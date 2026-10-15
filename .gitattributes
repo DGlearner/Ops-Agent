@@ -1,0 +1,7 @@
+# Normalize line endings so shell scripts mounted into Linux containers keep LF on Windows checkouts.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.jar binary
+*.png binary
+*.jpg binary

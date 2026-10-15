@@ -1,0 +1,23 @@
+# Build output
+build/
+out/
+.gradle/
+!gradle/wrapper/gradle-wrapper.jar
+*.class
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Local configuration and secrets
+.env
+*.local.yaml
+application-local.yaml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
