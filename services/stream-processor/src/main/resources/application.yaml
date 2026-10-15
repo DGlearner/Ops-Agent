@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: stream-processor
+  profiles:
+    default: local
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      acks: all
+    streams:
+      application-id: ops-stream-processor
+      properties:
+        # State stores (window counts, alert suppression) commit atomically with consumed offsets.
+        processing.guarantee: exactly_once_v2
+        # Undeserializable records are skipped and copied to the dead-letter topic instead of stopping the stream.
+        deserialization.exception.handler: org.apache.kafka.streams.errors.LogAndContinueExceptionHandler
+        errors.dead.letter.queue.topic.name: stream-processor.dlt
+
+server:
+  port: 8082
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: always
+
+ops:
+  stream:
+    grace: 30s
+    # "ingest" lets an old dataset be replayed more than once; see DetectionTime.
+    detection-time: event
+    max-sample-events: 5
+    # Until core-service manages rules (J3), publish rules/default-rules.json at startup.
+    seed-rules: true

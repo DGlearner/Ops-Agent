@@ -16,3 +16,8 @@ springBoot {
         excludes = setOf("time")
     }
 }
+
+// Services ship as executable jars only; skip the plain jar.
+tasks.named<Jar>("jar") {
+    enabled = false
+}

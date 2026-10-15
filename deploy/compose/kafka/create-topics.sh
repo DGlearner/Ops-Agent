@@ -41,6 +41,9 @@ retention() { echo "--config retention.ms=$(( $1 * DAY_MS ))"; }
   for t in logs.normalized alerts incident.candidates agent.results agent.tasks; do
     create "$t.dlt" 1 $(retention 14)
   done
+
+  # Dead-letter topic for records Kafka Streams cannot deserialize.
+  create stream-processor.dlt  1 $(retention 14)
 }
 
 echo "topics:"

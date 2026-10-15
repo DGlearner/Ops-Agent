@@ -275,11 +275,12 @@ JSON Schema 放在仓库根目录 `contracts/kafka/`，供 Python 侧使用；Ja
 | `incident.events` | incident_id | `IncidentEvent` | 3 | 30 天 | core（outbox） | 推送、Agent 派发（待定） |
 | `agent.tasks.high` / `.low`、`agent.results` | task_id | 待定 | 3 | 3 / 7 天 | core / agent | agent / core |
 | `<topic>.dlt` | 原 key | 原消息 + 错误头 | 1 | 14 天 | Spring Kafka 错误处理器 | 人工排查、重放 |
+| `stream-processor.dlt` | 原 key | 原始字节 + 错误头 | 1 | 14 天 | Kafka Streams（`errors.dead.letter.queue.topic.name`） | 人工排查 |
 
 **生产与消费语义：**
 
 - 生产者：`acks=all`，幂等开启。
-- Kafka Streams：`processing.guarantee=exactly_once_v2`，状态与 offset 一起提交。
+- Kafka Streams：`processing.guarantee=exactly_once_v2`，状态与 offset 一起提交；无法反序列化的记录跳过并写入 `stream-processor.dlt`（Kafka Streams 4.2 的内置死信队列）。读取 Streams 输出的消费者应使用 `isolation.level=read_committed`。
 - core 的消费者：手动提交；按业务键幂等 upsert；`DefaultErrorHandler` 指数退避重试 3 次后写入 `<topic>.dlt`。
 
 ### 7.5 消息字段
@@ -392,10 +393,11 @@ Agent 方案确定前，Java 侧只承诺以下原则，不实现具体接口：
 - **匹配：** `event_types`、`source_types`、`min_severity`、`field_equals` 之间为"与"关系，未给出的条件视为不限。
 - **分组：** `group_by` 可以使用 `host`、`service`、`component`、`event_type` 和 `fields.<name>`。
 - **窗口：** 限定为 `PT1M`、`PT5M`、`PT15M` 三档。Kafka Streams 的窗口大小在拓扑构建时确定，三档各对应一条子拓扑；规则按自己的档位路由。这是为了支持规则热更新而做的取舍。
-- **计数：** `SlidingWindows`，宽限期 30 秒（允许轻微乱序）；使用事件时间。
-- **去重：** 同一个 `fingerprint` 在 `suppress_for` 时间内只发一次告警。去重状态保存在 Kafka Streams 的状态存储中，与 offset 一起提交，重启或重放时不会重复告警。
+- **计数：** `SlidingWindows`，宽限期 30 秒（允许轻微乱序）。默认使用事件时间；`ops.stream.detection-time=ingest` 改用接收时间，用于反复重放旧数据集（用事件时间时，流时间一旦越过数据集，再次重放会被当作迟到数据丢弃）。
+- **去重：** 同一个 `fingerprint` 在 `suppress_for` 时间内只发一次告警。去重状态保存在 Kafka Streams 的状态存储中，与 offset 一起提交，重启或重放时不会重复告警；过期的记录按流时间定期清理。
 - **热更新：** 规则来自 `rules.changelog` 的全局表；规则变更后，新进入的事件立即按新规则匹配。
-- **默认规则（从 v1 移植并扩充）：** SSH 暴力破解；MySQL 连接被拒绝（1 分钟 ≥ 1）；MySQL 连接数过多；应用数据库连接错误（5 分钟 ≥ 2，按 service + host）；Nginx 5xx（1 分钟 ≥ 10，按 host）；容器 OOM（≥ 1）；容器频繁重启（15 分钟 ≥ 3，按容器）。
+- **默认规则（从 v1 移植并扩充，见 `services/stream-processor/src/main/resources/rules/default-rules.json`）：** SSH 暴力破解（5 分钟 ≥ 5，按 host + 来源 IP）；MySQL 连接被拒绝（1 分钟 ≥ 1）；MySQL 连接数过多；MySQL 慢查询（5 分钟 ≥ 3）；应用数据库连接错误（5 分钟 ≥ 2，按 service + host）；Nginx 5xx（5 分钟 ≥ 5，按 host）；容器 OOM（≥ 1）；容器频繁重启（15 分钟 ≥ 3，按容器）；内核 OOM；磁盘使用告警（node-exporter 报告 warning 或 critical）。
+- **样例数据的结果：** 重放 `datasets/aiops_mixed_incident_small.jsonl` 产生 7 条告警：SSH 暴力破解、MySQL 连接被拒绝、MySQL 连接数过多、payment-api 数据库连接错误、web-01 的 5xx 突增、api-gateway 容器 OOM、api-gateway 频繁重启（拓扑测试和真实 Kafka 上的端到端运行结果一致）。
 - **规则来源：** J3 之前没有 core-service，stream-processor 在 `local` 配置下启动时把 `default-rules.json` 写入 `rules.changelog`；J3 起由 core-service 管理。
 
 ### 8.4 告警聚合

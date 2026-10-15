@@ -13,7 +13,7 @@
 |---|---|
 | J0 工程骨架 | 完成 |
 | J1 接入（ingest-service） | 完成 |
-| J2 解析与检测（stream-processor） | 进行中 |
+| J2 解析与检测（stream-processor） | 完成（告警聚合留到 J4） |
 | J3 core 基础 · J4 告警与 Incident · J5 加固 | 未开始 |
 
 ## 本地运行
@@ -33,10 +33,13 @@ docker compose --profile tools up -d       # 另外启动 Kafka UI：http://loca
 ```bash
 ./gradlew build                                   # 编译并运行全部测试（集成测试需要 Docker）
 ./gradlew :services:ingest-service:bootRun        # 日志接入，http://localhost:8081/swagger-ui.html
+./gradlew :services:stream-processor:bootRun     # 解析与检测，启动时写入默认规则
 java tools/Replay.java datasets/aiops_mixed_incident_small.jsonl
 ```
 
 开发用的 API Key 是 `dev-ingest-key`（只用于本地）。
+
+查看结果：`docker compose --profile tools up -d` 后打开 Kafka UI（http://localhost:8089），看 `logs.normalized`、`alerts` 等 topic。样例数据会产生 7 条告警。
 
 ## 目录
 
