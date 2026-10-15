@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/DGlearner/Ops-Agent/contracts/kafka/normalized-event.schema.json",
+  "title": "NormalizedEvent",
+  "description": "A parsed and redacted log line. Topic logs.normalized, key = service (host when service is unknown).",
+  "type": "object",
+  "required": [
+    "event_id",
+    "source_type",
+    "host",
+    "event_type",
+    "severity",
+    "timestamp",
+    "message",
+    "fields",
+    "tags"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "source_id": {
+      "type": "string"
+    },
+    "source_type": {
+      "enum": [
+        "nginx",
+        "linux",
+        "mysql",
+        "app_service",
+        "docker"
+      ]
+    },
+    "source_name": {
+      "type": "string"
+    },
+    "host": {
+      "type": "string",
+      "minLength": 1
+    },
+    "service": {
+      "type": "string"
+    },
+    "component": {
+      "type": "string"
+    },
+    "event_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "severity": {
+      "enum": [
+        "info",
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Event time from the log line; received_at when the line has no usable time."
+    },
+    "received_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "message": {
+      "type": "string",
+      "description": "Original line after redaction."
+    },
+    "fields": {
+      "type": "object",
+      "additionalProperties": {
+        "type": [
+          "string",
+          "number",
+          "boolean"
+        ]
+      }
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/DGlearner/Ops-Agent/contracts/kafka/topology-entry.schema.json",
+  "title": "TopologyEntry",
+  "description": "Dependency information for one service. Topic topology.changelog (compacted), key = service.",
+  "type": "object",
+  "required": [
+    "service",
+    "group_key",
+    "depends_on",
+    "version"
+  ],
+  "properties": {
+    "service": {
+      "type": "string",
+      "minLength": 1
+    },
+    "group_key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "depends_on": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "team": {
+      "type": "string"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

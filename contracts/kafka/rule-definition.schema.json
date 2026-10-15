@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/DGlearner/Ops-Agent/contracts/kafka/rule-definition.schema.json",
+  "title": "RuleDefinition",
+  "description": "A detection rule. Topic rules.changelog (compacted), key = rule_id; a null value deletes the rule.",
+  "type": "object",
+  "required": [
+    "rule_id",
+    "version",
+    "enabled",
+    "window",
+    "threshold",
+    "severity"
+  ],
+  "properties": {
+    "rule_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "name": {
+      "type": "string"
+    },
+    "match": {
+      "type": "object",
+      "properties": {
+        "event_types": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "source_types": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "nginx",
+              "linux",
+              "mysql",
+              "app_service",
+              "docker"
+            ]
+          }
+        },
+        "min_severity": {
+          "enum": [
+            "info",
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        },
+        "field_equals": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "group_by": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(host|service|component|event_type|fields\\.[A-Za-z0-9_.-]+)$"
+      }
+    },
+    "window": {
+      "enum": [
+        "PT1M",
+        "PT5M",
+        "PT15M"
+      ]
+    },
+    "threshold": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "severity": {
+      "enum": [
+        "info",
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    },
+    "suppress_for": {
+      "type": "string",
+      "pattern": "^PT"
+    },
+    "summary_template": {
+      "type": "string"
+    }
+  }
+}

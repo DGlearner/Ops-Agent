@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/DGlearner/Ops-Agent/contracts/kafka/alert.schema.json",
+  "title": "Alert",
+  "description": "A rule crossed its threshold. Topic alerts, key = group_key.",
+  "type": "object",
+  "required": [
+    "alert_id",
+    "rule_id",
+    "rule_version",
+    "fingerprint",
+    "severity",
+    "group_key",
+    "host",
+    "group_values",
+    "window_start",
+    "window_end",
+    "count",
+    "threshold",
+    "sample_event_ids",
+    "summary",
+    "created_at"
+  ],
+  "properties": {
+    "alert_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Deterministic: derived from fingerprint and window start."
+    },
+    "rule_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rule_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "fingerprint": {
+      "type": "string",
+      "minLength": 1
+    },
+    "severity": {
+      "enum": [
+        "info",
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    },
+    "group_key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "service": {
+      "type": "string"
+    },
+    "host": {
+      "type": "string",
+      "minLength": 1
+    },
+    "group_values": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "window_start": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "window_end": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "threshold": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "first_event_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "last_event_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sample_event_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "maxItems": 5
+    },
+    "summary": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

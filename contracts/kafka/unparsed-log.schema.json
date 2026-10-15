@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/DGlearner/Ops-Agent/contracts/kafka/unparsed-log.schema.json",
+  "title": "UnparsedLog",
+  "description": "A raw line no parser could handle. Topic logs.unparsed, key = source_type.",
+  "type": "object",
+  "required": [
+    "raw",
+    "reason"
+  ],
+  "properties": {
+    "raw": {
+      "type": "object",
+      "description": "Same shape as RawLogRecord.",
+      "required": [
+        "event_id",
+        "source_id",
+        "source_type",
+        "host",
+        "message",
+        "received_at"
+      ],
+      "properties": {
+        "event_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "source_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_type": {
+          "enum": [
+            "nginx",
+            "linux",
+            "mysql",
+            "app_service",
+            "docker"
+          ]
+        },
+        "host": {
+          "type": "string",
+          "minLength": 1
+        },
+        "service": {
+          "type": "string"
+        },
+        "source_name": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "received_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

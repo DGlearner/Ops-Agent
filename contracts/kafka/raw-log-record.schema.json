@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/DGlearner/Ops-Agent/contracts/kafka/raw-log-record.schema.json",
+  "title": "RawLogRecord",
+  "description": "One raw log line accepted by ingest-service. Topic logs.raw, key = host.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "source_id",
+    "source_type",
+    "host",
+    "message",
+    "received_at"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "request_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "source_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_type": {
+      "enum": [
+        "nginx",
+        "linux",
+        "mysql",
+        "app_service",
+        "docker"
+      ]
+    },
+    "host": {
+      "type": "string",
+      "minLength": 1
+    },
+    "service": {
+      "type": "string"
+    },
+    "source_name": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string"
+    },
+    "received_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/DGlearner/Ops-Agent/contracts/kafka/incident-candidate.schema.json",
+  "title": "IncidentCandidate",
+  "description": "Alerts of one dependency group merged by a session window. Topic incident.candidates, key = group_key.",
+  "type": "object",
+  "required": [
+    "group_key",
+    "session_start",
+    "session_end",
+    "alert_ids",
+    "services",
+    "hosts",
+    "max_severity",
+    "alert_count",
+    "merged_from"
+  ],
+  "properties": {
+    "group_key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "session_start": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "session_end": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "alert_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      }
+    },
+    "services": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "hosts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "max_severity": {
+      "enum": [
+        "info",
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    },
+    "alert_count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "merged_from": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "description": "Start times of earlier sessions absorbed by this one."
+    }
+  }
+}
