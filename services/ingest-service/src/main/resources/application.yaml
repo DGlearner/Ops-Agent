@@ -1,0 +1,55 @@
+spring:
+  application:
+    name: ingest-service
+  profiles:
+    default: local
+  threads:
+    virtual:
+      enabled: true
+  mvc:
+    problemdetails:
+      enabled: true
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
+        linger.ms: 5
+        compression.type: lz4
+        # Fail fast so clients get a 503 they can retry instead of a hanging request.
+        max.block.ms: 5000
+        request.timeout.ms: 5000
+        delivery.timeout.ms: 10000
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 1s
+
+server:
+  port: 8081
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+ops:
+  ingest:
+    max-request-size: 1MB
+    publish-timeout: 10s
+    rate-limit:
+      enabled: true
+      capacity: 20000
+      refill-per-second: 5000
+    sources:
+      # Development source. The API key is "dev-ingest-key"; only its SHA-256 is configured.
+      # Override ops.ingest.sources in any shared or deployed environment.
+      - id: dev
+        api-key-sha256: 21dd9e3b3f1633b88d69b73906f1a9e594beebd9b616bf89448c0a50a8b4ad10

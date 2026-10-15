@@ -141,7 +141,9 @@ JSON Schema 放在仓库根目录 `contracts/kafka/`，供 Python 侧使用；Ja
 | `ratelimit` | Redis 令牌桶（Lua 脚本），按日志源、按**日志条数**限流 |
 | `publish` | 拆分为单条 `RawLogRecord`，补充 `event_id`、`received_at`，以 host 为 key 写入 `logs.raw`，等待 broker 确认后才返回 202 |
 
-- **语义：** 返回 202 表示所有记录都已被 Kafka 确认（`acks=all`，幂等生产者）。Kafka 不可用时返回 503，客户端可以安全重试。重试可能产生重复记录，下游按 `event_id` 去重。
+- **语义：** 返回 202 表示所有记录都已被 Kafka 确认（`acks=all`，幂等生产者）。Kafka 不可用时返回 503，客户端可以重试。
+- **重试与去重：** 请求带 `Idempotency-Key` 时，`request_id` 和每条记录的 `event_id` 都由它推导（UUIDv5），重试产生的记录 `event_id` 相同，下游可以据此去重；不带时为随机 UUIDv7。重放工具 `tools/Replay.java` 每行都带这个头。
+- **限流失败时放行：** Redis 不可用时请求照常接收，并累加 `ops.ingest.ratelimit.errors`。Redis 故障期间丢日志比短暂不限流更糟。
 - **日志源与 API Key：** J1 阶段从配置文件读取（只存哈希）；J3 起改为从 core-service 的 `log_sources` 表读取，并在 Redis 中缓存。
 
 ### 6.3 `services/stream-processor`
@@ -185,7 +187,7 @@ JSON Schema 放在仓库根目录 `contracts/kafka/`，供 Python 侧使用；Ja
 | 鉴权 | 控制台与管理接口：`Authorization: Bearer <JWT>`；日志接入：`X-Api-Key: <key>` |
 | 错误 | RFC 9457 ProblemDetail：`type`、`title`、`status`、`detail`、`instance`，扩展字段 `code`（如 `RULE_INVALID`）和 `errors`（字段级错误） |
 | 分页 | 游标分页：`?limit=50&cursor=<opaque>`，响应 `{ "items": [...], "next_cursor": "..." }`。列表按 UUIDv7 主键倒序，游标即最后一条的主键 |
-| 幂等 | 创建类 POST 支持 `Idempotency-Key` 头（Redis 保存 24 小时）（J5） |
+| 幂等 | 日志接入已支持 `Idempotency-Key`（§6.2）；core-service 的创建类 POST 在 J5 支持（Redis 保存 24 小时） |
 | 文档 | 每个服务在 `/v3/api-docs` 和 `/swagger-ui.html` 提供 OpenAPI |
 | 运维端点 | `/actuator/health`、`/actuator/prometheus` |
 
@@ -213,12 +215,17 @@ JSON Schema 放在仓库根目录 `contracts/kafka/`，供 Python 侧使用；Ja
 | `source_name` | 否 | 日志文件路径等，≤ 1024 字符 |
 | `logs` | 是 | 1–1000 条；单条 ≤ 16 KB |
 
+| 请求头 | 必填 | 说明 |
+|---|---|---|
+| `X-Api-Key` | 是 | 日志源的 API Key |
+| `Idempotency-Key` | 否 | 1–128 个可见 ASCII 字符；相同的 key 产生相同的 `event_id`（见 §6.2） |
+
 | 响应 | 含义 |
 |---|---|
 | `202` | `{ "accepted": 1, "request_id": "..." }`，所有记录已写入 Kafka |
 | `400` | 字段校验失败（`errors` 中列出字段） |
 | `401` | 缺少或无效的 API Key |
-| `413` | 请求体超过 1 MB |
+| `413` | 请求体超过 1 MB（包括没有 Content-Length 的分块请求） |
 | `429` | 超过限流，带 `Retry-After` 头（秒） |
 | `503` | Kafka 不可用，带 `Retry-After` 头 |
 

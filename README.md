@@ -11,8 +11,10 @@
 
 | 阶段 | 状态 |
 |---|---|
-| J0 工程骨架 | 进行中 |
-| J1 接入 · J2 解析与检测 · J3 core 基础 · J4 告警与 Incident · J5 加固 | 未开始 |
+| J0 工程骨架 | 完成 |
+| J1 接入（ingest-service） | 完成 |
+| J2 解析与检测（stream-processor） | 进行中 |
+| J3 core 基础 · J4 告警与 Incident · J5 加固 | 未开始 |
 
 ## 本地运行
 
@@ -25,6 +27,16 @@ docker compose --profile tools up -d       # 另外启动 Kafka UI：http://loca
 ```
 
 端口只绑定在 127.0.0.1。如需修改，复制 `deploy/compose/.env.example` 为 `.env`。
+
+构建、运行与重放（Windows 上用 `gradlew.bat`）：
+
+```bash
+./gradlew build                                   # 编译并运行全部测试（集成测试需要 Docker）
+./gradlew :services:ingest-service:bootRun        # 日志接入，http://localhost:8081/swagger-ui.html
+java tools/Replay.java datasets/aiops_mixed_incident_small.jsonl
+```
+
+开发用的 API Key 是 `dev-ingest-key`（只用于本地）。
 
 ## 目录
 

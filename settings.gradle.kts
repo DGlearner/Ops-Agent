@@ -18,4 +18,5 @@ rootProject.name = "ops-agent"
 
 include(
     "libs:ops-contracts",
+    "services:ingest-service",
 )
