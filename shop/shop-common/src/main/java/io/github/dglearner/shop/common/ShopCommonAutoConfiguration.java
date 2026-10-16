@@ -7,8 +7,14 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.Ordered;
 
-/** Registers the shared error handling and the trace id response header in every shop service. */
-@AutoConfiguration
+/**
+ * Registers the shared error handling and the trace id response header in every shop service.
+ *
+ * <p>Runs before Spring MVC's auto-configuration: Boot adds its own problem-details handler only when no
+ * {@code ResponseEntityExceptionHandler} exists yet, and would otherwise answer validation errors without a
+ * {@code code}.
+ */
+@AutoConfiguration(beforeName = "org.springframework.boot.webmvc.autoconfigure.WebMvcAutoConfiguration")
 public class ShopCommonAutoConfiguration {
 
     @Bean

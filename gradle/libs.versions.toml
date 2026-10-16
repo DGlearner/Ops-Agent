@@ -22,3 +22,4 @@ junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher
 assertj-core = { module = "org.assertj:assertj-core" }
 testcontainers-junit-jupiter = { module = "org.testcontainers:testcontainers-junit-jupiter" }
 testcontainers-kafka = { module = "org.testcontainers:testcontainers-kafka" }
+testcontainers-mysql = { module = "org.testcontainers:testcontainers-mysql" }

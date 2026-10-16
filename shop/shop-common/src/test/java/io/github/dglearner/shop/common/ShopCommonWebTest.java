@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"spring.application.name=common-test", "management.server.port=0",
-                "spring.datasource.hikari.connection-timeout=5s"})
+                "spring.datasource.hikari.connection-timeout=5000"})
 class ShopCommonWebTest {
 
     private final HttpClient http = HttpClient.newHttpClient();
@@ -94,7 +94,7 @@ class ShopCommonWebTest {
     @Test
     void sharedDefaultsApplyAndServiceSettingsOverrideThem() {
         assertThat(environment.getProperty("management.tracing.sampling.probability")).isEqualTo("1.0");
-        assertThat(environment.getProperty("spring.datasource.hikari.connection-timeout")).isEqualTo("5s");
+        assertThat(environment.getProperty("spring.datasource.hikari.connection-timeout")).isEqualTo("5000");
     }
 
     private HttpResponse<String> post(String path, String json, String idempotencyKey) throws Exception {

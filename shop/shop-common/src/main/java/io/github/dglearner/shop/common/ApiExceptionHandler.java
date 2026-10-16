@@ -6,6 +6,9 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.MethodParameter;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.TransientDataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -39,6 +42,19 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         ProblemDetail body = problem(e.status(), e.code(), e.getMessage());
         e.properties().forEach(body::setProperty);
         return ResponseEntity.status(e.status()).body(body);
+    }
+
+    /**
+     * The database is unreachable, the connection pool is exhausted or a lock wait timed out. The same request may
+     * succeed later, so this is a 503 rather than a 500.
+     */
+    @ExceptionHandler({TransientDataAccessException.class, DataAccessResourceFailureException.class})
+    ResponseEntity<ProblemDetail> databaseUnavailable(DataAccessException e) {
+        log.atWarn().addKeyValue("error_type", e.getClass().getSimpleName())
+                .log("Database unavailable: {}", e.getMostSpecificCause().getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .header(HttpHeaders.RETRY_AFTER, "1")
+                .body(problem(HttpStatus.SERVICE_UNAVAILABLE, "DATABASE_UNAVAILABLE", "Database is unavailable"));
     }
 
     /** Anything unexpected: logged with its stack trace, answered without internals. */

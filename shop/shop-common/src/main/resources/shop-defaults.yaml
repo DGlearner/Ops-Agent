@@ -4,13 +4,10 @@ spring:
   jackson:
     property-naming-strategy: SNAKE_CASE
     default-property-inclusion: non_null
-  mvc:
-    problemdetails:
-      enabled: true
   datasource:
     hikari:
       # Fail within 2 s when the pool is exhausted or MySQL is down, instead of holding the request for 30 s.
-      connection-timeout: 2s
+      connection-timeout: 2000 # ms
 
 # Console output stays human-readable; the file gets one ECS JSON object per line for log collectors.
 logging:

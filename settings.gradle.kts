@@ -21,4 +21,5 @@ include(
     "services:ingest-service",
     "services:stream-processor",
     "shop:shop-common",
+    "shop:inventory-service",
 )

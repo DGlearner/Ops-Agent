@@ -5,12 +5,16 @@ plugins {
 
 dependencies {
     implementation(project(":shop:shop-common"))
+
+    testImplementation(testFixtures(project(":shop:shop-common")))
+    testImplementation("org.springframework.boot:spring-boot-testcontainers")
+    testImplementation("org.testcontainers:testcontainers-junit-jupiter")
 }
 
 // Every service writes its JSON log to <repo>/logs/shop, so a collector finds them in one place.
 tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
     systemProperty("shop.log-dir", layout.settingsDirectory.dir("logs/shop").asFile.absolutePath)
-    jvmArgs("-Xmx256m")
+    maxHeapSize = "256m"
 }
 
 tasks.withType<Test>().configureEach {
