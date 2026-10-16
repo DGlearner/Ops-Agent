@@ -19,6 +19,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
 import java.util.stream.Collectors;
 import tools.jackson.databind.json.JsonMapper;
@@ -63,6 +64,9 @@ public final class LoadGenerator {
     /** Sends duplicates that go out alongside their original; separate because the main pool stops taking work. */
     private final ExecutorService duplicateSender = Executors.newVirtualThreadPerTaskExecutor();
     private final String runId;
+    private volatile long sendingStartedAt;
+    /** When the first order was answered out of stock, in {@link System#nanoTime()} terms. */
+    private final AtomicLong firstOutOfStockAt = new AtomicLong(Long.MAX_VALUE);
 
     private LoadGenerator(Options options) {
         this.options = options;
@@ -89,11 +93,15 @@ public final class LoadGenerator {
 
     private boolean run() throws Exception {
         List<String> skus = client.productSkus();
-        Map<String, ShopClient.StockRow> before = options.verify() ? client.stock() : Map.of();
         long seed = options.seed().orElse(ThreadLocalRandom.current().nextLong());
         OrderMix mix = new OrderMix(skus, options, new Random(seed));
-        System.out.printf("run %s: %.1f orders/s for %ds, seed %d%s%n", runId, options.rate(),
-                options.duration().toSeconds(), seed, options.hasScenario() ? ", scenario " + options.scenario() : "");
+        if (options.stock().isPresent() && !prepareStock(options.flashSale(), options.stock().getAsInt())) {
+            return false;
+        }
+        Map<String, ShopClient.StockRow> before = options.verify() || options.isFlashSale() ? client.stock() : Map.of();
+        System.out.printf("run %s: %.1f orders/s for %ds, seed %d%s%s%n", runId, options.rate(),
+                options.duration().toSeconds(), seed, options.hasScenario() ? ", scenario " + options.scenario() : "",
+                options.isFlashSale() ? ", flash sale of " + options.flashSale() : "");
 
         Map<String, Object> report = new LinkedHashMap<>();
         report.put("run_id", runId);
@@ -142,6 +150,7 @@ public final class LoadGenerator {
         Semaphore inFlight = new Semaphore(options.concurrency());
         long interval = (long) (1_000_000_000L / options.rate());
         long start = System.nanoTime();
+        sendingStartedAt = start;
         long end = start + options.duration().toNanos();
         try (ExecutorService workers = Executors.newVirtualThreadPerTaskExecutor()) {
             int sequence = 0;
@@ -211,6 +220,9 @@ public final class LoadGenerator {
         if (!orderStatus.isEmpty()) {
             tracked.status = orderStatus;
             tracked.reason = response.body().path("failure_reason").asString();
+            if ("OUT_OF_STOCK".equals(tracked.reason)) {
+                firstOutOfStockAt.accumulateAndGet(System.nanoTime(), Math::min);
+            }
         }
         if (status == 503) {
             stats.failure(key + ": 503 " + response.body().path("code").asString() + " order " + orderId
@@ -289,6 +301,10 @@ public final class LoadGenerator {
                     unresolved, unanswered.size());
         }
 
+        if (options.isFlashSale()) {
+            report.put("flash_sale", flashSale(before, outcomes));
+        }
+
         boolean ok = stats.duplicatesWrong.sum() == 0 && stats.unexpected.sum() == 0 && unresolved == 0
                 && unanswered.isEmpty();
         if (options.verify()) {
@@ -335,6 +351,41 @@ public final class LoadGenerator {
         check.problems().forEach(p -> System.out.println("  " + p));
         report.put("ledger", Map.of("ok", check.ok(), "units_sold", check.unitsSold(), "problems", check.problems()));
         return check.ok();
+    }
+
+    /** Sets how many units of the SKU on sale are available before the sale starts. */
+    private boolean prepareStock(String sku, int units) {
+        ShopClient.Response response = client.admin("inventory", "POST", "/actuator/stockprep",
+                "{\"sku\":\"" + sku + "\",\"available\":" + units + "}");
+        if (response.status() != 200) {
+            System.out.println("cannot prepare the stock of " + sku + ": "
+                    + (response.error() != null ? response.error() : "HTTP " + response.status() + " "
+                    + response.body().path("error").asString()));
+            return false;
+        }
+        return true;
+    }
+
+    /** The sale in numbers: stock at the start, units sold, buyers turned away, and how soon it sold out. */
+    private Map<String, Object> flashSale(Map<String, ShopClient.StockRow> before, Map<String, Long> outcomes) {
+        String sku = options.flashSale();
+        int atStart = before.containsKey(sku) ? before.get(sku).available() : -1;
+        ShopClient.StockRow after = client.stock().get(sku);
+        long paid = outcomes.getOrDefault("PAID", 0L);
+        long outOfStock = outcomes.getOrDefault("CANCELLED/OUT_OF_STOCK", 0L);
+        long first = firstOutOfStockAt.get();
+        Long soldOutAfter = first == Long.MAX_VALUE ? null : TimeUnit.NANOSECONDS.toMillis(first - sendingStartedAt);
+        System.out.printf("flash sale: %s, %d available at the start, %d paid orders, %d answered out of stock%s, "
+                        + "%d left%n", sku, atStart, paid, outOfStock,
+                soldOutAfter == null ? "" : " (the first after " + soldOutAfter + " ms)", after.available());
+        Map<String, Object> sale = new LinkedHashMap<>();
+        sale.put("sku", sku);
+        sale.put("available_at_start", atStart);
+        sale.put("paid_orders", paid);
+        sale.put("out_of_stock", outOfStock);
+        sale.put("first_out_of_stock_after_ms", soldOutAfter);
+        sale.put("available_at_end", after.available());
+        return sale;
     }
 
     /** Order by order: payment and reservation agree with how the order ended (see {@link OrderCheck}). */

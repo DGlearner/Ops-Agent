@@ -5,7 +5,10 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
-/** Generates order requests: random users, one to three distinct SKUs, some declined cards, some limited items. */
+/**
+ * Generates order requests: random users, one to three distinct SKUs, some declined cards, some limited items; or,
+ * in a flash sale, one unit of the SKU on sale.
+ */
 final class OrderMix {
 
     static final String HOT_SKU = "SKU-2001";
@@ -29,10 +32,16 @@ final class OrderMix {
         if (regularSkus.isEmpty()) {
             throw new IllegalStateException("The catalogue has no regular SKUs to order");
         }
+        if (options.isFlashSale() && !catalogueSkus.contains(options.flashSale())) {
+            throw new IllegalStateException("The catalogue has no " + options.flashSale() + " to put on sale");
+        }
     }
 
     synchronized OrderRequest next() {
         String user = "u-" + (1000 + random.nextInt(options.users()));
+        if (options.isFlashSale()) {
+            return new OrderRequest(user, List.of(new Line(options.flashSale(), 1)), token());
+        }
         List<String> skus = new ArrayList<>(regularSkus);
         Collections.shuffle(skus, random);
         int count = 1 + random.nextInt(Math.min(3, skus.size()));
@@ -43,8 +52,11 @@ final class OrderMix {
         if (hotAvailable && random.nextDouble() < options.hotRate()) {
             lines.add(new Line(HOT_SKU, 1));
         }
-        String token = random.nextDouble() < options.declineRate() ? "tok_declined" : "tok_ok";
-        return new OrderRequest(user, List.copyOf(lines), token);
+        return new OrderRequest(user, List.copyOf(lines), token());
+    }
+
+    private String token() {
+        return random.nextDouble() < options.declineRate() ? "tok_declined" : "tok_ok";
     }
 
     synchronized boolean duplicate() {

@@ -53,6 +53,19 @@ class OptionsTest {
     }
 
     @Test
+    void aFlashSaleNamesItsSkuAndOptionallyTheStartingStock() {
+        Options options = Options.parse("--flash-sale", "SKU-2001", "--stock", "100");
+
+        assertThat(options.isFlashSale()).isTrue();
+        assertThat(options.flashSale()).isEqualTo("SKU-2001");
+        assertThat(options.stock()).hasValue(100);
+        assertThat(Options.parse().isFlashSale()).isFalse();
+        assertThatThrownBy(() -> Options.parse("--stock", "100")).hasMessageContaining("--stock needs --flash-sale");
+        assertThatThrownBy(() -> Options.parse("--flash-sale", "SKU-2001", "--stock", "-1"))
+                .hasMessageContaining("must not be negative");
+    }
+
+    @Test
     void rejectsNonsense() {
         assertThatThrownBy(() -> Options.parse("--rate", "0")).hasMessageContaining("--rate must be positive");
         assertThatThrownBy(() -> Options.parse("--duplicate-rate", "1.5")).hasMessageContaining("between 0 and 1");

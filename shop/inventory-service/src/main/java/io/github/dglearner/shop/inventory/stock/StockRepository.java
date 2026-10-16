@@ -58,6 +58,17 @@ public class StockRepository {
                 .param("sku", sku).param("q", quantity).update() == 1;
     }
 
+    /**
+     * Makes exactly {@code available} units available, keeping what was sold, if nothing is reserved; false if the SKU
+     * is unknown or has reserved units.
+     */
+    public boolean prepare(String sku, int available) {
+        return jdbc.sql("""
+                        UPDATE stock SET total = sold + :a, available = :a, updated_at = NOW(3)
+                        WHERE sku = :sku AND reserved = 0""")
+                .param("sku", sku).param("a", available).update() == 1;
+    }
+
     private static void requireOneRow(String sku, int rows) {
         if (rows != 1) {
             throw new IllegalStateException("Stock row missing for reserved SKU " + sku);

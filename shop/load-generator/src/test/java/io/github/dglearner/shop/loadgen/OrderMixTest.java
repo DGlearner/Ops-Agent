@@ -31,6 +31,18 @@ class OrderMixTest {
     }
 
     @Test
+    void aFlashSaleOrdersOneUnitOfTheSkuOnSale() {
+        Options options = Options.parse("--flash-sale", OrderMix.HOT_SKU, "--decline-rate", "0.1");
+        OrderMix mix = new OrderMix(SKUS, options, new Random(7));
+
+        List<OrderMix.OrderRequest> orders = IntStream.range(0, 2_000).mapToObj(i -> mix.next()).toList();
+
+        assertThat(orders).allSatisfy(o -> assertThat(o.lines()).containsExactly(new OrderMix.Line(OrderMix.HOT_SKU, 1)));
+        assertThat(orders.stream().filter(o -> o.paymentToken().equals("tok_declined")).count() / 2_000.0)
+                .isBetween(0.07, 0.13);
+    }
+
+    @Test
     void theSameSeedGivesTheSameOrders() {
         Options options = Options.parse();
         OrderMix a = new OrderMix(SKUS, options, new Random(42));

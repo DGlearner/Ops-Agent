@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 
@@ -12,7 +13,7 @@ import java.util.Set;
 record Options(String orderUrl, String inventoryUrl, String paymentUrl, double rate, Duration duration,
         int concurrency, int users, double duplicateRate, double declineRate, double hotRate, OptionalLong seed,
         Duration settleTimeout, boolean verify, Path report, String scenario, Duration baseline, Duration fault,
-        Duration recovery, Map<String, String> adminUrls, String mysqlContainer) {
+        Duration recovery, Map<String, String> adminUrls, String mysqlContainer, String flashSale, OptionalInt stock) {
 
     static final String USAGE = """
             Usage: load-generator [options]
@@ -40,17 +41,26 @@ record Options(String orderUrl, String inventoryUrl, String paymentUrl, double r
               --inventory-admin URL  (defaults http://localhost:8191, 8192, 8193)
               --payment-admin URL
               --mysql-container N    container stopped by mysql-down (default ops-shop-mysql-1)
+            Flash sale (every order buys one unit of one SKU; --hot-rate does not apply):
+              --flash-sale SKU       the SKU on sale, e.g. SKU-2001
+              --stock N              units available when the sale starts, set through the inventory
+                                     management port; refused while orders for the SKU are still in flight
             The checks assume nothing else orders or restocks while the run is going on.""".formatted(
             String.join(", ", Scenarios.names()));
 
     private static final Set<String> VALUE_OPTIONS = Set.of("--order-url", "--inventory-url", "--payment-url",
             "--rate", "--duration", "--concurrency", "--users", "--duplicate-rate", "--decline-rate", "--hot-rate",
             "--seed", "--settle-timeout", "--report", "--scenario", "--baseline", "--fault", "--recovery",
-            "--order-admin", "--inventory-admin", "--payment-admin", "--mysql-container");
+            "--order-admin", "--inventory-admin", "--payment-admin", "--mysql-container", "--flash-sale", "--stock");
 
     /** Whether this run injects a fault. */
     boolean hasScenario() {
         return scenario != null;
+    }
+
+    /** Whether every order buys one unit of {@link #flashSale()}. */
+    boolean isFlashSale() {
+        return flashSale != null;
     }
 
     static Options parse(String... args) {
@@ -75,6 +85,8 @@ record Options(String orderUrl, String inventoryUrl, String paymentUrl, double r
         Map<String, String> adminUrls = new LinkedHashMap<>(Map.of("order", "http://localhost:8191",
                 "inventory", "http://localhost:8192", "payment", "http://localhost:8193"));
         String mysqlContainer = "ops-shop-mysql-1";
+        String flashSale = null;
+        OptionalInt stock = OptionalInt.empty();
 
         for (int i = 0; i < args.length; i++) {
             String name = args[i];
@@ -114,8 +126,13 @@ record Options(String orderUrl, String inventoryUrl, String paymentUrl, double r
                 case "--inventory-admin" -> adminUrls.put("inventory", stripSlash(value));
                 case "--payment-admin" -> adminUrls.put("payment", stripSlash(value));
                 case "--mysql-container" -> mysqlContainer = value;
+                case "--flash-sale" -> flashSale = value;
+                case "--stock" -> stock = OptionalInt.of((int) nonNegative(name, Integer.parseInt(value)));
                 default -> throw new IllegalStateException("Unhandled option " + name);
             }
+        }
+        if (stock.isPresent() && flashSale == null) {
+            throw new IllegalArgumentException("--stock needs --flash-sale");
         }
         if (scenario != null) {
             duration = baseline.plus(fault).plus(recovery);
@@ -125,7 +142,7 @@ record Options(String orderUrl, String inventoryUrl, String paymentUrl, double r
         }
         return new Options(orderUrl, inventoryUrl, paymentUrl, rate, duration, concurrency, users, duplicateRate,
                 declineRate, hotRate, seed, settleTimeout, verify, report, scenario, baseline, fault, recovery,
-                Map.copyOf(adminUrls), mysqlContainer);
+                Map.copyOf(adminUrls), mysqlContainer, flashSale, stock);
     }
 
     /** {@code 500ms}, {@code 30s}, {@code 5m} or {@code 1h}. */
@@ -158,6 +175,13 @@ record Options(String orderUrl, String inventoryUrl, String paymentUrl, double r
     private static double positive(String name, double value) {
         if (value <= 0) {
             throw new IllegalArgumentException(name + " must be positive");
+        }
+        return value;
+    }
+
+    private static double nonNegative(String name, double value) {
+        if (value < 0) {
+            throw new IllegalArgumentException(name + " must not be negative");
         }
         return value;
     }

@@ -271,9 +271,36 @@ class InventoryIT {
         assertStock(skuA, 10, 9, 1, 0);
     }
 
+    @Test
+    void stockIsPreparedForAnExperimentOnlyWhileNothingIsReserved() throws Exception {
+        String order = newOrder();
+        reserve(order, item(skuA, 3));
+
+        HttpResponse<String> refused = management("stockprep", "POST", "{\"sku\":\"" + skuA + "\",\"available\":50}");
+        assertThat(refused.statusCode()).as(refused.body()).isEqualTo(409);
+        assertStock(skuA, 10, 7, 3, 0);
+
+        post("/api/v1/reservations/" + order + "/confirm", "");
+        HttpResponse<String> prepared = management("stockprep", "POST", "{\"sku\":\"" + skuA + "\",\"available\":50}");
+        assertThat(prepared.statusCode()).as(prepared.body()).isEqualTo(200);
+        assertStock(skuA, 53, 50, 0, 3);
+        assertThat(management("stockprep", "POST", "{\"sku\":\"" + skuA + "\",\"available\":2}").statusCode())
+                .isEqualTo(200);
+        assertStock(skuA, 5, 2, 0, 3);
+
+        assertThat(management("stockprep", "POST", "{\"sku\":\"NO-SUCH-SKU\",\"available\":5}").statusCode())
+                .isEqualTo(404);
+        assertThat(management("stockprep", "POST", "{\"sku\":\"" + skuA + "\",\"available\":-1}").statusCode())
+                .isEqualTo(400);
+    }
+
     private HttpResponse<String> management(String method, String json) throws Exception {
+        return management("rowlock", method, json);
+    }
+
+    private HttpResponse<String> management(String endpoint, String method, String json) throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder(
-                URI.create("http://localhost:" + managementPort + "/actuator/rowlock"));
+                URI.create("http://localhost:" + managementPort + "/actuator/" + endpoint));
         if (json != null) {
             request.header("Content-Type", "application/json");
         }
