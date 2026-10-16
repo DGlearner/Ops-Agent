@@ -40,7 +40,7 @@ final class StubServer implements AutoCloseable {
 
     private final List<Route> routes = new CopyOnWriteArrayList<>();
     private final List<Received> received = new CopyOnWriteArrayList<>();
-    private final ExecutorService executor = Executors.newCachedThreadPool();
+    private final ExecutorService executor = Executors.newCachedThreadPool(Thread.ofPlatform().daemon().factory());
     private int port;
     private HttpServer server;
 

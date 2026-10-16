@@ -2,7 +2,10 @@ package io.github.dglearner.shop.order.order;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -51,6 +54,24 @@ public class OrderRepository {
                 .param("id", orderId).param("from", from.name()).param("to", to.name())
                 .param("reason", reason == null ? null : reason.name())
                 .update() == 1;
+    }
+
+    /** Ids and statuses of orders in one of {@code statuses} that have not changed for {@code age}, oldest first. */
+    public List<Map.Entry<String, OrderStatus>> findUnchangedFor(Duration age, int limit, OrderStatus... statuses) {
+        return jdbc.sql("""
+                        SELECT order_id, status FROM orders
+                        WHERE status IN (:statuses) AND updated_at < NOW(3) - INTERVAL :micros MICROSECOND
+                        ORDER BY updated_at LIMIT :limit""")
+                .param("statuses", Arrays.stream(statuses).map(Enum::name).toList())
+                .param("micros", age.toNanos() / 1000).param("limit", limit)
+                .query((rs, row) -> Map.entry(rs.getString("order_id"), OrderStatus.valueOf(rs.getString("status"))))
+                .list();
+    }
+
+    /** Pushes the order to the back of the reconciliation queue without changing its status. */
+    public void touch(String orderId, OrderStatus status) {
+        jdbc.sql("UPDATE orders SET updated_at = NOW(3) WHERE order_id = :id AND status = :status")
+                .param("id", orderId).param("status", status.name()).update();
     }
 
     public Optional<Order> find(String orderId) {

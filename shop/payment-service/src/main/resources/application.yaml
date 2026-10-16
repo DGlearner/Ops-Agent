@@ -23,3 +23,5 @@ shop:
     # Simulated time spent at the payment provider, picked uniformly per charge.
     gateway-latency-min: 20ms
     gateway-latency-max: 60ms
+    # A charge still PROCESSING after this long was interrupted (e.g. a crash) and is settled by asking the provider.
+    stale-after: 30s

@@ -8,6 +8,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -15,6 +16,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -33,7 +35,9 @@ import tools.jackson.databind.json.JsonMapper;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "management.server.port=0",
         "shop.payment.gateway-latency-min=150ms",
-        "shop.payment.gateway-latency-max=150ms"})
+        "shop.payment.gateway-latency-max=150ms",
+        "shop.payment.resolve-interval=200ms",
+        "shop.payment.stale-after=1s"})
 class PaymentIT {
 
     @Container
@@ -66,7 +70,7 @@ class PaymentIT {
         assertThat(charged.statusCode()).isEqualTo(201);
         Payment payment = json.readValue(charged.body(), Payment.class);
         assertThat(payment.status()).isEqualTo(PaymentStatus.SUCCEEDED);
-        assertThat(payment.amountCents()).isEqualTo(19_800);
+        assertThat(payment.amountCents()).isEqualTo(19_800L);
         assertThat(payment.declineReason()).isNull();
         assertThat(charged.body()).doesNotContain("tok_ok").doesNotContain("payment_token");
         assertThat(json.readValue(get("/api/v1/payments/" + order).body(), Payment.class)).isEqualTo(payment);
@@ -120,6 +124,51 @@ class PaymentIT {
         assertThat(providerCalls()).isEqualTo(calls + 1);
         assertThat(rows(order)).isEqualTo(1);
         assertThat(charge(order, 4_200, "tok_ok").statusCode()).isEqualTo(200);
+    }
+
+    @Test
+    void voidBeforeAnyChargeRefusesTheLateCharge() throws Exception {
+        String order = newOrder();
+
+        HttpResponse<String> voided = post("/api/v1/payments/" + order + "/void", "");
+        double calls = providerCalls();
+        HttpResponse<String> late = charge(order, 1_000, "tok_ok");
+
+        assertThat(voided.statusCode()).isEqualTo(200);
+        Payment placeholder = json.readValue(voided.body(), Payment.class);
+        assertThat(placeholder.status()).isEqualTo(PaymentStatus.VOIDED);
+        assertThat(placeholder.amountCents()).isNull();
+        assertProblem(late, 409, "PAYMENT_VOIDED");
+        assertThat(providerCalls()).isEqualTo(calls);
+        assertThat(json.readValue(post("/api/v1/payments/" + order + "/void", "").body(), Payment.class))
+                .isEqualTo(placeholder);
+    }
+
+    @Test
+    void voidAfterAChargeReportsHowTheChargeEnded() throws Exception {
+        String order = newOrder();
+        charge(order, 1_000, "tok_ok");
+
+        Payment payment = json.readValue(post("/api/v1/payments/" + order + "/void", "").body(), Payment.class);
+
+        assertThat(payment.status()).isEqualTo(PaymentStatus.SUCCEEDED);
+    }
+
+    @Test
+    void interruptedChargeIsSettledFromTheProvidersRecord() {
+        String order = newOrder();
+        jdbc.sql("""
+                        INSERT INTO payment (payment_id, order_id, user_id, amount_cents, currency, payment_token, status,
+                                             created_at, updated_at)
+                        VALUES (?, ?, 'u-1', 500, 'CNY', 'tok_declined', 'PROCESSING', NOW(3) - INTERVAL 1 MINUTE,
+                                NOW(3) - INTERVAL 1 MINUTE)""")
+                .params(UUID.randomUUID().toString(), order).update();
+
+        Awaitility.await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+            Payment payment = json.readValue(get("/api/v1/payments/" + order).body(), Payment.class);
+            assertThat(payment.status()).isEqualTo(PaymentStatus.DECLINED);
+            assertThat(payment.declineReason()).isEqualTo("INSUFFICIENT_FUNDS");
+        });
     }
 
     @Test

@@ -29,3 +29,11 @@ shop:
       base-url: http://localhost:8093
       connect-timeout: 500ms
       read-timeout: 3s
+    recovery:
+      enabled: true
+      interval: 2s
+      # Longer than the payment read timeout, so a slow charge has finished one way or the other.
+      reconcile-after: 5s
+      # Far longer than any request can take with the timeouts above.
+      abandon-after: 60s
+      max-backoff: 30s

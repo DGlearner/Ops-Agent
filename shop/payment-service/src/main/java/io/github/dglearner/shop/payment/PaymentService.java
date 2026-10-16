@@ -58,12 +58,51 @@ public class PaymentService {
         return payments.find(orderId).map(PaymentRepository.Stored::payment);
     }
 
+    /**
+     * Makes sure an order can no longer be charged unless it already was: with no payment yet, writes a VOIDED
+     * placeholder that refuses any later charge for the order. Returns the order's payment either way, so the
+     * caller learns how the charge ended (docs/shop-design.md §7.4).
+     */
+    public Outcome voidUnlessCharged(String orderId) {
+        try {
+            payments.insertVoided(Ids.newId(), orderId);
+        } catch (DuplicateKeyException e) {
+            return new Outcome(payments.find(orderId).orElseThrow().payment(), false);
+        }
+        Payment voided = payments.find(orderId).orElseThrow().payment();
+        registry.counter("shop.payments", "status", "voided", "reason", "none").increment();
+        log.atInfo().addKeyValue("order_id", orderId).addKeyValue("payment_id", voided.paymentId())
+                .log("Payment voided before any charge arrived");
+        return new Outcome(voided, true);
+    }
+
+    /** Settles a charge that was interrupted while PROCESSING, by asking the provider how it ended. */
+    public void resolveInterrupted(PaymentRepository.Stored stored) {
+        Payment payment = stored.payment();
+        PaymentGateway.Decision decision = gateway.lookup(stored.paymentToken());
+        if (payments.complete(payment.orderId(), decision.status(), decision.declineReason())) {
+            registry.counter("shop.payments", "status", decision.status().name().toLowerCase(Locale.ROOT),
+                    "reason", decision.declineReason() == null ? "none"
+                            : decision.declineReason().toLowerCase(Locale.ROOT)).increment();
+            log.atWarn().addKeyValue("order_id", payment.orderId()).addKeyValue("payment_id", payment.paymentId())
+                    .addKeyValue("status", decision.status())
+                    .log("Interrupted charge resolved from the provider's record");
+        }
+    }
+
     private Outcome replay(ChargeRequest request) {
         PaymentRepository.Stored stored = payments.find(request.orderId())
                 .orElseThrow(() -> new IllegalStateException("Duplicate key without a row for " + request.orderId()));
         Payment existing = stored.payment();
+        if (existing.status() == PaymentStatus.VOIDED) {
+            // Reconciliation gave up on this charge and cancelled the order: it must not go through now.
+            registry.counter("shop.payments", "status", "refused_after_void", "reason", "none").increment();
+            log.atWarn().addKeyValue("order_id", request.orderId()).log("Late charge refused: payment was voided");
+            throw new ApiException(HttpStatus.CONFLICT, "PAYMENT_VOIDED",
+                    "The payment for order " + request.orderId() + " was voided").with("order_id", request.orderId());
+        }
         boolean same = existing.userId().equals(request.userId())
-                && existing.amountCents() == request.amountCents()
+                && Objects.equals(existing.amountCents(), request.amountCents())
                 && existing.currency().equals(request.currency())
                 && Objects.equals(stored.paymentToken(), request.paymentToken());
         if (!same) {

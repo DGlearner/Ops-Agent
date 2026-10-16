@@ -16,8 +16,6 @@ import io.github.dglearner.shop.order.client.InventoryClient.ReserveResult;
 import io.github.dglearner.shop.order.client.PaymentClient;
 import io.github.dglearner.shop.order.client.PaymentClient.ChargeResult;
 import io.github.dglearner.shop.order.task.InventoryAction;
-import io.github.dglearner.shop.order.task.InventoryTaskRepository;
-import io.github.dglearner.shop.order.task.InventoryTasks;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -46,21 +44,19 @@ public class OrderService {
 
     private final OrderRepository orders;
     private final ProductRepository products;
-    private final InventoryTaskRepository taskRepository;
-    private final InventoryTasks tasks;
+    private final OrderSettlement settlement;
     private final InventoryClient inventory;
     private final PaymentClient payment;
     private final TransactionTemplate tx;
     private final OrderMetrics metrics;
     private final String currency;
 
-    public OrderService(OrderRepository orders, ProductRepository products, InventoryTaskRepository taskRepository,
-            InventoryTasks tasks, InventoryClient inventory, PaymentClient payment, TransactionTemplate tx,
-            OrderMetrics metrics, OrderProperties properties) {
+    public OrderService(OrderRepository orders, ProductRepository products, OrderSettlement settlement,
+            InventoryClient inventory, PaymentClient payment, TransactionTemplate tx, OrderMetrics metrics,
+            OrderProperties properties) {
         this.orders = orders;
         this.products = products;
-        this.taskRepository = taskRepository;
-        this.tasks = tasks;
+        this.settlement = settlement;
         this.inventory = inventory;
         this.payment = payment;
         this.tx = tx;
@@ -142,23 +138,9 @@ public class OrderService {
         };
     }
 
-    /**
-     * Moves the order to its final status and records the inventory command in the same transaction, then sends the
-     * command. If sending fails the command stays pending and is retried, so stock is never left reserved.
-     */
     private Order settle(String orderId, OrderStatus from, OrderStatus to, FailureReason reason,
             InventoryAction action) {
-        boolean moved = Boolean.TRUE.equals(tx.execute(status -> {
-            if (!orders.transition(orderId, from, to, reason)) {
-                return false;
-            }
-            taskRepository.insert(orderId, action);
-            return true;
-        }));
-        if (moved) {
-            tasks.execute(orderId, action);
-        }
-        return current(orderId);
+        return settlement.settle(orderId, from, to, reason, action);
     }
 
     private Optional<Result> replay(String userId, String idempotencyKey, String hash) {

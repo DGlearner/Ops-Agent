@@ -86,11 +86,17 @@ HTTP 调用都在数据库事务之外进行，调用下游时不占用数据库
 
 ```
 CREATED ──预留成功──▶ STOCK_RESERVED ──支付成功──▶ PAID
-   │                      │   └──支付结果未知──▶ PAYMENT_UNKNOWN ──对账──▶ PAID / CANCELLED   （S5）
+   │                      │   └──支付结果未知──▶ PAYMENT_UNKNOWN ──对账──▶ PAID / CANCELLED
    └──────────────────────┴──────────────────────────────────────────▶ CANCELLED（带 failure_reason）
 ```
 
 每次状态变更都是条件更新 `UPDATE orders SET status = ? WHERE order_id = ? AND status = ?`，不会被并发的另一方覆盖。
+
+后台恢复任务（§7.7）保证每个订单最终都有结局：
+- 停在 CREATED 或 STOCK_RESERVED 超过 60 s（`abandon-after`）的订单，说明处理它的请求已经中断，例如进程崩溃。
+  - CREATED：取消（`ABANDONED`），并释放可能已经做出的预留。
+  - STOCK_RESERVED：扣款请求可能已经发出，转入 PAYMENT_UNKNOWN 等待对账。
+- PAYMENT_UNKNOWN 超过 5 s（`reconcile-after`）开始对账。
 
 ### 4.3 分支处理
 
@@ -102,6 +108,7 @@ CREATED ──预留成功──▶ STOCK_RESERVED ──支付成功──▶ P
 | 库存服务连不上、超时或 5xx | CANCELLED / `INVENTORY_UNAVAILABLE` | RELEASE（可能已经预留，见 §7.3） | 503 |
 | 支付服务连不上（请求没发出去） | CANCELLED / `PAYMENT_UNAVAILABLE` | RELEASE | 503 |
 | 支付超时或 5xx（不知道扣没扣款） | PAYMENT_UNKNOWN，不取消 | 保持预留，等对账 | 202 |
+| 处理中途请求中断（进程崩溃） | 后台任务处理：CANCELLED / `ABANDONED`，或转入对账 | RELEASE，或等对账 | — |
 
 业务结果（库存不足、支付被拒）返回 201，订单状态写在响应里。基础设施故障返回 5xx，这样能体现在 `http.server.requests` 的错误率上，便于监控。
 
@@ -141,7 +148,7 @@ CREATED ──预留成功──▶ STOCK_RESERVED ──支付成功──▶ P
 |---|---|
 | 201 | 本次请求创建了订单（状态可能是 PAID 或 CANCELLED） |
 | 200 | 幂等重放：同一个键、同样的请求体、订单已有结局；响应头 `Idempotent-Replayed: true` |
-| 202 | 订单处于 PAYMENT_UNKNOWN，结果待对账（S5） |
+| 202 | 订单处于 PAYMENT_UNKNOWN，结果待对账（§7.4）；用 `GET /api/v1/orders/{order_id}` 查询结局 |
 | 400 | 校验失败，`code` = `VALIDATION_FAILED` |
 | 409 | 同一个键的原请求仍在处理中，`code` = `ORDER_IN_PROGRESS`，带 `order_id` |
 | 422 | 同一个键配了不同的请求体（`IDEMPOTENCY_KEY_REUSED`），或 SKU 不存在（`UNKNOWN_SKU`） |
@@ -180,7 +187,7 @@ CREATED ──预留成功──▶ STOCK_RESERVED ──支付成功──▶ P
 |---|---|
 | `POST /api/v1/payments` | `{"order_id", "user_id", "amount_cents", "currency", "payment_token"}`，扣款 |
 | `GET /api/v1/payments/{order_id}` | 按订单查询支付，用于对账 |
-| `POST /api/v1/payments/{order_id}/void`（S5） | 作废：若还没有支付记录，写入 VOIDED 占位，之后迟到的扣款请求会被拒绝 |
+| `POST /api/v1/payments/{order_id}/void` | 作废，除非已经扣款：若还没有支付记录，写入 VOIDED 占位（没有金额和用户），之后迟到的扣款请求返回 409 `PAYMENT_VOIDED`。无论哪种情况，都返回该订单当前的支付记录 |
 
 测试令牌仿照支付平台的沙箱：`tok_ok` 扣款成功，`tok_declined` 被拒（`INSUFFICIENT_FUNDS`），其他令牌被拒（`INVALID_TOKEN`）。
 
@@ -257,14 +264,23 @@ payment (payment_id PK, order_id UNIQUE, user_id, amount_cents, currency,
 
 - `order_id` 唯一，一个订单最多一笔支付。
 - 支付服务先写 PROCESSING 记录占住订单，再调用（模拟的）支付渠道，最后更新为结果。并发的重复请求看到 PROCESSING 会返回 409，不会第二次调用渠道。
-- 支付超时 ≠ 支付失败。订单服务遇到超时或 5xx 时不取消订单，而是置为 PAYMENT_UNKNOWN，由对账（S5）通过 `GET /payments/{order_id}` 确定结果。如果查不到支付记录，先调用 `void` 写入作废占位，再取消订单。这与库存的防悬挂是同一个思路。
+- 支付超时 ≠ 支付失败。订单服务遇到超时或 5xx 时不取消订单，而是置为 PAYMENT_UNKNOWN，交给对账。
+- **对账只调用一次 `void`，它同时完成两件事：** 返回支付的实际结局；如果还没扣款，保证以后也扣不了。这与库存的防悬挂是同一个思路。
+  - SUCCEEDED → PAID，确认库存。
+  - DECLINED → CANCELLED / `PAYMENT_DECLINED`，释放库存。
+  - VOIDED（从未扣款） → CANCELLED / `PAYMENT_UNAVAILABLE`，释放库存。
+  - PROCESSING 或支付服务不可达 → 稍后再对账。
+- 如果先查询、再根据查询结果作废，两步之间迟到的扣款可能恰好到达。`void` 在一个请求里写入占位，消除了这个时间窗。
+- **支付服务自己的恢复：** 停在 PROCESSING 超过 30 s 的扣款，说明请求在调用渠道之后、保存结果之前中断了。支付服务向（模拟的）渠道查询这笔扣款的结局并补记。
 
 ### 7.5 确认、释放的可靠执行
 
 订单进入 PAID 或预留后被取消时，在**同一个事务**里写入一条 `inventory_task`（CONFIRM 或 RELEASE）。随后：
 
 1. 请求线程立即调用库存服务，成功后将待办置为 DONE。
-2. 调用失败时，待办保持 PENDING。S5 加入后台任务，按 `next_attempt_at` 指数退避重试，直到成功。
+2. 调用失败时，待办保持 PENDING，由后台任务按 `next_attempt_at` 重试，直到成功。
+   - 重试间隔指数退避：2 s、4 s、8 s……最长 30 s（`max-backoff`）。
+   - 新写入的待办带 30 s 租约。只有请求线程没能记下结果（例如进程崩溃）时，后台任务才会接手，避免两边同时发送。
 3. 库存服务明确拒绝（例如确认一个已释放的预留）时，待办置为 FAILED 并记 ERROR 日志。按设计这不应发生；一旦发生需要人工处理，重试也没有用。
 
 库存的确认和释放都是幂等的，重试是安全的。这就是 outbox 模式，只是投递走 HTTP 而不是消息队列。
@@ -274,6 +290,17 @@ payment (payment_id PK, order_id UNIQUE, user_id, amount_cents, currency,
 每个 SKU 始终满足 `available + reserved + sold = total`（由 CHECK 约束保证）。
 
 所有订单都有结局之后，`reserved` 回到 0，并且 `sold` 的增量等于 PAID 订单的商品数量之和。请求生成工具在每次运行结束时核对这两点。
+
+
+### 7.7 后台恢复
+
+订单服务每 2 s（`shop.order.recovery.interval`）依次执行三步。每步都是条件更新，与在途请求并发安全，多实例部署也安全：
+
+1. 关闭中断的订单（§4.2）。
+2. 对账 PAYMENT_UNKNOWN 订单（§7.4）。
+3. 重试到期的库存待办（§7.5）。
+
+每个动作都计入 `shop.order.recovery{action, result}`，并记一条带 `order_id` 的日志。
 
 ---
 
@@ -306,6 +333,7 @@ payment (payment_id PK, order_id UNIQUE, user_id, amount_cents, currency,
 | `shop.inventory.tasks` | `action`（confirm/release）、`result`（done/retry/conflict） | order |
 | `shop.payments` | `status`、`reason`（拒绝原因） | payment |
 | `shop.payment.gateway`（计时器） | — | payment |
+| `shop.order.recovery` | `action`（abandoned/reconcile）、`result` | order |
 
 所有指标带 `application` 标签。
 

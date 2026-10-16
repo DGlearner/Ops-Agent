@@ -7,7 +7,9 @@ public enum FailureReason {
     /** Inventory could not be reached, timed out or failed; any reservation it may have made is released. */
     INVENTORY_UNAVAILABLE(true),
     /** The charge request never reached the payment service, so no money was taken. */
-    PAYMENT_UNAVAILABLE(true);
+    PAYMENT_UNAVAILABLE(true),
+    /** The request placing the order stopped before reserving finished, e.g. the service crashed. */
+    ABANDONED(false);
 
     private final boolean dependencyFailure;
 

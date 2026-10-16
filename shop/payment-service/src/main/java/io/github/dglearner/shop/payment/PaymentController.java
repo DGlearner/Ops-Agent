@@ -33,6 +33,12 @@ public class PaymentController {
         return ResponseEntity.ok().header(ShopHeaders.IDEMPOTENT_REPLAYED, "true").body(outcome.payment());
     }
 
+    /** Voids the order's payment unless it was charged; always answers with the order's payment. */
+    @PostMapping("/{orderId}/void")
+    public Payment voidUnlessCharged(@PathVariable String orderId) {
+        return service.voidUnlessCharged(orderId).payment();
+    }
+
     /** Looks up the payment of an order, e.g. to find out how a timed-out charge ended. */
     @GetMapping("/{orderId}")
     public Payment get(@PathVariable String orderId) {

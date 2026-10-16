@@ -29,12 +29,24 @@ public class PaymentGateway {
     public Decision charge(String paymentToken, long amountCents) {
         return timer.record(() -> {
             sleep(latency());
-            return switch (paymentToken) {
-                case "tok_ok" -> new Decision(PaymentStatus.SUCCEEDED, null);
-                case "tok_declined" -> new Decision(PaymentStatus.DECLINED, "INSUFFICIENT_FUNDS");
-                default -> new Decision(PaymentStatus.DECLINED, "INVALID_TOKEN");
-            };
+            return decide(paymentToken);
         });
+    }
+
+    /**
+     * Asks the provider how an earlier charge ended, for a charge whose answer was lost (e.g. the service crashed
+     * while waiting). In this simulation the outcome depends only on the token, so the answer is the same.
+     */
+    public Decision lookup(String paymentToken) {
+        return decide(paymentToken);
+    }
+
+    private static Decision decide(String paymentToken) {
+        return switch (paymentToken) {
+            case "tok_ok" -> new Decision(PaymentStatus.SUCCEEDED, null);
+            case "tok_declined" -> new Decision(PaymentStatus.DECLINED, "INSUFFICIENT_FUNDS");
+            default -> new Decision(PaymentStatus.DECLINED, "INVALID_TOKEN");
+        };
     }
 
     private Duration latency() {

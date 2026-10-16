@@ -23,6 +23,26 @@ public class PaymentClient {
         }
     }
 
+    /** How an order's charge ended, as reported by voiding it (which only takes effect if it was never charged). */
+    public sealed interface VoidResult {
+        record Charged(String paymentId) implements VoidResult {
+        }
+
+        record Declined(String reason) implements VoidResult {
+        }
+
+        /** No charge was made, and none can be made any more. */
+        record Voided() implements VoidResult {
+        }
+
+        /** The charge is still at the provider; ask again later. */
+        record Processing() implements VoidResult {
+        }
+
+        record Failed(CallFailure failure) implements VoidResult {
+        }
+    }
+
     private record ChargeBody(String orderId, String userId, long amountCents, String currency, String paymentToken) {
     }
 
@@ -54,13 +74,36 @@ public class PaymentClient {
                         }
                         String code = Problems.read(json, response).path("code").asString();
                         CallFailure failure = CallFailure.response(status, code);
-                        // A 400 is a validation failure: the payment service rejected the request before charging.
-                        return status == 400 ? new ChargeResult.NotCharged(failure) : new ChargeResult.Unknown(failure);
+                        // A 400 is a validation failure, and PAYMENT_VOIDED means reconciliation already closed the
+                        // payment: either way nothing was charged.
+                        boolean notCharged = status == 400 || code.equals("PAYMENT_VOIDED");
+                        return notCharged ? new ChargeResult.NotCharged(failure) : new ChargeResult.Unknown(failure);
                     });
         } catch (ResourceAccessException e) {
             CallFailure failure = CallFailure.from(e);
             return failure.kind() == CallFailure.Kind.NOT_SENT
                     ? new ChargeResult.NotCharged(failure) : new ChargeResult.Unknown(failure);
+        }
+    }
+
+    public VoidResult voidUnlessCharged(String orderId) {
+        try {
+            return rest.post().uri("/api/v1/payments/{orderId}/void", orderId).exchange((request, response) -> {
+                int status = response.getStatusCode().value();
+                if (status != 200) {
+                    String code = Problems.read(json, response).path("code").asString();
+                    return new VoidResult.Failed(CallFailure.response(status, code));
+                }
+                PaymentBody payment = json.readValue(response.getBody(), PaymentBody.class);
+                return switch (payment.status()) {
+                    case "SUCCEEDED" -> new VoidResult.Charged(payment.paymentId());
+                    case "DECLINED" -> new VoidResult.Declined(payment.declineReason());
+                    case "VOIDED" -> new VoidResult.Voided();
+                    default -> new VoidResult.Processing();
+                };
+            });
+        } catch (ResourceAccessException e) {
+            return new VoidResult.Failed(CallFailure.from(e));
         }
     }
 }
