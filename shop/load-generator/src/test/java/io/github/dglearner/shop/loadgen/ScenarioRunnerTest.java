@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
@@ -99,6 +100,38 @@ class ScenarioRunnerTest {
         assertThat(received).isEmpty();
         assertThat(runner.report().get("injected_at")).isNull();
         assertThat(runner.ok()).isFalse();
+    }
+
+    @Test
+    void commandStillRunningAtTheTimeoutIsKilledAndFails() {
+        long start = System.nanoTime();
+
+        boolean ok = ScenarioRunner.runCommand(sleeper(120, 0), Duration.ofSeconds(2));
+
+        assertThat(ok).isFalse();
+        assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(15));
+        Awaitility.await().atMost(Duration.ofSeconds(10)).until(() -> ProcessHandle.allProcesses()
+                .noneMatch(p -> p.info().commandLine().orElse("").contains(Sleeper.class.getName())));
+    }
+
+    @Test
+    void commandResultFollowsItsExitCode() {
+        assertThat(ScenarioRunner.runCommand(sleeper(0, 0), Duration.ofSeconds(30))).isTrue();
+        assertThat(ScenarioRunner.runCommand(sleeper(0, 3), Duration.ofSeconds(30))).isFalse();
+        assertThat(ScenarioRunner.runCommand(List.of("no-such-command-for-the-shop"), Duration.ofSeconds(5))).isFalse();
+    }
+
+    /** {@link Sleeper} in a child JVM; only the test classes are needed on its class path. */
+    private static List<String> sleeper(int seconds, int exitCode) {
+        String java = ProcessHandle.current().info().command().orElseThrow();
+        String classes;
+        try {
+            classes = Path.of(Sleeper.class.getProtectionDomain().getCodeSource().getLocation().toURI()).toString();
+        } catch (java.net.URISyntaxException e) {
+            throw new IllegalStateException(e);
+        }
+        return List.of(java, "-Xmx32m", "-cp", classes, Sleeper.class.getName(), String.valueOf(seconds),
+                String.valueOf(exitCode));
     }
 
     private ScenarioRunner runner(String baseline, String fault) {

@@ -1,6 +1,8 @@
 package io.github.dglearner.shop.loadgen;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -23,6 +25,9 @@ final class ScenarioRunner {
 
     /** How long an injected fault rule outlives the planned fault phase if it is never cleared. */
     static final Duration EXPIRY_MARGIN = Duration.ofSeconds(30);
+
+    /** How long a docker command may run before it is stopped and counted as failed. */
+    static final Duration COMMAND_TIMEOUT = Duration.ofSeconds(60);
 
     private final Scenarios.Scenario scenario;
     private final Options options;
@@ -87,7 +92,8 @@ final class ScenarioRunner {
     void finish() {
         stop.countDown();
         try {
-            thread.join(TimeUnit.SECONDS.toMillis(60));
+            // Long enough for a clearing command to run into its own timeout and be reported.
+            thread.join(COMMAND_TIMEOUT.plusSeconds(30));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
@@ -136,7 +142,7 @@ final class ScenarioRunner {
                         command.add(arg.replace("%MYSQL%", options.mysqlContainer()));
                     }
                     step.put("action", String.join(" ", command));
-                    step.put("ok", runCommand(command));
+                    step.put("ok", runCommand(command, COMMAND_TIMEOUT));
                 }
             }
             if (!Boolean.TRUE.equals(step.get("ok"))) {
@@ -148,20 +154,42 @@ final class ScenarioRunner {
         return ok;
     }
 
-    private static boolean runCommand(List<String> command) {
+    /** Runs a command; false if it cannot start, exits non-zero, or is still running at the timeout (it is killed). */
+    static boolean runCommand(List<String> command, Duration timeout) {
+        Process process;
         try {
-            Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
-            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
-            boolean done = process.waitFor(60, TimeUnit.SECONDS);
-            if (!done || process.exitValue() != 0) {
-                System.out.println("  " + String.join(" ", command) + " failed: " + output);
-                return false;
-            }
-            return true;
+            process = new ProcessBuilder(command).redirectErrorStream(true).start();
         } catch (IOException e) {
             System.out.println("  cannot run " + command.getFirst() + ": " + e.getMessage());
             return false;
+        }
+        // The output is read on its own thread: reading it here would wait until the process closes it, however long
+        // that takes, before the timeout below even starts.
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        Thread reader = Thread.ofPlatform().name("command-output").daemon().start(() -> {
+            try (InputStream in = process.getInputStream()) {
+                in.transferTo(output);
+            } catch (IOException e) {
+                // The process was killed; whatever was read so far is reported.
+            }
+        });
+        try {
+            if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
+                process.descendants().forEach(ProcessHandle::destroyForcibly);
+                process.destroyForcibly();
+                System.out.println("  " + String.join(" ", command) + " still running after " + timeout.toSeconds()
+                        + " s, stopped: " + output.toString(StandardCharsets.UTF_8).trim());
+                return false;
+            }
+            reader.join(Duration.ofSeconds(5));
+            if (process.exitValue() != 0) {
+                System.out.println("  " + String.join(" ", command) + " failed: "
+                        + output.toString(StandardCharsets.UTF_8).trim());
+                return false;
+            }
+            return true;
         } catch (InterruptedException e) {
+            process.destroyForcibly();
             Thread.currentThread().interrupt();
             return false;
         }
