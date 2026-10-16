@@ -7,6 +7,8 @@ plugins {
 
 dependencies {
     implementation(libs.jackson.databind)
+
+    testImplementation("org.awaitility:awaitility")
 }
 
 application {

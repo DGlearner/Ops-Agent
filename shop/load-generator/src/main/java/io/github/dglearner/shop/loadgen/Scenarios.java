@@ -91,8 +91,10 @@ final class Scenarios {
         ALL.put(scenario.name(), scenario);
     }
 
+    /** Injects one fault rule; it expires on its own shortly after the fault phase in case it is never cleared. */
     private static List<Action> faults(String service, String rule) {
-        return List.of(new Action.Http(service, "POST", "/actuator/faults", rule));
+        String expiring = rule.substring(0, rule.lastIndexOf('}')) + ",\"duration\":\"%EXPIRY%\"}";
+        return List.of(new Action.Http(service, "POST", "/actuator/faults", expiring));
     }
 
     private static List<Action> clearFaults(String service) {

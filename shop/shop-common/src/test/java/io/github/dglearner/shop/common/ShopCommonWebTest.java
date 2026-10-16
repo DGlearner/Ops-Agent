@@ -11,9 +11,11 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -183,6 +185,27 @@ class ShopCommonWebTest {
             clearFaults();
         }
         assertThat(management("GET", null).body()).isEqualTo("[]");
+    }
+
+    @Test
+    void faultRulesExpireOnTheirOwn() throws Exception {
+        try {
+            HttpResponse<String> added = addFault("{\"path\":\"/echo\",\"errors\":1.0,\"duration\":\"500ms\"}");
+            assertThat(added.statusCode()).isEqualTo(200);
+            assertThat(added.body()).contains("\"expires_at\"");
+            assertThat(post("/echo", "{\"sku_code\":\"SKU-1\",\"quantity\":1}", "k").statusCode()).isEqualTo(503);
+
+            Awaitility.await().atMost(Duration.ofSeconds(5)).untilAsserted(() ->
+                    assertThat(management("GET", null).body()).isEqualTo("[]"));
+            assertThat(post("/echo", "{\"sku_code\":\"SKU-1\",\"quantity\":1}", "k").statusCode()).isEqualTo(200);
+
+            assertThat(addFault("{\"path\":\"/echo\",\"duration\":\"0s\"}").statusCode()).isEqualTo(400);
+            assertThat(addFault("{\"path\":\"/echo\",\"duration\":\"2h\"}").statusCode()).isEqualTo(400);
+            // Without a duration a rule stays for the default 10 minutes, not forever.
+            assertThat(addFault("{\"path\":\"/echo\"}").body()).contains("\"expires_at\"");
+        } finally {
+            clearFaults();
+        }
     }
 
     @LocalManagementPort

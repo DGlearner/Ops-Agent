@@ -101,14 +101,18 @@ public final class LoadGenerator {
         report.put("rate", options.rate());
         ScenarioRunner scenario = options.hasScenario()
                 ? new ScenarioRunner(Scenarios.get(options.scenario()), options, client) : null;
+        // Ctrl+C or a kill ends the JVM without the finally block below; the hook still clears the fault.
+        Thread clearOnExit = scenario == null ? null : new Thread(scenario::finish, "scenario-clear-on-exit");
         try {
             if (scenario != null) {
+                Runtime.getRuntime().addShutdownHook(clearOnExit);
                 scenario.start();
             }
             send(mix);
         } finally {
             if (scenario != null) {
                 scenario.finish();
+                removeShutdownHook(clearOnExit);
             }
             duplicateSender.close();
         }
@@ -376,6 +380,14 @@ public final class LoadGenerator {
 
     private static String traceSuffix(ShopClient.Response response) {
         return response.traceId().isEmpty() ? "" : " (trace " + response.traceId() + ")";
+    }
+
+    private static void removeShutdownHook(Thread hook) {
+        try {
+            Runtime.getRuntime().removeShutdownHook(hook);
+        } catch (IllegalStateException e) {
+            // Already shutting down: the hook is running or has run.
+        }
     }
 
     static {

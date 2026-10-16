@@ -8,21 +8,31 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 /**
  * Runs a scenario's fault while orders keep flowing: waits for the baseline, injects, waits for the fault phase,
  * clears. Records when each step happened; that timeline is the ground truth in the run report.
+ *
+ * <p>A fault is recorded as cleared only when every clearing step succeeded. Fault rules are injected with an expiry a
+ * little after the planned end of the fault, so even if this process dies before clearing them they end on their
+ * own; a stopped container does not, and is reported.
  */
 final class ScenarioRunner {
+
+    /** How long an injected fault rule outlives the planned fault phase if it is never cleared. */
+    static final Duration EXPIRY_MARGIN = Duration.ofSeconds(30);
 
     private final Scenarios.Scenario scenario;
     private final Options options;
     private final ShopClient client;
     private final Thread thread;
     private final List<Map<String, Object>> steps = new ArrayList<>();
+    private final CountDownLatch stop = new CountDownLatch(1);
     private volatile Instant injectedAt;
     private volatile Instant clearedAt;
+    private boolean clearAttempted;
 
     ScenarioRunner(Scenarios.Scenario scenario, Options options, ShopClient client) {
         this.scenario = scenario;
@@ -36,12 +46,16 @@ final class ScenarioRunner {
     }
 
     private void run() {
+        // Waits on a latch rather than sleeping, so finish() can end a phase early without interrupting this thread:
+        // the clearing requests below would fail at once on an interrupted thread.
         try {
-            Thread.sleep(options.baseline());
+            if (stop.await(options.baseline().toMillis(), TimeUnit.MILLISECONDS)) {
+                return;
+            }
             injectedAt = Instant.now();
             System.out.printf("%s fault injected: %s%n", injectedAt, scenario.fault());
             perform("inject", scenario.inject());
-            Thread.sleep(options.fault());
+            stop.await(options.fault().toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } finally {
@@ -52,17 +66,26 @@ final class ScenarioRunner {
     }
 
     private synchronized void clear() {
-        if (clearedAt != null) {
+        if (clearAttempted) {
             return;
         }
-        perform("clear", scenario.clear());
-        clearedAt = Instant.now();
-        System.out.printf("%s fault cleared%n", clearedAt);
+        clearAttempted = true;
+        if (perform("clear", scenario.clear())) {
+            clearedAt = Instant.now();
+            System.out.printf("%s fault cleared%n", clearedAt);
+        } else {
+            System.out.printf("%s FAULT NOT CLEARED, it may still be active: %s%n", Instant.now(), scenario.fault());
+            System.out.println("  injected fault rules expire on their own " + EXPIRY_MARGIN.toSeconds()
+                    + " s after the planned end of the fault; repeat the failed steps above for anything else");
+        }
     }
 
-    /** Ends the scenario, clearing the fault if it is still active, e.g. when the run was cut short. */
+    /**
+     * Ends the scenario, clearing the fault if it is still active, e.g. when the run was cut short or the process is
+     * shutting down. Safe to call more than once.
+     */
     void finish() {
-        thread.interrupt();
+        stop.countDown();
         try {
             thread.join(TimeUnit.SECONDS.toMillis(60));
         } catch (InterruptedException e) {
@@ -89,7 +112,9 @@ final class ScenarioRunner {
         return injectedAt != null && clearedAt != null && steps.stream().allMatch(s -> Boolean.TRUE.equals(s.get("ok")));
     }
 
-    private void perform(String phase, List<Scenarios.Action> actions) {
+    /** Runs the actions in order; true if all succeeded. */
+    private boolean perform(String phase, List<Scenarios.Action> actions) {
+        boolean ok = true;
         for (Scenarios.Action action : actions) {
             Map<String, Object> step = new LinkedHashMap<>();
             step.put("phase", phase);
@@ -97,7 +122,8 @@ final class ScenarioRunner {
             switch (action) {
                 case Scenarios.Action.Http http -> {
                     String body = http.body() == null ? null
-                            : http.body().replace("%FAULT%", options.fault().toMillis() + "ms");
+                            : http.body().replace("%FAULT%", options.fault().toMillis() + "ms")
+                                    .replace("%EXPIRY%", options.fault().plus(EXPIRY_MARGIN).toMillis() + "ms");
                     ShopClient.Response response = client.admin(http.service(), http.method(), http.path(), body);
                     step.put("action", http.method() + " " + http.service() + " " + http.path());
                     step.put("body", body);
@@ -115,9 +141,11 @@ final class ScenarioRunner {
             }
             if (!Boolean.TRUE.equals(step.get("ok"))) {
                 System.out.println("  step failed: " + step);
+                ok = false;
             }
             steps.add(step);
         }
+        return ok;
     }
 
     private static boolean runCommand(List<String> command) {
