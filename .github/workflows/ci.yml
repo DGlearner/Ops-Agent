@@ -16,7 +16,7 @@ jobs:
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: "25"
+          java-version: "21"
       # Also validates the checksum of gradle/wrapper/gradle-wrapper.jar.
       - uses: gradle/actions/setup-gradle@v6
       # Integration tests start Kafka, PostgreSQL and Redis with Testcontainers; the runner provides Docker.

@@ -18,7 +18,7 @@
 
 ## 本地运行
 
-需要 Docker（Windows 上为 Docker Desktop + WSL2）。JDK 25 由 Gradle 自动下载，也可以自行安装。
+需要 Docker（Windows 上为 Docker Desktop + WSL2）。JDK 21 由 Gradle 自动下载，也可以自行安装。
 
 ```bash
 cd deploy/compose

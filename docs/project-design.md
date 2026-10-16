@@ -101,7 +101,7 @@ Ops-Agent/
 
 | 领域 | 选择 | 版本 |
 |---|---|---|
-| 语言 | Java（Temurin） | 25 LTS |
+| 语言 | Java（Temurin） | 21 LTS |
 | 构建 | Gradle（Kotlin DSL）+ wrapper；foojay 插件自动下载 JDK | 9.8.1 |
 | 框架 | Spring Boot（含 Spring Framework 7、Spring Security 7、Jackson 3） | 4.1.1 |
 | 模块化 | Spring Modulith（core-service 模块边界校验与事件发布登记） | 2.1.1 |
@@ -113,6 +113,12 @@ Ops-Agent/
 | API 文档 | springdoc-openapi | 3.1.1 |
 | 测试 | JUnit 6、AssertJ、Testcontainers 2、Kafka Streams TopologyTestDriver | 随 Boot 管理 |
 | 可观测 | Spring Boot Actuator、Micrometer + Prometheus | 随 Boot 管理 |
+
+版本选择的考虑：
+
+- **JDK 21：** 选更贴近企业现状的 LTS（2023-09 发布，Temurin 支持到 2029-12）。17 没有虚拟线程，所以不选。
+- **Spring Boot 4.1：** 3.x 的最后一个版本 3.5 的开源支持已于 2026-06-30 结束，新项目不再用。4.1 的开源支持到 2027-07。
+- **JDK 21 上虚拟线程的限制：** ingest-service 开启了虚拟线程。Kafka 拿不到元数据时，producer 会在 `synchronized` 方法里调用 `Object.wait()`，最长 `max.block.ms`（5 s）。JDK 21 上这会钉住载体线程，调度器临时增加载体线程补偿（上限 256），也就是 Kafka 故障期间每个等待中的请求占一个系统线程。实测（4 个载体、64 个虚拟线程各等待 1 s）：JDK 21 线程峰值 72，JDK 25 为 12，耗时都是 1 s。在 `synchronized` 里做其他阻塞操作（sleep、阻塞 I/O）没有补偿，会被串行化（同样实测 16 s 对 1 s），所以本项目在虚拟线程上用 `ReentrantLock` 而不是 `synchronized` 包住阻塞调用。JDK 24 起（JEP 491）没有这个限制。
 
 ---
 
@@ -516,7 +522,7 @@ docker compose up -d            # Kafka UI: docker compose --profile tools up -d
 java tools/Replay.java datasets/aiops_mixed_incident_small.jsonl
 ```
 
-- **Windows 兼容：** `.gitattributes` 强制 LF（容器内的 shell 脚本不能是 CRLF）；开发脚本使用 Java 单文件程序或 Gradle 任务，不依赖 bash；Gradle 的 foojay 插件会自动下载 JDK 25。
+- **Windows 兼容：** `.gitattributes` 强制 LF（容器内的 shell 脚本不能是 CRLF）；开发脚本使用 Java 单文件程序或 Gradle 任务，不依赖 bash；Gradle 的 foojay 插件会自动下载 JDK 21。
 
 ---
 

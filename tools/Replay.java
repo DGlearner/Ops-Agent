@@ -16,7 +16,7 @@ import java.util.UUID;
  * java tools/Replay.java [--url http://localhost:8081] [--key dev-ingest-key] [--rate 20] [--run-id ID] FILE
  * </pre>
  *
- * Runs on any OS with JDK 25 (single-file source launch, no build needed). Each request carries
+ * Runs on any OS with JDK 21 (single-file source launch, no build needed). Each request carries
  * Idempotency-Key "run-id:line", so retries after 429/503 within a run, or rerunning with the same --run-id,
  * produce the same event ids.
  */
