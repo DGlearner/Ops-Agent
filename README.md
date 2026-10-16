@@ -41,15 +41,47 @@ java tools/Replay.java datasets/aiops_mixed_incident_small.jsonl
 
 查看结果：`docker compose --profile tools up -d` 后打开 Kafka UI（http://localhost:8089），看 `logs.normalized`、`alerts` 等 topic。样例数据会产生 7 条告警。
 
+## 电商靶场（shop）
+
+给 Ops-Agent 监控用的最小电商系统：订单、库存、支付模拟三个服务。它们产生结构化日志、跨服务 trace 和指标，S5 起可以注入超时与故障。设计见 [docs/shop-design.md](docs/shop-design.md)。
+
+| 阶段 | 状态 |
+|---|---|
+| S0 设计、MySQL、公共模块 · S1 库存 · S2 支付 · S3 订单 · S4 请求生成工具 | 完成 |
+| S5 故障注入与恢复 | 进行中 |
+
+```bash
+cd deploy/shop && docker compose up -d                  # MySQL 8.4（与 Ops-Agent 的基础设施分开）
+./gradlew :shop:inventory-service:bootRun              # 8092
+./gradlew :shop:payment-service:bootRun                # 8093
+./gradlew :shop:order-service:bootRun                  # 8091
+./gradlew :shop:load-generator:run --args="--rate 10 --duration 30s"
+```
+
+- 也可以在 IDEA 里直接运行三个服务的主类。
+- 请求生成工具也可以先用 `./gradlew :shop:load-generator:installDist` 安装，再运行 `shop/load-generator/build/install/load-generator/bin/load-generator`（Windows 上运行同目录下的 `.bat`）。
+- 运行结束时，请求生成工具核对重复请求和库存账目，有任何不一致就以非 0 退出。`--help` 之外的参数见 `Options.java`。
+- 日志：`logs/shop/<服务名>.log`，每行一条 ECS JSON，带 `trace.id`。
+- 指标：`http://localhost:819x/actuator/prometheus`，管理端口只监听 127.0.0.1。
+
+下单示例：
+
+```bash
+curl -s localhost:8091/api/v1/orders -H 'Content-Type: application/json' -H 'Idempotency-Key: demo-1' \
+  -d '{"user_id":"u-1001","items":[{"sku":"SKU-1001","quantity":2}]}'
+```
+
 ## 目录
 
 ```
 build-logic/      Gradle convention plugins
 libs/             共享库（消息契约）
 services/         ingest-service、stream-processor、core-service
+shop/             电商靶场：order、inventory、payment 服务，shop-common，load-generator
 contracts/        Kafka 消息的 JSON Schema
 agent/            Python Agent（待定）
 deploy/compose/   本地基础设施
+deploy/shop/      靶场的 MySQL
 datasets/         样例日志
 tools/            重放工具等开发脚本
 docs/             设计文档

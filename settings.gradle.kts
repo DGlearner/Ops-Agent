@@ -24,4 +24,5 @@ include(
     "shop:inventory-service",
     "shop:payment-service",
     "shop:order-service",
+    "shop:load-generator",
 )

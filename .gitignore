@@ -22,3 +22,6 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Load generator reports
+runs/

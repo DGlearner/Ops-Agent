@@ -313,16 +313,28 @@ payment (payment_id PK, order_id UNIQUE, user_id, amount_cents, currency,
 
 ## 9. 请求生成工具
 
-`shop/load-generator` 是一个 Java 命令行程序，用 Gradle 运行，Windows 上同样可用：
+`shop/load-generator` 是一个 Java 命令行程序，Windows 上同样可用：
 
 ```bash
 ./gradlew :shop:load-generator:run --args="--rate 10 --duration 60s --duplicate-rate 0.1"
+# 或者先安装：./gradlew :shop:load-generator:installDist，然后运行 build/install/load-generator/bin/load-generator（Windows 用 .bat）
 ```
 
-- **下单：** 按设定速率下单，随机用户、随机商品，可以设定被拒卡的比例和限量商品的比例。
-- **重复请求：** 按比例用同一个 `Idempotency-Key` 再发一次，一半与原请求并发，一半在原请求完成后。检查两次拿到的是同一个 `order_id`。
-- **统计：** 按 HTTP 状态码和订单结局计数，输出延迟的 p50/p95/p99。
-- **核对：** 运行前后各取一次库存快照，核对 §7.6 的不变量。任何一项不通过，进程以非 0 退出。
+- **下单：** 按设定速率下单（`--rate`），随机用户、每单 1–3 个不同的商品。被拒卡的比例由 `--decline-rate` 设定，限量商品 `SKU-2001` 的比例由 `--hot-rate` 设定。同时进行中的请求数达到 `--concurrency` 时，跳过这一拍并计数，这说明系统已经跟不上了。
+- **重复请求：** 按 `--duplicate-rate` 用同一个 `Idempotency-Key` 再发一次，一半与原请求并发，一半在原请求完成后发出。两次响应必须指向同一个 `order_id`；其中一次是 409，说明另一次还在处理中。
+- **收尾：** 发送结束后，在 `--settle-timeout` 内轮询仍未结束的订单。
+- **核对：** 运行前后各取一次库存快照，核对 §7.6 的不变量：`sold` 的增量等于 PAID 订单的件数；`reserved` 的增量等于仍未结束的订单占用的件数。只要有不一致、重复请求拿到不同订单，或者出现意外的状态码，进程就以 1 退出。
+- **输出：** 按 HTTP 状态码和订单结局计数，以及 p50/p95/p99 延迟。前 20 个失败请求连同它们的 trace ID 一起列出；`--report` 另外写一份 JSON。
+- **前提：** 核对假设运行期间没有别的下单或补货；`--no-verify` 可以关闭核对。
+
+**S4 实测**（开发服务器，2026-10-16）：三个服务的堆各 256 MB，10 单/秒，持续 30 秒，15% 重复请求，15% 含限量商品。
+
+- 共 300 单，54 次重复请求。重复请求全部指向原订单：27 次重放，27 次处理中。
+- 结局：PAID 264，OUT_OF_STOCK 28，PAYMENT_DECLINED 8。
+- `SKU-2001` 恰好卖出 20 件，没有超卖。库存账目核对通过：卖出 1066 件，没有残留的预留。
+- 延迟：p50 105 ms，p95 150 ms，p99 521 ms（p99 含刚启动时的 JIT 预热）。
+- 同一个 trace ID 依次出现在三个服务的日志里：创建订单 → 预留库存 → 扣款 → 确认库存。
+- 三个服务的业务计数对得上：预留 272 次 = PAID 264 + 被拒 8，确认 264 次，释放 8 次。
 
 ---
 
