@@ -108,24 +108,36 @@ public final class LoadGenerator {
         report.put("started_at", Instant.now().toString());
         report.put("seed", seed);
         report.put("rate", options.rate());
+        report.put("environment", RunEnvironment.describe(options));
+        report.put("config", options.describe());
+        Map<String, Long> locksBefore = RunEnvironment.rowLocks(options.mysqlContainer());
+        ResourceSampler sampler = new ResourceSampler(client, List.of("order", "inventory", "payment"));
+        Map<String, Object> resources;
         ScenarioRunner scenario = options.hasScenario()
                 ? new ScenarioRunner(Scenarios.get(options.scenario()), options, client) : null;
         // Ctrl+C or a kill ends the JVM without the finally block below; the hook still clears the fault.
         Thread clearOnExit = scenario == null ? null : new Thread(scenario::finish, "scenario-clear-on-exit");
+        long sendingFrom = System.nanoTime();
         try {
             if (scenario != null) {
                 Runtime.getRuntime().addShutdownHook(clearOnExit);
                 scenario.start();
             }
+            sampler.start();
             send(mix);
         } finally {
+            resources = sampler.stop();
             if (scenario != null) {
                 scenario.finish();
                 removeShutdownHook(clearOnExit);
             }
             duplicateSender.close();
         }
+        double sendingSeconds = (System.nanoTime() - sendingFrom) / 1e9;
         report.put("sending_ended_at", Instant.now().toString());
+        report.put("sending_s", Math.round(sendingSeconds * 10) / 10.0);
+        report.put("actual_rate", Math.round(stats.orders.sum() / sendingSeconds * 10) / 10.0);
+        report.put("resources", resources);
         if (scenario != null) {
             report.put("scenario", scenario.report());
         }
@@ -133,6 +145,9 @@ public final class LoadGenerator {
         long deadline = System.nanoTime() + options.settleTimeout().toNanos();
         settle(deadline);
         boolean ok = summarize(before, report, deadline) && (scenario == null || scenario.ok());
+        printResources(resources);
+        report.put("mysql_row_locks", rowLocksDuring(locksBefore));
+        report.put("backlog_at_end", backlogAtEnd());
         System.out.println(ok ? "RESULT: OK" : "RESULT: FAILED");
         report.put("ok", ok);
         if (options.report() != null) {
@@ -287,6 +302,7 @@ public final class LoadGenerator {
         System.out.printf("orders: %d sent (%d ticks skipped at the concurrency limit), %d duplicates, "
                         + "%d retries of unanswered requests%n", stats.orders.sum(), stats.skippedTicks.sum(),
                 stats.duplicatesSent.sum(), stats.retries.sum());
+        System.out.printf("rate: %s orders/s sent, %.1f planned%n", report.get("actual_rate"), options.rate());
         System.out.println("http: " + stats.statusCounts().entrySet().stream()
                 .map(e -> (e.getKey() == 0 ? "network-error" : e.getKey()) + "x" + e.getValue())
                 .collect(Collectors.joining(" ")));
@@ -294,6 +310,9 @@ public final class LoadGenerator {
                 .map(e -> e.getKey() + " " + e.getValue()).collect(Collectors.joining(", ")));
         System.out.printf("latency: p50 %d ms, p95 %d ms, p99 %d ms%n",
                 stats.percentile(50), stats.percentile(95), stats.percentile(99));
+        Map<String, Map<String, Long>> byOutcome = stats.latencyByOutcome();
+        byOutcome.forEach((outcome, l) -> System.out.printf("  %s: %d, p50 %d ms, p95 %d ms, p99 %d ms%n", outcome,
+                l.get("count"), l.get("p50"), l.get("p95"), l.get("p99")));
         System.out.printf("duplicates: %d same order, %d in progress, %d wrong%n", stats.duplicatesSameOrder.sum(),
                 stats.duplicatesInProgress.sum(), stats.duplicatesWrong.sum());
         if (unresolved > 0 || !unanswered.isEmpty()) {
@@ -326,6 +345,9 @@ public final class LoadGenerator {
         report.put("unanswered_requests", unanswered.size());
         report.put("latency_ms", Map.of("p50", stats.percentile(50), "p95", stats.percentile(95),
                 "p99", stats.percentile(99)));
+        report.put("latency_ms_by_outcome", byOutcome);
+        report.put("requests", Map.of("original", stats.orders.sum(), "duplicate", stats.duplicatesSent.sum(),
+                "retry", stats.retries.sum()));
         report.put("duplicates", Map.of("sent", stats.duplicatesSent.sum(), "same_order",
                 stats.duplicatesSameOrder.sum(), "in_progress", stats.duplicatesInProgress.sum(),
                 "wrong", stats.duplicatesWrong.sum()));
@@ -351,6 +373,62 @@ public final class LoadGenerator {
         check.problems().forEach(p -> System.out.println("  " + p));
         report.put("ledger", Map.of("ok", check.ok(), "units_sold", check.unitsSold(), "problems", check.problems()));
         return check.ok();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void printResources(Map<String, Object> resources) {
+        System.out.println("resources while sending (mean / max; cpu in cores):");
+        resources.forEach((source, gauges) -> {
+            Map<String, Map<String, Object>> g = (Map<String, Map<String, Object>>) gauges;
+            if (g.isEmpty()) {
+                System.out.println("  " + source + ": not reachable");
+            } else if (!g.containsKey("db_connections_max")) {
+                System.out.printf("  %-9s cpu %s / %s%n", source, v(g, "cpu_cores", "mean"), v(g, "cpu_cores", "max"));
+            } else {
+                System.out.printf("  %-9s cpu %s / %s, db connections %s / %s active of %s, %s / %s waiting, "
+                                + "request threads %s / %s busy of %s, heap %s / %s MB%n", source,
+                        v(g, "cpu_cores", "mean"), v(g, "cpu_cores", "max"), v(g, "db_connections_active", "mean"),
+                        v(g, "db_connections_active", "max"), v(g, "db_connections_max", "max"),
+                        v(g, "db_connections_pending", "mean"), v(g, "db_connections_pending", "max"),
+                        v(g, "request_threads_busy", "mean"), v(g, "request_threads_busy", "max"),
+                        v(g, "request_threads_max", "max"), v(g, "heap_used_mb", "mean"), v(g, "heap_used_mb", "max"));
+            }
+        });
+    }
+
+    private static Object v(Map<String, Map<String, Object>> gauges, String gauge, String statistic) {
+        Map<String, Object> values = gauges.get(gauge);
+        return values == null ? "-" : values.get(statistic);
+    }
+
+    /** MySQL row lock waits during the run (including anything else using that MySQL meanwhile). */
+    private Map<String, Object> rowLocksDuring(Map<String, Long> before) {
+        Map<String, Long> after = RunEnvironment.rowLocks(options.mysqlContainer());
+        Map<String, Object> during = new LinkedHashMap<>();
+        if (before.isEmpty() || after.isEmpty()) {
+            System.out.println("mysql row locks: unknown (cannot read the counters of " + options.mysqlContainer() + ")");
+            return during;
+        }
+        long waits = after.get("innodb_row_lock_waits") - before.get("innodb_row_lock_waits");
+        long waitedMs = after.get("innodb_row_lock_time") - before.get("innodb_row_lock_time");
+        System.out.printf("mysql row locks: %d waits, %d ms waited in all%s%n", waits, waitedMs,
+                waits == 0 ? "" : ", " + waitedMs / waits + " ms on average");
+        during.put("waits", waits);
+        during.put("waited_ms", waitedMs);
+        return during;
+    }
+
+    /** Inventory tasks still pending or given up, as order-service's backlog gauges see them (refreshed every 5 s). */
+    private Map<String, Object> backlogAtEnd() {
+        Map<String, Object> backlog = new LinkedHashMap<>();
+        for (String gauge : List.of("shop.inventory.tasks.pending", "shop.inventory.tasks.failed")) {
+            ShopClient.Response response = client.admin("order", "GET", "/actuator/metrics/" + gauge, null);
+            backlog.put(gauge, response.status() == 200
+                    ? response.body().path("measurements").path(0).path("value").asDouble() : null);
+        }
+        System.out.printf("backlog at the end: %s pending and %s failed inventory tasks%n",
+                backlog.get("shop.inventory.tasks.pending"), backlog.get("shop.inventory.tasks.failed"));
+        return backlog;
     }
 
     /** Sets how many units of the SKU on sale are available before the sale starts. */

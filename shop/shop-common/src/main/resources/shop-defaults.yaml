@@ -15,6 +15,10 @@ server:
   # The shop has no authentication, so its business ports, like the management ports, are reachable from this machine
   # only (docs/shop-design.md §3). To reach a service from elsewhere set server.address (SERVER_ADDRESS), e.g. 0.0.0.0.
   address: 127.0.0.1
+  tomcat:
+    # Publishes tomcat.threads.busy / current / config.max: request threads running out is a failure to detect.
+    mbeanregistry:
+      enabled: true
 
 # Console output stays human-readable; the file gets one ECS JSON object per line for log collectors.
 logging:

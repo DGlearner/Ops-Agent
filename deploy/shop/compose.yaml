@@ -17,6 +17,8 @@ services:
     # Performance Schema costs ~200 MB; drop this flag when diagnosing with performance_schema or sys views.
     command: ["mysqld", "--performance-schema=OFF"]
     mem_limit: 640m
+    # One core, so load experiments run on fixed resources and MySQL cannot starve the services on a shared machine.
+    cpus: 1.0
     volumes:
       - mysql-data:/var/lib/mysql
       # Runs once, on the first start with an empty data volume: one database and one account per service.

@@ -25,6 +25,7 @@ final class Stats {
     final LongAdder unexpected = new LongAdder();
     final LongAdder retries = new LongAdder();
     private final ConcurrentLinkedQueue<Long> latencies = new ConcurrentLinkedQueue<>();
+    private final Map<String, ConcurrentLinkedQueue<Long>> latenciesByOutcome = new ConcurrentHashMap<>();
     private final ConcurrentLinkedQueue<String> failures = new ConcurrentLinkedQueue<>();
     private final AtomicInteger failuresSeen = new AtomicInteger();
 
@@ -32,7 +33,42 @@ final class Stats {
         httpStatuses.computeIfAbsent(response.status(), s -> new LongAdder()).increment();
         if (original) {
             latencies.add(response.latencyMillis());
+            latenciesByOutcome.computeIfAbsent(outcome(response), o -> new ConcurrentLinkedQueue<>())
+                    .add(response.latencyMillis());
         }
+    }
+
+    /**
+     * What a response said, for latency per outcome: an order's status and reason (e.g. {@code CANCELLED/OUT_OF_STOCK}),
+     * {@code PAYMENT_UNKNOWN} for a 202, or the HTTP status and problem code.
+     */
+    static String outcome(ShopClient.Response response) {
+        int status = response.status();
+        String code = response.body().path("code").asString();
+        if (status == 0) {
+            return "NETWORK_ERROR";
+        }
+        if (status == 200 || status == 201) {
+            String reason = response.body().path("failure_reason").asString();
+            String orderStatus = response.body().path("status").asString();
+            return reason.isEmpty() ? orderStatus : orderStatus + "/" + reason;
+        }
+        if (status == 202) {
+            return "PAYMENT_UNKNOWN";
+        }
+        return "HTTP_" + status + (code.isEmpty() ? "" : "/" + code);
+    }
+
+    /** Count and p50/p95/p99 in milliseconds of original requests, per outcome. */
+    Map<String, Map<String, Long>> latencyByOutcome() {
+        Map<String, Map<String, Long>> result = new TreeMap<>();
+        latenciesByOutcome.forEach((outcome, values) -> {
+            List<Long> sorted = new ArrayList<>(values);
+            Collections.sort(sorted);
+            result.put(outcome, Map.of("count", (long) sorted.size(), "p50", rank(sorted, 50), "p95", rank(sorted, 95),
+                    "p99", rank(sorted, 99)));
+        });
+        return result;
     }
 
     /** Remembers the first few failures with their trace ids, so they can be looked up in the logs. */
@@ -59,10 +95,14 @@ final class Stats {
     /** Nearest-rank percentile of original order requests, in milliseconds; 0 when nothing was sent. */
     long percentile(double p) {
         List<Long> sorted = new ArrayList<>(latencies);
+        Collections.sort(sorted);
+        return rank(sorted, p);
+    }
+
+    private static long rank(List<Long> sorted, double p) {
         if (sorted.isEmpty()) {
             return 0;
         }
-        Collections.sort(sorted);
         int rank = (int) Math.ceil(p / 100.0 * sorted.size());
         return sorted.get(Math.max(0, rank - 1));
     }

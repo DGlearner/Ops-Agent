@@ -58,6 +58,23 @@ record Options(String orderUrl, String inventoryUrl, String paymentUrl, double r
         return scenario != null;
     }
 
+    /** The settings that shape the load, for the run report. */
+    Map<String, Object> describe() {
+        Map<String, Object> config = new LinkedHashMap<>();
+        config.put("rate", rate);
+        config.put("duration_s", duration.toMillis() / 1000.0);
+        config.put("concurrency", concurrency);
+        config.put("users", users);
+        config.put("duplicate_rate", duplicateRate);
+        config.put("decline_rate", declineRate);
+        config.put("hot_rate", isFlashSale() ? null : hotRate);
+        config.put("flash_sale", flashSale);
+        config.put("stock", stock.isPresent() ? stock.getAsInt() : null);
+        config.put("scenario", scenario);
+        config.put("settle_timeout_s", settleTimeout.toSeconds());
+        return config;
+    }
+
     /** Whether every order buys one unit of {@link #flashSale()}. */
     boolean isFlashSale() {
         return flashSale != null;
