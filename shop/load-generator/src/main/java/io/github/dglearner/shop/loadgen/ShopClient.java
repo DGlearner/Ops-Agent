@@ -76,6 +76,22 @@ final class ShopClient {
         return send(get(options.orderUrl() + "/api/v1/orders/" + orderId));
     }
 
+    Response payment(String orderId) {
+        return send(get(options.paymentUrl() + "/api/v1/payments/" + orderId));
+    }
+
+    /** A call to a service's management port, e.g. to inject or clear a fault. */
+    Response admin(String service, String method, String path, String jsonBody) {
+        HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(options.adminUrls().get(service) + path))
+                .timeout(Duration.ofSeconds(15));
+        if (jsonBody != null) {
+            request.header("Content-Type", "application/json");
+        }
+        request.method(method, jsonBody == null ? HttpRequest.BodyPublishers.noBody()
+                : HttpRequest.BodyPublishers.ofString(jsonBody));
+        return send(request.build());
+    }
+
     private static HttpRequest get(String url) {
         return HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(10)).GET().build();
     }

@@ -22,7 +22,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalManagementPort;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.core.env.Environment;
+import org.springframework.dao.CannotAcquireLockException;
+import org.springframework.dao.RecoverableDataAccessException;
 import org.springframework.http.HttpStatus;
+import org.springframework.transaction.CannotCreateTransactionException;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -93,6 +97,17 @@ class ShopCommonWebTest {
                 .contains("\"trace.id\":\"" + traceId + "\"")
                 .contains("\"span.id\":")
                 .contains("\"stack_trace\":\"java.lang.IllegalStateException: secret internals");
+    }
+
+    @Test
+    void databaseOutagesAreReportedAsRetryable503s() throws Exception {
+        for (String failure : new String[] {"no-connection", "link-broken", "lock-timeout"}) {
+            HttpResponse<String> response = post("/db/" + failure, "{}", "k");
+
+            assertThat(response.statusCode()).as(failure).isEqualTo(503);
+            assertThat(response.body()).contains("\"code\":\"DATABASE_UNAVAILABLE\"");
+            assertThat(response.headers().firstValue("Retry-After")).hasValue("1");
+        }
     }
 
     @Test
@@ -242,6 +257,15 @@ class ShopCommonWebTest {
         @PostMapping("/boom")
         Line boom() {
             throw new IllegalStateException("secret internals");
+        }
+
+        @PostMapping("/db/{failure}")
+        Line database(@PathVariable String failure) {
+            throw switch (failure) {
+                case "no-connection" -> new CannotCreateTransactionException("Could not open JDBC Connection");
+                case "link-broken" -> new RecoverableDataAccessException("Communications link failure");
+                default -> new CannotAcquireLockException("Lock wait timeout exceeded");
+            };
         }
 
         @PostMapping("/api/count")

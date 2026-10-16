@@ -23,6 +23,7 @@ final class Stats {
     final LongAdder duplicatesInProgress = new LongAdder();
     final LongAdder duplicatesWrong = new LongAdder();
     final LongAdder unexpected = new LongAdder();
+    final LongAdder retries = new LongAdder();
     private final ConcurrentLinkedQueue<Long> latencies = new ConcurrentLinkedQueue<>();
     private final ConcurrentLinkedQueue<String> failures = new ConcurrentLinkedQueue<>();
     private final AtomicInteger failuresSeen = new AtomicInteger();

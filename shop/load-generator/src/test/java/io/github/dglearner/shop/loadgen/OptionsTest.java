@@ -38,6 +38,21 @@ class OptionsTest {
     }
 
     @Test
+    void aScenarioRunsBaselineFaultAndRecoveryAndWaitsLongerAtTheEnd() {
+        Options options = Options.parse("--scenario", "payment-timeout", "--baseline", "10s", "--fault", "1m",
+                "--recovery", "20s", "--payment-admin", "http://pay:9/");
+
+        assertThat(options.hasScenario()).isTrue();
+        assertThat(options.duration()).isEqualTo(Duration.ofSeconds(90));
+        assertThat(options.settleTimeout()).isEqualTo(Duration.ofSeconds(90));
+        assertThat(options.adminUrls()).containsEntry("payment", "http://pay:9").containsEntry("order",
+                "http://localhost:8191");
+        assertThat(Options.parse().settleTimeout()).isEqualTo(Duration.ofSeconds(10));
+        assertThatThrownBy(() -> Options.parse("--scenario", "meteor")).hasMessageContaining("Unknown scenario");
+        assertThatThrownBy(() -> Options.parse("--help")).hasMessage("");
+    }
+
+    @Test
     void rejectsNonsense() {
         assertThatThrownBy(() -> Options.parse("--rate", "0")).hasMessageContaining("--rate must be positive");
         assertThatThrownBy(() -> Options.parse("--duplicate-rate", "1.5")).hasMessageContaining("between 0 and 1");

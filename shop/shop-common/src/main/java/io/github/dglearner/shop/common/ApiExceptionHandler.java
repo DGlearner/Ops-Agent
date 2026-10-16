@@ -6,8 +6,9 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.MethodParameter;
-import org.springframework.dao.DataAccessException;
+import org.springframework.core.NestedRuntimeException;
 import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.RecoverableDataAccessException;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -15,6 +16,7 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.validation.FieldError;
 import org.springframework.validation.method.ParameterErrors;
 import org.springframework.validation.method.ParameterValidationResult;
@@ -45,11 +47,12 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     /**
-     * The database is unreachable, the connection pool is exhausted or a lock wait timed out. The same request may
-     * succeed later, so this is a 503 rather than a 500.
+     * The database is unreachable, a pooled connection broke, the pool is exhausted or a lock wait timed out. The same
+     * request may succeed later, so this is a 503 rather than a 500.
      */
-    @ExceptionHandler({TransientDataAccessException.class, DataAccessResourceFailureException.class})
-    ResponseEntity<ProblemDetail> databaseUnavailable(DataAccessException e) {
+    @ExceptionHandler({TransientDataAccessException.class, DataAccessResourceFailureException.class,
+            RecoverableDataAccessException.class, CannotCreateTransactionException.class})
+    ResponseEntity<ProblemDetail> databaseUnavailable(NestedRuntimeException e) {
         log.atWarn().addKeyValue("error_type", e.getClass().getSimpleName())
                 .log("Database unavailable: {}", e.getMostSpecificCause().getMessage());
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)

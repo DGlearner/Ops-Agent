@@ -47,8 +47,7 @@ java tools/Replay.java datasets/aiops_mixed_incident_small.jsonl
 
 | 阶段 | 状态 |
 |---|---|
-| S0 设计、MySQL、公共模块 · S1 库存 · S2 支付 · S3 订单 · S4 请求生成工具 | 完成 |
-| S5 故障注入与恢复 | 进行中 |
+| S0 设计、MySQL、公共模块 · S1 库存 · S2 支付 · S3 订单 · S4 请求生成工具 · S5 故障注入与恢复 | 完成 |
 
 ```bash
 cd deploy/shop && docker compose up -d                  # MySQL 8.4（与 Ops-Agent 的基础设施分开）
@@ -60,7 +59,8 @@ cd deploy/shop && docker compose up -d                  # MySQL 8.4（与 Ops-Ag
 
 - 也可以在 IDEA 里直接运行三个服务的主类。
 - 请求生成工具也可以先用 `./gradlew :shop:load-generator:installDist` 安装，再运行 `shop/load-generator/build/install/load-generator/bin/load-generator`（Windows 上运行同目录下的 `.bat`）。
-- 运行结束时，请求生成工具核对重复请求和库存账目，有任何不一致就以非 0 退出。`--help` 之外的参数见 `Options.java`。
+- 运行结束时，请求生成工具核对重复请求、库存账目和资金（已付款的订单都扣了款，取消的都没扣），有任何不一致就以非 0 退出。参数见 `--help`。
+- 故障场景：`--scenario payment-timeout` 等 8 个，见设计文档 §10。管理端口上的 `/actuator/faults` 可以手动注入延迟和错误。
 - 日志：`logs/shop/<服务名>.log`，每行一条 ECS JSON，带 `trace.id`。
 - 指标：`http://localhost:819x/actuator/prometheus`，管理端口只监听 127.0.0.1。
 
