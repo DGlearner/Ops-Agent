@@ -77,23 +77,34 @@ public class OrderRepository {
     public Optional<Order> find(String orderId) {
         return jdbc.sql("SELECT * FROM orders WHERE order_id = :id")
                 .param("id", orderId)
-                .query(this::map).optional();
+                .query((rs, row) -> header(rs)).optional()
+                .map(this::withItems);
     }
 
     public Optional<Stored> findByKey(String userId, String idempotencyKey) {
         return jdbc.sql("SELECT * FROM orders WHERE user_id = :user AND idempotency_key = :key")
                 .param("user", userId).param("key", idempotencyKey)
-                .query((rs, row) -> new Stored(map(rs, row), rs.getString("request_hash")))
-                .optional();
+                .query((rs, row) -> new Stored(header(rs), rs.getString("request_hash")))
+                .optional()
+                .map(stored -> new Stored(withItems(stored.order()), stored.requestHash()));
     }
 
-    private Order map(ResultSet rs, int row) throws SQLException {
-        String orderId = rs.getString("order_id");
+    /**
+     * The order row without its items. The items are read by a separate query once this one has returned: querying
+     * them from inside the row mapper would take a second connection while the first is still held, so with N
+     * lookups in flight on a pool of N connections every lookup would wait for a connection that never frees up.
+     */
+    private static Order header(ResultSet rs) throws SQLException {
         String reason = rs.getString("failure_reason");
-        return new Order(orderId, rs.getString("user_id"), OrderStatus.valueOf(rs.getString("status")),
-                reason == null ? null : FailureReason.valueOf(reason), rs.getLong("amount_cents"),
-                rs.getString("currency"), items(orderId), rs.getTimestamp("created_at").toInstant(),
-                rs.getTimestamp("updated_at").toInstant());
+        return new Order(rs.getString("order_id"), rs.getString("user_id"),
+                OrderStatus.valueOf(rs.getString("status")), reason == null ? null : FailureReason.valueOf(reason),
+                rs.getLong("amount_cents"), rs.getString("currency"), List.of(),
+                rs.getTimestamp("created_at").toInstant(), rs.getTimestamp("updated_at").toInstant());
+    }
+
+    private Order withItems(Order order) {
+        return new Order(order.orderId(), order.userId(), order.status(), order.failureReason(), order.amountCents(),
+                order.currency(), items(order.orderId()), order.createdAt(), order.updatedAt());
     }
 
     private List<OrderItem> items(String orderId) {
