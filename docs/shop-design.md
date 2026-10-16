@@ -353,13 +353,14 @@ payment (payment_id PK, order_id UNIQUE, user_id, amount_cents, currency,
 
 指标标签只用有界的维度，如服务、接口模板、状态、原因。订单 ID、用户 ID、trace ID 只出现在日志里，避免指标高基数。
 
-**待补（R3 之前）：** 积压类指标。没有它们，就写不出“补偿不收敛”和“支付结果长时间未知”这类规则（§12.4）。
+**积压指标**（order-service）：没有它们，就写不出“补偿不收敛”和“支付结果长时间未知”这类规则（§12.4）。每 5 s 从数据库读一次，而不是每次抓取都查；读不到数据库时报 NaN，不报过期的旧值。
 
 | 指标 | 含义 |
 |---|---|
-| `shop.inventory.tasks.pending`、`shop.inventory.tasks.oldest.age` | PENDING 待办的数量、最老一条已等待的时间 |
-| `shop.inventory.tasks.failed` | FAILED 待办的数量（需要人工处理） |
-| `shop.orders.unresolved`（`status`）、`shop.orders.unresolved.oldest.age` | 停在 PAYMENT_UNKNOWN 等中间状态的订单数量、最老一单停留的时间 |
+| `shop.orders.unresolved`（`status`：created / stock_reserved / payment_unknown） | 停在这个中间状态的订单数 |
+| `shop.orders.unresolved.oldest.age`（`status`），秒 | 这个状态里最早下单的那一单，距今多久 |
+| `shop.inventory.tasks.pending`、`shop.inventory.tasks.failed` | 未完成的待办数、放弃重试（需要人工处理）的待办数 |
+| `shop.inventory.tasks.oldest.age`，秒 | 最老的未完成待办写入至今多久 |
 
 ---
 
@@ -587,7 +588,7 @@ R0 修复后（§13）用同样的参数重跑了全部 8 个场景（种子 42�
 | R0 | 修正与复验，清单见下（已完成） | 每一项都有回归测试；三个服务的正常、重复、超时、补偿路径回归通过 |
 | R1 | 限量抢购基线：单商品模式、逐订单核对、实验数据准备、实验记录补全（§11） | 并发竞争和售罄的结果可重复；订单、库存、支付逐单核对通过 |
 | R2 | 第一个 Ops 闭环：靶场 JSON 日志接入；core-service 先做告警模块（落库与查询）；首个场景 `mysql-down` | 故障产生可查询的告警，带来源、时间和事件证据；重复投递不误报 |
-| R3 | 指标与关联：积压指标（§8.3）、Prometheus + Alertmanager 接入、支付超时和库存热点锁场景、自动关联 | 正常售罄不误报；有触发和恢复记录；关联测试覆盖同时发生的独立故障 |
+| R3 | 指标与关联：Prometheus + Alertmanager 接入（积压指标已在 R1 实现，§8.3）、支付超时和库存热点锁场景、自动关联 | 正常售罄不误报；有触发和恢复记录；关联测试覆盖同时发生的独立故障 |
 | R4 | 按实测瓶颈选择优化（§11.4） | 正确性不倒退；改善由可复现的实验支撑 |
 | R5 | Agent 问答与受控工具排查；少量可疑行为规则 | 回答引用证据，原因不明时转人工；安全规则有正常行为作对照 |
 
