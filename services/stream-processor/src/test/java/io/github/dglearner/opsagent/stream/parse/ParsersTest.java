@@ -8,6 +8,8 @@ import io.github.dglearner.opsagent.contracts.RawLogRecord;
 import io.github.dglearner.opsagent.contracts.Severity;
 import io.github.dglearner.opsagent.contracts.SourceType;
 import java.time.Instant;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 class ParsersTest {
@@ -141,6 +143,40 @@ class ParsersTest {
 
         assertThat(outcome).isInstanceOfSatisfying(ParseOutcome.Unparsed.class, u ->
                 assertThat(u.log().raw().message()).doesNotContain("fake-opaque-12").contains("\"Authorization\":\"***\""));
+    }
+
+    @Test
+    void longOrCutOffLinesAreStillMaskedInUnparsed() {
+        for (String line : List.of(
+                "{\"message\":\"login\",\"password\":\"fake-secret-18",
+                "{\"message\":\"login\",\"password\":\"fake-" + "a".repeat(16 * 1024) + "\"")) {
+            ParseOutcome outcome = registry.parse(raw(SourceType.APP_SERVICE, "app-01", "auth-api", line));
+
+            assertThat(outcome).isInstanceOfSatisfying(ParseOutcome.Unparsed.class, u ->
+                    assertThat(u.log().raw().message()).doesNotContain("fake-"));
+        }
+    }
+
+    /** The whole chain, parser and redaction, on a thread with a deliberately small stack (see RedactorTest). */
+    @Test
+    void longQuotedLogfmtValuesNeedNoDeepRecursion() throws InterruptedException {
+        for (String value : List.of("x".repeat(16 * 1024), "x\\\"".repeat(4 * 1024))) {
+            RawLogRecord line = raw(SourceType.APP_SERVICE, "worker-01", null,
+                    "2026-01-01T00:10:50Z ERROR service=payment-api event=db_query_failed error=\"" + value + "\" attempt=1");
+            AtomicReference<Object> result = new AtomicReference<>();
+            Thread thread = new Thread(null, () -> {
+                try {
+                    result.set(registry.parse(line));
+                } catch (Throwable e) {
+                    result.set(e);
+                }
+            }, "small-stack", 256 * 1024);
+            thread.start();
+            thread.join();
+
+            assertThat(result.get()).as("outcome, or the error thrown").isInstanceOfSatisfying(ParseOutcome.Parsed.class,
+                    p -> assertThat(p.event().fields()).containsEntry("attempt", 1L));
+        }
     }
 
     private NormalizedEvent parsed(RawLogRecord raw) {

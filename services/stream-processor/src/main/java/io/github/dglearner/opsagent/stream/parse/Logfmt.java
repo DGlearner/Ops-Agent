@@ -8,8 +8,10 @@ import java.util.regex.Pattern;
 /** {@code key=value key="quoted value"} pairs, as written by the application, Docker and node-exporter logs. */
 final class Logfmt {
 
+    // The quoted value is written as "unrolled" possessive loops: (?:[^"\\]|\\.)* would recurse once per character in
+    // java.util.regex and overflow the stack on a long value.
     private static final Pattern PAIR =
-            Pattern.compile("([A-Za-z_][\\w.-]*)=(?:\"((?:[^\"\\\\]|\\\\.)*)\"|([^\\s\"]*))");
+            Pattern.compile("([A-Za-z_][\\w.-]*)=(?:\"([^\"\\\\]*+(?:\\\\.[^\"\\\\]*+)*+)\"|([^\\s\"]*))");
 
     /** Pairs in order of appearance; values are untyped strings with quotes and escapes removed. */
     static Map<String, String> parse(String text) {
