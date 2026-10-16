@@ -21,6 +21,10 @@ import org.apache.kafka.streams.state.KeyValueStore;
  * burst; without this step one burst would produce many alerts. The suppression deadline is kept in a state store
  * that is committed together with the input offsets ({@code exactly_once_v2}), so restarts and replays do not
  * re-alert. Expired deadlines are purged on stream time.
+ *
+ * <p>Deadlines are kept in detection time, the record timestamp that also drives the windows and stream time: the
+ * log's own time with {@link DetectionTime#EVENT}, the receive time with {@link DetectionTime#INGEST}. The time
+ * written in the log line stays in the alert as evidence only.
  */
 public class AlertSuppressor implements Processor<Windowed<String>, WindowAggregate, String, Alert> {
 
@@ -50,14 +54,14 @@ public class AlertSuppressor implements Processor<Windowed<String>, WindowAggreg
             return;
         }
         String fingerprint = record.key().key();
-        long eventTime = agg.lastEventAt().toEpochMilli();
+        long detectedAt = record.timestamp();
         Long until = suppressedUntil.get(fingerprint);
-        if (until != null && eventTime < until) {
+        if (until != null && detectedAt < until) {
             return;
         }
         Alert alert = AlertFactory.create(fingerprint, record.key().window().startTime(),
                 record.key().window().endTime(), agg, clock.instant());
-        suppressedUntil.put(fingerprint, eventTime + agg.latest().suppressFor().toMillis());
+        suppressedUntil.put(fingerprint, detectedAt + agg.latest().suppressFor().toMillis());
         context.forward(new Record<>(alert.groupKey(), alert, record.timestamp()));
     }
 

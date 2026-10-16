@@ -148,7 +148,7 @@ JSON Schema 放在仓库根目录 `contracts/kafka/`，供 Python 侧使用；Ja
 | `publish` | 拆分为单条 `RawLogRecord`，补充 `event_id`、`received_at`，以 host 为 key 写入 `logs.raw`，等待 broker 确认后才返回 202 |
 
 - **语义：** 返回 202 表示所有记录都已被 Kafka 确认（`acks=all`，幂等生产者）。Kafka 不可用时返回 503，客户端可以重试。
-- **重试与去重：** 请求带 `Idempotency-Key` 时，`request_id` 和每条记录的 `event_id` 都由它推导（UUIDv5），重试产生的记录 `event_id` 相同，下游可以据此去重；不带时为随机 UUIDv7。重放工具 `tools/Replay.java` 每行都带这个头。
+- **重试与去重：** 请求带 `Idempotency-Key` 时，`request_id` 和每条记录的 `event_id` 都由它推导（UUIDv5），重试产生的记录 `event_id` 相同，stream-processor 据此去重（§8.3）；不带时为随机 UUIDv7。重放工具 `tools/Replay.java` 每行都带这个头。
 - **限流失败时放行：** Redis 不可用时请求照常接收，并累加 `ops.ingest.ratelimit.errors`。Redis 故障期间丢日志比短暂不限流更糟。
 - **日志源与 API Key：** J1 阶段从配置文件读取（只存哈希）；J3 起改为从 core-service 的 `log_sources` 表读取，并在 Redis 中缓存。
 
@@ -400,7 +400,8 @@ Agent 方案确定前，Java 侧只承诺以下原则，不实现具体接口：
 - **分组：** `group_by` 可以使用 `host`、`service`、`component`、`event_type` 和 `fields.<name>`。
 - **窗口：** 限定为 `PT1M`、`PT5M`、`PT15M` 三档。Kafka Streams 的窗口大小在拓扑构建时确定，三档各对应一条子拓扑；规则按自己的档位路由。这是为了支持规则热更新而做的取舍。
 - **计数：** `SlidingWindows`，宽限期 30 秒（允许轻微乱序）。默认使用事件时间；`ops.stream.detection-time=ingest` 改用接收时间，用于反复重放旧数据集（用事件时间时，流时间一旦越过数据集，再次重放会被当作迟到数据丢弃）。
-- **去重：** 同一个 `fingerprint` 在 `suppress_for` 时间内只发一次告警。去重状态保存在 Kafka Streams 的状态存储中，与 offset 一起提交，重启或重放时不会重复告警；过期的记录按流时间定期清理。
+- **重复事件：** 同一条日志投递多次（例如客户端带同一个 `Idempotency-Key` 重试，§6.2）只计一次。计数前按 `fingerprint` + `event_id` 丢掉重复的匹配；只记匹配过规则的事件，保留窗口加宽限期的时长，相隔更久的副本不可能落进同一个窗口。Kafka 的 exactly-once 只防止流处理自身产生的重复，代替不了这一步。
+- **告警抑制：** 同一个 `fingerprint` 在 `suppress_for` 时间内只发一次告警。抑制期限、窗口和过期清理都用同一个检测时间（由 `detection-time` 决定是事件时间还是接收时间），日志自身的时间只作为告警里的证据。抑制状态保存在 Kafka Streams 的状态存储中，与 offset 一起提交，重启或重放时不会重复告警；过期的记录按流时间定期清理。
 - **热更新：** 规则来自 `rules.changelog` 的全局表；规则变更后，新进入的事件立即按新规则匹配。
 - **默认规则（从 v1 移植并扩充，见 `services/stream-processor/src/main/resources/rules/default-rules.json`）：** SSH 暴力破解（5 分钟 ≥ 5，按 host + 来源 IP）；MySQL 连接被拒绝（1 分钟 ≥ 1）；MySQL 连接数过多；MySQL 慢查询（5 分钟 ≥ 3）；应用数据库连接错误（5 分钟 ≥ 2，按 service + host）；Nginx 5xx（5 分钟 ≥ 5，按 host）；容器 OOM（≥ 1）；容器频繁重启（15 分钟 ≥ 3，按容器）；内核 OOM；磁盘使用告警（node-exporter 报告 warning 或 critical）。
 - **样例数据的结果：** 重放 `datasets/aiops_mixed_incident_small.jsonl` 产生 7 条告警：SSH 暴力破解、MySQL 连接被拒绝、MySQL 连接数过多、payment-api 数据库连接错误、web-01 的 5xx 突增、api-gateway 容器 OOM、api-gateway 频繁重启（拓扑测试和真实 Kafka 上的端到端运行结果一致）。

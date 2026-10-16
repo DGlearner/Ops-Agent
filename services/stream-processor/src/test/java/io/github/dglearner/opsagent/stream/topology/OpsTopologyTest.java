@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -34,6 +35,8 @@ import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 class OpsTopologyTest {
 
@@ -158,6 +161,40 @@ class OpsTopologyTest {
                 .containsExactly("198.51.100.7");
     }
 
+    @ParameterizedTest
+    @EnumSource(DetectionTime.class)
+    void countsAnEventDeliveredMoreThanOnceOnce(DetectionTime detectionTime) {
+        start(detectionTime);
+        rules.pipeInput("ssh", sshRule(3, true));
+
+        // One batch retried twice with the same Idempotency-Key: same event id, each copy received later.
+        UUID eventId = Ids.newId();
+        for (int i = 0; i < 3; i++) {
+            sshFailure(eventId, T0, T0.plusSeconds(1 + 5L * i), "198.51.100.7");
+        }
+        assertThat(alerts.isEmpty()).as("one event, three copies").isTrue();
+
+        sshFailure(T0.plusSeconds(20), "198.51.100.7");
+        sshFailure(T0.plusSeconds(21), "198.51.100.7");
+        assertThat(alerts.readValuesToList()).singleElement().satisfies(alert ->
+                assertThat(alert.count()).isEqualTo(3));
+    }
+
+    @Test
+    void ingestTimeModeSuppressesForTheSpanOfReceiveTime() {
+        start(DetectionTime.INGEST);
+        rules.pipeInput("ssh", sshRule(3, true));
+        // An old dataset replayed a month later, faster than it was written: 20 log minutes per 6 received ones.
+        Instant received = T0.plus(Duration.ofDays(30));
+
+        burst(T0, received);
+        burst(T0.plus(Duration.ofMinutes(20)), received.plus(Duration.ofMinutes(6)));
+        burst(T0.plus(Duration.ofMinutes(40)), received.plus(Duration.ofMinutes(12)));
+
+        // suppress_for is 10 minutes of receive time: the second burst is suppressed, the third alerts again.
+        assertThat(alerts.readValuesToList()).hasSize(2);
+    }
+
     @Test
     void sampleDatasetRaisesTheExpectedAlerts() {
         start(DetectionTime.EVENT);
@@ -212,15 +249,25 @@ class OpsTopologyTest {
                 OpsTopology.ALERT.deserializer());
     }
 
+    private void burst(Instant eventTime, Instant receivedAt) {
+        for (int i = 0; i < 3; i++) {
+            sshFailure(eventTime.plusSeconds(i), receivedAt.plusSeconds(i), "198.51.100.7");
+        }
+    }
+
     /** An SSH failure logged at {@code eventTime} and received one second later. */
     private void sshFailure(Instant eventTime, String sourceIp) {
         sshFailure(eventTime, eventTime.plusSeconds(1), sourceIp);
     }
 
     private void sshFailure(Instant eventTime, Instant receivedAt, String sourceIp) {
+        sshFailure(Ids.newId(), eventTime, receivedAt, sourceIp);
+    }
+
+    private void sshFailure(UUID eventId, Instant eventTime, Instant receivedAt, String sourceIp) {
         String line = SYSLOG.format(eventTime) + " app-01 sshd[1]: Failed password for root from " + sourceIp
                 + " port 22 ssh2";
-        RawLogRecord record = new RawLogRecord(Ids.newId(), null, "test", SourceType.LINUX, "app-01", "sshd", null,
+        RawLogRecord record = new RawLogRecord(eventId, null, "test", SourceType.LINUX, "app-01", "sshd", null,
                 line, receivedAt);
         raw.pipeInput("app-01", record, receivedAt);
     }

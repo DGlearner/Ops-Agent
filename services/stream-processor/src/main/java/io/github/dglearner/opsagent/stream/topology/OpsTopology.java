@@ -11,6 +11,7 @@ import io.github.dglearner.opsagent.stream.config.StreamProperties;
 import io.github.dglearner.opsagent.stream.detect.AlertFactory;
 import io.github.dglearner.opsagent.stream.detect.AlertSuppressor;
 import io.github.dglearner.opsagent.stream.detect.DetectionTimestampExtractor;
+import io.github.dglearner.opsagent.stream.detect.DuplicateMatchFilter;
 import io.github.dglearner.opsagent.stream.detect.RuleMatch;
 import io.github.dglearner.opsagent.stream.detect.RuleMatchProcessor;
 import io.github.dglearner.opsagent.stream.detect.WindowAggregate;
@@ -32,6 +33,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.Repartitioned;
 import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
@@ -43,7 +45,8 @@ import org.apache.kafka.streams.state.WindowStore;
  * logs.raw ── parse + redact ──┬── logs.normalized
  *                              └── logs.unparsed
  * logs.normalized ── match rules (global table rules.changelog) ── per window tier:
- *     repartition by fingerprint ── sliding-window count ── threshold ── suppression ── alerts
+ *     repartition by fingerprint ── drop duplicate events ── sliding-window count ── threshold ── suppression
+ *     ── alerts
  * </pre>
  *
  * Window sizes are fixed per sub-topology, so each supported tier (1, 5, 15 minutes) has its own branch and rules are
@@ -117,12 +120,22 @@ public class OpsTopology {
 
         for (Duration window : WINDOW_TIERS) {
             String tier = AlertFactory.humanizeWindow(window);
+            String dedupStore = "match-dedup-" + tier;
+            Duration dedupRetention = window.plus(properties.grace());
+            builder.addStateStore(Stores.windowStoreBuilder(
+                    Stores.persistentWindowStore(dedupStore, dedupRetention, dedupRetention, false),
+                    STRING, Serdes.Long()));
             String suppressionStore = "alert-suppression-" + tier;
             builder.addStateStore(Stores.keyValueStoreBuilder(
                     Stores.persistentKeyValueStore(suppressionStore), STRING, Serdes.Long()));
 
+            // Named like the repartition topic groupByKey used to create, so the internal topic name is unchanged.
             matches.filter((fingerprint, match) -> window.equals(match.window()), Named.as("tier-" + tier))
-                    .groupByKey(Grouped.with("detect-" + tier, STRING, MATCH))
+                    .repartition(Repartitioned.<String, RuleMatch>as("detect-" + tier)
+                            .withKeySerde(STRING).withValueSerde(MATCH))
+                    .processValues(() -> new DuplicateMatchFilter(dedupStore, dedupRetention),
+                            Named.as("dedup-" + tier), dedupStore)
+                    .groupByKey(Grouped.with(STRING, MATCH))
                     .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(window, properties.grace()))
                     .aggregate(WindowAggregate::empty,
                             (fingerprint, match, agg) -> agg.add(match, properties.maxSampleEvents()),
