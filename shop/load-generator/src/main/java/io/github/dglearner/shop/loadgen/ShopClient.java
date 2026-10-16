@@ -80,6 +80,10 @@ final class ShopClient {
         return send(get(options.paymentUrl() + "/api/v1/payments/" + orderId));
     }
 
+    Response reservation(String orderId) {
+        return send(get(options.inventoryUrl() + "/api/v1/reservations/" + orderId));
+    }
+
     /** A call to a service's management port, e.g. to inject or clear a fault. */
     Response admin(String service, String method, String path, String jsonBody) {
         HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(options.adminUrls().get(service) + path))

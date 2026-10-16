@@ -25,8 +25,9 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Places orders at a steady rate, repeats some of them with the same Idempotency-Key, optionally injects a fault
- * scenario meanwhile, then checks that every duplicate got the same order, that the stock ledger matches the orders
- * and that exactly the paid orders were charged (docs/shop-design.md §9–10).
+ * scenario meanwhile, then checks that every duplicate got the same order, that the stock ledger matches the orders,
+ * and, order by order, that exactly the paid orders were charged and had their stock confirmed (docs/shop-design.md
+ * §7.6, §9–10).
  */
 public final class LoadGenerator {
 
@@ -292,7 +293,7 @@ public final class LoadGenerator {
                 && unanswered.isEmpty();
         if (options.verify()) {
             ok &= checkLedger(before, report, deadline);
-            ok &= checkMoney(report);
+            ok &= checkOrders(report);
         }
         if (stats.failureCount() > 0) {
             System.out.printf("failures (%d, first %d shown; look the trace ids up in logs/shop):%n",
@@ -336,34 +337,54 @@ public final class LoadGenerator {
         return check.ok();
     }
 
-    /** Every paid order was charged, and no cancelled order was. */
-    private boolean checkMoney(Map<String, Object> report) {
-        Map<String, Long> byPaymentStatus = new TreeMap<>();
-        List<String> problems = new ArrayList<>();
+    /** Order by order: payment and reservation agree with how the order ended (see {@link OrderCheck}). */
+    private boolean checkOrders(Map<String, Object> report) {
+        Map<String, Long> byPayment = new TreeMap<>();
+        Map<String, Long> byReservation = new TreeMap<>();
+        List<String> paymentProblems = new ArrayList<>();
+        List<String> stockProblems = new ArrayList<>();
+        // At most 32 lookups at a time, so checking a big run does not flood the services.
+        Semaphore inFlight = new Semaphore(32);
         try (ExecutorService lookups = Executors.newVirtualThreadPerTaskExecutor()) {
-            Map<String, Future<ShopClient.Response>> payments = new HashMap<>();
-            orders.keySet().forEach(id -> payments.put(id, lookups.submit(() -> client.payment(id))));
-            for (Map.Entry<String, Future<ShopClient.Response>> entry : payments.entrySet()) {
-                ShopClient.Response response = entry.getValue().get();
-                String payment = response.status() == 404 ? "NONE"
-                        : response.status() == 200 ? response.body().path("status").asString() : "ERROR";
-                Tracked order = orders.get(entry.getKey());
-                byPaymentStatus.merge(order.status + "/" + payment, 1L, Long::sum);
-                boolean charged = payment.equals("SUCCEEDED");
-                if ("PAID".equals(order.status) != charged || payment.equals("ERROR")) {
-                    problems.add(entry.getKey() + ": order " + order.outcome() + " but payment " + payment);
-                }
+            Map<String, Future<OrderCheck.Result>> results = new HashMap<>();
+            orders.forEach((id, tracked) -> {
+                OrderCheck.Order order = new OrderCheck.Order(id, tracked.status, tracked.outcome(), tracked.lines);
+                results.put(id, lookups.submit(() -> {
+                    inFlight.acquire();
+                    try {
+                        return OrderCheck.check(order, client.payment(id), client.reservation(id));
+                    } finally {
+                        inFlight.release();
+                    }
+                }));
+            });
+            for (Map.Entry<String, Future<OrderCheck.Result>> entry : results.entrySet()) {
+                OrderCheck.Result result = entry.getValue().get();
+                String status = orders.get(entry.getKey()).status;
+                byPayment.merge(status + "/" + result.payment(), 1L, Long::sum);
+                byReservation.merge(status + "/" + result.reservation(), 1L, Long::sum);
+                paymentProblems.addAll(result.paymentProblems());
+                stockProblems.addAll(result.stockProblems());
             }
         } catch (Exception e) {
-            problems.add("payment lookups failed: " + e);
+            paymentProblems.add("payment or reservation lookups failed: " + e);
+            stockProblems.add("payment or reservation lookups failed: " + e);
         }
-        System.out.printf("money: %s (order/payment: %s)%n", problems.isEmpty() ? "OK" : "MISMATCH",
-                byPaymentStatus.entrySet().stream().map(e -> e.getKey() + " " + e.getValue())
-                        .collect(Collectors.joining(", ")));
-        problems.stream().limit(10).forEach(p -> System.out.println("  " + p));
-        report.put("money", Map.of("ok", problems.isEmpty(), "by_status", byPaymentStatus,
-                "problems", problems.stream().limit(50).toList()));
-        return problems.isEmpty();
+        System.out.printf("money: %s (order/payment: %s)%n", paymentProblems.isEmpty() ? "OK" : "MISMATCH",
+                joined(byPayment));
+        paymentProblems.stream().limit(10).forEach(p -> System.out.println("  " + p));
+        System.out.printf("reservations: %s (order/reservation: %s)%n", stockProblems.isEmpty() ? "OK" : "MISMATCH",
+                joined(byReservation));
+        stockProblems.stream().limit(10).forEach(p -> System.out.println("  " + p));
+        report.put("money", Map.of("ok", paymentProblems.isEmpty(), "by_status", byPayment,
+                "problems", paymentProblems.stream().limit(50).toList()));
+        report.put("reservations", Map.of("ok", stockProblems.isEmpty(), "by_status", byReservation,
+                "problems", stockProblems.stream().limit(50).toList()));
+        return paymentProblems.isEmpty() && stockProblems.isEmpty();
+    }
+
+    private static String joined(Map<String, Long> counts) {
+        return counts.entrySet().stream().map(e -> e.getKey() + " " + e.getValue()).collect(Collectors.joining(", "));
     }
 
     /** Units per SKU in paid orders ({@code paid}) or in unresolved orders that may still hold stock. */
