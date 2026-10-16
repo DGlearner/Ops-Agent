@@ -1,0 +1,31 @@
+spring:
+  application:
+    name: order-service
+  datasource:
+    url: jdbc:mysql://localhost:3306/shop_order
+    username: order_svc
+    password: order-dev
+    hikari:
+      data-source-properties:
+        # Sessions run in UTC whatever the JVM time zone is, so NOW(3) and DATETIME values are always UTC.
+        connectionTimeZone: UTC
+        forceConnectionTimeZoneToSession: true
+
+server:
+  port: 8091
+
+management:
+  server:
+    port: 8191
+
+shop:
+  order:
+    currency: CNY
+    inventory:
+      base-url: http://localhost:8092
+      connect-timeout: 500ms
+      read-timeout: 2s
+    payment:
+      base-url: http://localhost:8093
+      connect-timeout: 500ms
+      read-timeout: 3s

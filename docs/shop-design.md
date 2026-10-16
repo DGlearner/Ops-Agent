@@ -200,7 +200,7 @@ orders         (order_id PK, user_id, idempotency_key, request_hash, status, fai
                 amount_cents, currency, created_at, updated_at,
                 UNIQUE (user_id, idempotency_key), INDEX (status, updated_at))
 order_item     (order_id, sku, quantity, unit_price_cents, PK (order_id, sku))
-inventory_task (order_id PK, action CONFIRM|RELEASE, status PENDING|DONE, attempts,
+inventory_task (order_id PK, action CONFIRM|RELEASE, status PENDING|DONE|FAILED, attempts,
                 next_attempt_at, last_error, created_at, updated_at, INDEX (status, next_attempt_at))
 ```
 
@@ -265,6 +265,7 @@ payment (payment_id PK, order_id UNIQUE, user_id, amount_cents, currency,
 
 1. 请求线程立即调用库存服务，成功后将待办置为 DONE。
 2. 调用失败时，待办保持 PENDING。S5 加入后台任务，按 `next_attempt_at` 指数退避重试，直到成功。
+3. 库存服务明确拒绝（例如确认一个已释放的预留）时，待办置为 FAILED 并记 ERROR 日志。按设计这不应发生；一旦发生需要人工处理，重试也没有用。
 
 库存的确认和释放都是幂等的，重试是安全的。这就是 outbox 模式，只是投递走 HTTP 而不是消息队列。
 
@@ -302,6 +303,7 @@ payment (payment_id PK, order_id UNIQUE, user_id, amount_cents, currency,
 | `shop.orders` | `status`、`reason` | order |
 | `shop.idempotent.replays` | `operation` | 三个服务 |
 | `shop.inventory.operations` | `operation`（reserve/confirm/release）、`result` | inventory |
+| `shop.inventory.tasks` | `action`（confirm/release）、`result`（done/retry/conflict） | order |
 | `shop.payments` | `status`、`reason`（拒绝原因） | payment |
 | `shop.payment.gateway`（计时器） | — | payment |
 
