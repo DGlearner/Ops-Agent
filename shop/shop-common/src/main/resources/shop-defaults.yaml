@@ -1,0 +1,52 @@
+# Defaults shared by every shop service, added with the lowest precedence by ShopDefaultsEnvironmentPostProcessor.
+# A service's own application.yaml (or any other property source) overrides any of these.
+spring:
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+    default-property-inclusion: non_null
+  mvc:
+    problemdetails:
+      enabled: true
+  datasource:
+    hikari:
+      # Fail within 2 s when the pool is exhausted or MySQL is down, instead of holding the request for 30 s.
+      connection-timeout: 2s
+
+# Console output stays human-readable; the file gets one ECS JSON object per line for log collectors.
+logging:
+  file:
+    # Gradle bootRun points shop.log-dir at <repo>/logs/shop so collectors find every service in one place.
+    name: ${shop.log-dir:logs}/${spring.application.name}.log
+  structured:
+    format:
+      file: ecs
+    json:
+      # ECS field names (as dotted keys, like Elastic's own loggers) for the ids Micrometer Tracing puts in the MDC.
+      rename:
+        traceId: trace.id
+        spanId: span.id
+  logback:
+    rollingpolicy:
+      max-file-size: 50MB
+      max-history: 3
+
+management:
+  server:
+    # Each service sets its own management port; Actuator (metrics, health and, from S5, fault injection) is
+    # reachable from this machine only.
+    address: 127.0.0.1
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  tracing:
+    # Every request gets a trace id for log correlation; no exporter is configured, so this costs nothing extra.
+    sampling:
+      probability: 1.0
+  metrics:
+    tags:
+      application: ${spring.application.name}

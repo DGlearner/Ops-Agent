@@ -1,0 +1,29 @@
+# MySQL for the shop target system (docs/shop-design.md).
+#
+#   docker compose up -d
+#
+# Kept apart from Ops-Agent's own infrastructure (deploy/compose) so that database faults injected into the shop
+# never affect the monitoring system. The port binds to 127.0.0.1 only; see .env.example to change it.
+
+name: ops-shop
+
+services:
+  mysql:
+    image: mysql:8.4.10
+    ports:
+      - "127.0.0.1:${SHOP_MYSQL_PORT:-3306}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${SHOP_MYSQL_ROOT_PASSWORD:-shop-root-dev}
+    volumes:
+      - mysql-data:/var/lib/mysql
+      # Runs once, on the first start with an empty data volume: one database and one account per service.
+      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+volumes:
+  mysql-data:
