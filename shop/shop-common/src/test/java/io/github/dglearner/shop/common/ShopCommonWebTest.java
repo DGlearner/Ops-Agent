@@ -1,10 +1,18 @@
 package io.github.dglearner.shop.common;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import java.io.IOException;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.NetworkInterface;
+import java.net.Socket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -205,6 +213,40 @@ class ShopCommonWebTest {
             assertThat(addFault("{\"path\":\"/echo\"}").body()).contains("\"expires_at\"");
         } finally {
             clearFaults();
+        }
+    }
+
+    @Test
+    void businessPortIsReachableFromThisMachineOnly() throws Exception {
+        InetAddress external = NetworkInterface.networkInterfaces()
+                .filter(nic -> isUp(nic) && !isLoopback(nic))
+                .flatMap(NetworkInterface::inetAddresses)
+                .filter(Inet4Address.class::isInstance)
+                .findFirst().orElse(null);
+        assumeTrue(external != null, "this machine has no non-loopback IPv4 address");
+
+        try (Socket socket = new Socket()) {
+            socket.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), 1000);
+        }
+        try (Socket socket = new Socket()) {
+            assertThatThrownBy(() -> socket.connect(new InetSocketAddress(external, port), 1000))
+                    .isInstanceOf(IOException.class);
+        }
+    }
+
+    private static boolean isUp(NetworkInterface nic) {
+        try {
+            return nic.isUp();
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    private static boolean isLoopback(NetworkInterface nic) {
+        try {
+            return nic.isLoopback();
+        } catch (IOException e) {
+            return true;
         }
     }
 
