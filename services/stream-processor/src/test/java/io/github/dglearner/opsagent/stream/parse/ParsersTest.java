@@ -133,6 +133,16 @@ class ParsersTest {
         assertThat(e.eventType()).isEqualTo("app_login_failed");
     }
 
+    @Test
+    void secretsAreRedactedInUnparsedLinesToo() {
+        ParseOutcome outcome = registry.parse(raw(SourceType.APP_SERVICE, "app-01", "auth-api",
+                "{\"@timestamp\":\"2026-01-01T00:00:00Z\",\"message\":\"login\","
+                        + "\"http\":{\"request\":{\"headers\":{\"Authorization\":\"Bearer fake-opaque-12\"}}}}"));
+
+        assertThat(outcome).isInstanceOfSatisfying(ParseOutcome.Unparsed.class, u ->
+                assertThat(u.log().raw().message()).doesNotContain("fake-opaque-12").contains("\"Authorization\":\"***\""));
+    }
+
     private NormalizedEvent parsed(RawLogRecord raw) {
         ParseOutcome outcome = registry.parse(raw);
         assertThat(outcome).as("outcome for %s", raw.message()).isInstanceOf(ParseOutcome.Parsed.class);

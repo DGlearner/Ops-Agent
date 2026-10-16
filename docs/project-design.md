@@ -364,13 +364,17 @@ Agent 方案确定前，Java 侧只承诺以下原则，不实现具体接口：
 
 ### 8.2 脱敏
 
-在解析之后、写出之前执行，作用于 `message` 和所有字符串字段。
+在解析之后、写出之前执行，作用于 `message` 和所有字符串字段；`logs.normalized` 和 `logs.unparsed` 两个出口都经过这一步。
 
 | 类型 | 匹配 | 替换 |
 |---|---|---|
-| 键值对 | `password`、`passwd`、`pwd`、`secret`、`token`、`api_key`、`access_key` 等键（不区分大小写，支持 `=` 和 `:`） | 值替换为 `***` |
-| HTTP 头 | `Authorization: Bearer ...`、`Basic ...` | 凭据替换为 `***` |
+| 键值对 | `password`、`passwd`、`secret`、`token`、`api_key`、`access_key` 等键（不区分大小写，支持 `=` 和 `:`，键和值可以带引号，值里可以有转义的引号）。`PWD` 不算：sudo 日志里它是工作目录 | 值替换为 `***`，原来带引号的仍带引号 |
+| HTTP 头 | `Authorization: Bearer ...`、`Basic ...`，包括 JSON 里的 `"Authorization": "Bearer ..."` | 凭据替换为 `***` |
 | 已知格式 | JWT（`eyJ...` 三段）、AWS Access Key（`AKIA...`）、URL 中的 `user:password@` | `***` |
+
+整条消息是 JSON 文档时（结构化的应用日志通常如此），先解析，再逐个字段处理：名字是密钥的字段（包括 `authorization`）整个替换为 `***`，其他字符串值按上表处理，嵌套对象和数组同样处理。结果仍是合法的 JSON；没有需要遮蔽的内容时原样保留。解析失败的按普通文本处理，不会因为解析失败而原样放行。字段（`fields`）里的嵌套对象和列表也逐层处理。
+
+`logs.raw` 保存的是脱敏之前的原文，所以“下游已脱敏”不等于 Kafka 里从没有过明文：要控制 `logs.raw` 的访问权限和保留期限，Agent 也不读这个 topic。
 
 ### 8.3 规则检测
 
