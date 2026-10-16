@@ -105,6 +105,10 @@ class LogIngestControllerTest {
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
                 .andExpect(jsonPath("$.errors[?(@.field == 'host')]").exists())
                 .andExpect(jsonPath("$.errors[?(@.field == 'logs')]").exists());
+        // Field names are reported as clients write them, in snake_case.
+        mvc.perform(logs("{\"host\":\"h\",\"logs\":[\"x\"]}").header("X-Api-Key", KEY))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[?(@.field == 'source_type')]").exists());
     }
 
     @Test

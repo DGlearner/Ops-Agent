@@ -109,8 +109,25 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static List<Map<String, String>> fieldErrors(List<FieldError> errors) {
         return errors.stream()
-                .map(f -> Map.of("field", f.getField(), "message", String.valueOf(f.getDefaultMessage())))
+                .map(f -> Map.of("field", snakeCase(f.getField()), "message", String.valueOf(f.getDefaultMessage())))
                 .toList();
+    }
+
+    /** Reports field paths the way clients write them in JSON: {@code sourceType} → {@code source_type}. */
+    static String snakeCase(String path) {
+        StringBuilder out = new StringBuilder(path.length() + 8);
+        for (int i = 0; i < path.length(); i++) {
+            char c = path.charAt(i);
+            if (Character.isUpperCase(c)) {
+                if (i > 0 && Character.isLetterOrDigit(path.charAt(i - 1))) {
+                    out.append('_');
+                }
+                out.append(Character.toLowerCase(c));
+            } else {
+                out.append(c);
+            }
+        }
+        return out.toString();
     }
 
     private static String parameterName(MethodParameter parameter) {
