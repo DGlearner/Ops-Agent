@@ -17,6 +17,11 @@ springBoot {
     }
 }
 
+// A bounded heap for local runs, so a few services plus the dev stack fit on a small machine.
+tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
+    maxHeapSize = "512m"
+}
+
 // Services ship as executable jars only; skip the plain jar.
 tasks.named<Jar>("jar") {
     enabled = false

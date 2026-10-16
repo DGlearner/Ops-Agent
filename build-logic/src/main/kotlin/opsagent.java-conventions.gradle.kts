@@ -25,9 +25,17 @@ tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.addAll(listOf("-parameters", "-Xlint:all,-serial,-processing,-this-escape"))
 }
 
+// Integration tests start Kafka, MySQL or Redis containers. Running two test tasks side by side doubles that, which
+// is what exhausted memory on a small dev server, so test tasks take turns; compilation stays parallel.
+val testSlot = gradle.sharedServices.registerIfAbsent("testSlot", TestSlot::class) {
+    maxParallelUsages = 1
+}
+
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
+    usesService(testSlot)
     maxHeapSize = "512m"
+    jvmArgs("-XX:MaxMetaspaceSize=256m", "-XX:+UseSerialGC")
     testLogging {
         events("failed", "skipped")
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL

@@ -55,7 +55,10 @@ class StreamProcessorIT {
 
     @Container
     @ServiceConnection
-    static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:4.2.2");
+    static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:4.2.2")
+            // The image defaults to a 1 GB heap; a test broker needs a fraction of that.
+            .withEnv("KAFKA_HEAP_OPTS", "-Xms256m -Xmx256m")
+            .withCreateContainerCmdModifier(cmd -> cmd.getHostConfig().withMemory(640L * 1024 * 1024));
 
     /**
      * Not a JUnit {@code @TempDir}: that is deleted after the class while the cached Spring context, and with it Kafka

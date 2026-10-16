@@ -523,6 +523,14 @@ java tools/Replay.java datasets/aiops_mixed_incident_small.jsonl
 ```
 
 - **Windows 兼容：** `.gitattributes` 强制 LF（容器内的 shell 脚本不能是 CRLF）；开发脚本使用 Java 单文件程序或 Gradle 任务，不依赖 bash；Gradle 的 foojay 插件会自动下载 JDK 21。
+- **内存预算：** 开发服务器只有 5.8 GB 内存。2026-10-16，一次 Gradle 构建、Testcontainers 和开发用的容器同时运行，耗尽内存，服务器卡死了约 15 分钟。现在的限制如下：
+  - 只用一个 Gradle 守护进程：Kotlin 在守护进程内编译（`kotlin.compiler.execution.strategy=in-process`），不再多开一个约 0.9 GB 的 Kotlin 守护进程。
+  - 测试任务轮流执行：共享的构建服务 `TestSlot` 只有一个位置，同一时间只有一个测试 JVM 和它的容器。编译仍然并行。
+  - 测试 JVM 堆 512 MB；测试用的 Kafka 堆 256 MB、容器上限 640 MB；测试用的 MySQL 关闭 Performance Schema、容器上限 512 MB。
+  - 两个 Compose 文件里的每个容器都有 `mem_limit`。
+  - `bootRun` 的堆上限：Ops-Agent 服务 512 MB，靶场服务 256 MB。
+  - 实测（2026-10-16）：在开发服务器上完整执行 `./gradlew build`（90 个测试，约 50 秒），可用内存最低 1.4 GB，没有用到 swap。
+  - 开发服务器本机另有 4 GB swap 和 earlyoom，用 `memcap` 包装命令，在 cgroup 里限制构建的内存。这些不在仓库里。
 
 ---
 

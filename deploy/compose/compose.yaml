@@ -3,6 +3,7 @@
 #   docker compose up -d                    # Kafka, PostgreSQL (pgvector), Redis, topic setup
 #   docker compose --profile tools up -d    # plus Kafka UI
 #
+# Every service has a memory limit, so a leak or spike gets that container restarted instead of exhausting the host.
 # All published ports bind to 127.0.0.1 only. Docker-published ports bypass host firewalls such as
 # UFW, so binding to all interfaces would expose these services to the network.
 # Host ports can be changed in a .env file next to this one (see .env.example).
@@ -34,6 +35,7 @@ services:
       # Topics are created explicitly by kafka-init with their partitions and retention.
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
       KAFKA_HEAP_OPTS: "-Xms512m -Xmx512m"
+    mem_limit: 1g
     volumes:
       - kafka-data:/var/lib/kafka/data
     healthcheck:
@@ -63,6 +65,7 @@ services:
       POSTGRES_DB: opsagent
       POSTGRES_USER: opsagent
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opsagent-dev}
+    mem_limit: 512m
     volumes:
       # PostgreSQL 18+ images keep data under a versioned directory below /var/lib/postgresql.
       - postgres-data:/var/lib/postgresql
@@ -79,6 +82,7 @@ services:
       - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     # Locks and LLM budgets live here, so keys must not be evicted (see docs/project-design.md, Redis).
     command: ["redis-server", "--appendonly", "no", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
+    mem_limit: 384m
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -97,6 +101,8 @@ services:
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      JAVA_OPTS: "-Xmx256m"
+    mem_limit: 512m
     restart: unless-stopped
 
 networks:

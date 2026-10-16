@@ -41,11 +41,15 @@ class IngestApplicationIT {
 
     @Container
     @ServiceConnection
-    static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:4.2.2");
+    static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:4.2.2")
+            // The image defaults to a 1 GB heap; a test broker needs a fraction of that.
+            .withEnv("KAFKA_HEAP_OPTS", "-Xms256m -Xmx256m")
+            .withCreateContainerCmdModifier(cmd -> cmd.getHostConfig().withMemory(640L * 1024 * 1024));
 
     @Container
     @ServiceConnection(name = "redis")
-    static final GenericContainer<?> REDIS = new GenericContainer<>("redis:8.8.3-alpine").withExposedPorts(6379);
+    static final GenericContainer<?> REDIS = new GenericContainer<>("redis:8.8.3-alpine").withExposedPorts(6379)
+            .withCreateContainerCmdModifier(cmd -> cmd.getHostConfig().withMemory(128L * 1024 * 1024));
 
     private final HttpClient http = HttpClient.newHttpClient();
 
