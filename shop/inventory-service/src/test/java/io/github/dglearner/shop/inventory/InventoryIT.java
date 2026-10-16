@@ -11,6 +11,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -22,6 +23,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,7 +44,8 @@ import tools.jackson.databind.json.JsonMapper;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "management.server.port=0",
         // Concurrency tests queue many requests on one hot row; give them time instead of failing at 2 s.
-        "spring.datasource.hikari.connection-timeout=10000"})
+        "spring.datasource.hikari.connection-timeout=10000",
+        "spring.datasource.hikari.connection-init-sql=SET SESSION innodb_lock_wait_timeout = 1"})
 class InventoryIT {
 
     @Container
@@ -246,6 +249,37 @@ class InventoryIT {
                 .contains("shop_inventory_operations_total{application=\"inventory-service\",operation=\"reserve\",result=\"reserved\"}")
                 .contains("result=\"insufficient_stock\"")
                 .contains("hikaricp_connections_active");
+    }
+
+    @Test
+    void heldRowLockMakesReservationsOfThatSkuFailWithoutTouchingOthers() throws Exception {
+        HttpResponse<String> locked = management("POST", "{\"sku\":\"" + skuA + "\",\"duration\":\"30s\"}");
+        assertThat(locked.statusCode()).as(locked.body()).isEqualTo(200);
+        try {
+            long start = System.nanoTime();
+            assertProblem(reserve(newOrder(), item(skuA, 1)), 503, "DATABASE_UNAVAILABLE");
+            assertThat((System.nanoTime() - start) / 1_000_000).isGreaterThanOrEqualTo(900);
+            assertThat(reserve(newOrder(), item(skuB, 1)).statusCode()).isEqualTo(201);
+            assertThat(management("GET", null).body()).contains(skuA);
+            assertThat(management("POST", "{\"sku\":\"NO-SUCH-SKU\",\"duration\":\"1s\"}").statusCode())
+                    .isEqualTo(400);
+        } finally {
+            assertThat(management("DELETE", null).body()).contains("\"released\":1");
+        }
+        Awaitility.await().atMost(Duration.ofSeconds(5)).untilAsserted(() ->
+                assertThat(reserve(newOrder(), item(skuA, 1)).statusCode()).isEqualTo(201));
+        assertStock(skuA, 10, 9, 1, 0);
+    }
+
+    private HttpResponse<String> management(String method, String json) throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + managementPort + "/actuator/rowlock"));
+        if (json != null) {
+            request.header("Content-Type", "application/json");
+        }
+        request.method(method, json == null ? HttpRequest.BodyPublishers.noBody()
+                : HttpRequest.BodyPublishers.ofString(json));
+        return http.send(request.build(), HttpResponse.BodyHandlers.ofString());
     }
 
     private String newSku(int quantity) {

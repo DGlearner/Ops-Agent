@@ -8,6 +8,8 @@ spring:
     hikari:
       # Fail within 2 s when the pool is exhausted or MySQL is down, instead of holding the request for 30 s.
       connection-timeout: 2000 # ms
+      # A transaction waiting on a row lock gives up after 5 s instead of MySQL's default 50 s.
+      connection-init-sql: SET SESSION innodb_lock_wait_timeout = 5
 
 # Console output stays human-readable; the file gets one ECS JSON object per line for log collectors.
 logging:
@@ -29,13 +31,13 @@ logging:
 
 management:
   server:
-    # Each service sets its own management port; Actuator (metrics, health and, from S5, fault injection) is
-    # reachable from this machine only.
+    # Each service sets its own management port; Actuator (metrics, health and fault injection) is reachable from
+    # this machine only.
     address: 127.0.0.1
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: health,info,metrics,prometheus,faults
   endpoint:
     health:
       probes:

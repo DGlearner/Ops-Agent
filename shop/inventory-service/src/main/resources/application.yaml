@@ -17,3 +17,7 @@ server:
 management:
   server:
     port: 8192
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,faults,rowlock
