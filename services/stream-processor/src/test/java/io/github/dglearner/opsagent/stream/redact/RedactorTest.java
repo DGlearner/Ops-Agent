@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -58,6 +59,59 @@ class RedactorTest {
     void masksTruncatedJsonAsText() {
         assertThat(redactor.redact("{\"user\":\"bob\",\"password\":\"fake-9\",\"msg\":\"cut off"))
                 .isEqualTo("{\"user\":\"bob\",\"password\":\"***\",\"msg\":\"cut off");
+    }
+
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+            "password=\"fake-secret                          | password=\"***",
+            "login failed api_key='fake-15                   | login failed api_key='***",
+            "{\"user\":\"bob\",\"password\":\"fake-16          | {\"user\":\"bob\",\"password\":\"***",
+            "{\"user\":\"bob\",\"password\":\"ab\\\"fake-17     | {\"user\":\"bob\",\"password\":\"***"})
+    void masksASecretValueCutOffBeforeItsClosingQuote(String input, String expected) {
+        assertThat(redactor.redact(input.strip())).isEqualTo(expected.strip());
+    }
+
+    /**
+     * Ingest accepts lines of up to 16 KB. Masking must not need stack in proportion to the line: a StackOverflowError
+     * in the stream thread would stop processing. The work runs on a thread with a deliberately small stack.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "password=\"%s\"",
+            "password=\"%s",
+            "{\"password\":\"%s\",\"user\":\"bob\"}",
+            "{\"message\":\"login password=%s\"}",
+            "token=%s"})
+    void masksLongLinesWithoutDeepRecursion(String template) throws InterruptedException {
+        for (String value : List.of("fake-" + "a".repeat(16 * 1024), "fake-" + "a\\\"".repeat(4 * 1024))) {
+            String input = template.formatted(value);
+
+            String output = onSmallStack(() -> redactor.redact(input));
+
+            assertThat(output).doesNotContain("fake-");
+        }
+    }
+
+    @Test
+    void longValueOfAnOrdinaryFieldNeedsNoDeepRecursionEither() throws InterruptedException {
+        String input = "note=\"" + "a\\\"".repeat(4 * 1024) + "\" password=fake-x";
+
+        assertThat(onSmallStack(() -> redactor.redact(input))).endsWith("\" password=***");
+    }
+
+    private static String onSmallStack(java.util.function.Supplier<String> work) throws InterruptedException {
+        AtomicReference<Object> result = new AtomicReference<>();
+        Thread thread = new Thread(null, () -> {
+            try {
+                result.set(work.get());
+            } catch (Throwable e) {
+                result.set(e);
+            }
+        }, "small-stack", 256 * 1024);
+        thread.start();
+        thread.join();
+        assertThat(result.get()).as("result, or the error thrown").isInstanceOf(String.class);
+        return (String) result.get();
     }
 
     @Test
