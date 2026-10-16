@@ -37,7 +37,7 @@ docker compose --profile tools up -d       # 另外启动 Kafka UI：http://loca
 java tools/Replay.java datasets/aiops_mixed_incident_small.jsonl
 ```
 
-开发用的 API Key 是 `dev-ingest-key`（只用于本地）。
+开发用的 API Key 是 `dev-ingest-key`，只在 `local` profile 下有效（不指定 profile 时默认就是 `local`）。其他环境必须配置自己的 `ops.ingest.sources`，仍用开发密钥或没有配置来源时，服务拒绝启动。
 
 查看结果：`docker compose --profile tools up -d` 后打开 Kafka UI（http://localhost:8089），看 `logs.normalized`、`alerts` 等 topic。样例数据会产生 7 条告警。
 

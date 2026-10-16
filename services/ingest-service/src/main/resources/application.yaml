@@ -48,8 +48,18 @@ ops:
       enabled: true
       capacity: 20000
       refill-per-second: 5000
+    # Log sources and the SHA-256 of their API keys: none outside the local profile, so a shared or deployed
+    # environment must configure its own (ops.ingest.sources[0].id, ...), or the service does not start.
+
+---
+# Local development only: the default profile when none is set (spring.profiles.default above).
+spring:
+  config:
+    activate:
+      on-profile: local
+ops:
+  ingest:
     sources:
-      # Development source. The API key is "dev-ingest-key"; only its SHA-256 is configured.
-      # Override ops.ingest.sources in any shared or deployed environment.
+      # The API key is "dev-ingest-key"; only its SHA-256 is configured. Refused outside the local profile.
       - id: dev
         api-key-sha256: 21dd9e3b3f1633b88d69b73906f1a9e594beebd9b616bf89448c0a50a8b4ad10
