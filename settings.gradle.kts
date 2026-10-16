@@ -22,4 +22,5 @@ include(
     "services:stream-processor",
     "shop:shop-common",
     "shop:inventory-service",
+    "shop:payment-service",
 )

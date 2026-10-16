@@ -302,7 +302,8 @@ payment (payment_id PK, order_id UNIQUE, user_id, amount_cents, currency,
 | `shop.orders` | `status`、`reason` | order |
 | `shop.idempotent.replays` | `operation` | 三个服务 |
 | `shop.inventory.operations` | `operation`（reserve/confirm/release）、`result` | inventory |
-| `shop.payments` | `status` | payment |
+| `shop.payments` | `status`、`reason`（拒绝原因） | payment |
+| `shop.payment.gateway`（计时器） | — | payment |
 
 所有指标带 `application` 标签。
 
