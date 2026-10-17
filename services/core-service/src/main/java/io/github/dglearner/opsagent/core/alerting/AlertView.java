@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/** An alert as the API returns it: the Kafka message's fields, the incident it belongs to and when it was stored. */
+/** An alert as the API returns it: the Kafka message's fields and when it was stored. */
 public record AlertView(
         UUID alertId,
         String ruleId,
@@ -27,7 +27,6 @@ public record AlertView(
         String summary,
         List<UUID> sampleEventIds,
         List<Alert.Sample> samples,
-        UUID incidentId,
         Instant createdAt,
         Instant storedAt) {
 }

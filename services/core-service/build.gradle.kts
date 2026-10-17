@@ -13,6 +13,9 @@ dependencies {
     implementation("org.flywaydb:flyway-database-postgresql")
     implementation(libs.mybatis.plus.boot.starter)
     implementation(libs.springdoc.webmvc.ui)
+    // Events between modules are recorded in the same transaction as the change that raised them, and delivered
+    // again after a crash (event_publication table).
+    implementation("org.springframework.modulith:spring-modulith-starter-jdbc")
     runtimeOnly("org.postgresql:postgresql")
 
     testImplementation(platform(libs.spring.modulith.bom))

@@ -11,13 +11,17 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Base64;
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.type.TypeReference;
 
 /** The alerting module's API: stores alerts from stream-processor and answers queries about them. */
@@ -32,14 +36,34 @@ public class Alerts {
     };
 
     private final AlertMapper mapper;
+    private final ApplicationEventPublisher events;
 
-    Alerts(AlertMapper mapper) {
+    Alerts(AlertMapper mapper, ApplicationEventPublisher events) {
         this.mapper = mapper;
+        this.events = events;
     }
 
-    /** True if the alert is new; false if it was stored before (a redelivery or a replay). */
+    /**
+     * True if the alert is new, and then {@link AlertStored} is published with it; false if it was stored before (a
+     * redelivery or a replay).
+     */
+    @Transactional
     public boolean store(Alert alert) {
-        return mapper.insertIfAbsent(record(alert)) == 1;
+        if (mapper.insertIfAbsent(record(alert)) != 1) {
+            return false;
+        }
+        events.publishEvent(new AlertStored(alert.alertId(), alert.ruleId(), alert.severity(), alert.service(),
+                alert.host(), alert.groupValues(), alert.summary(), alert.createdAt()));
+        return true;
+    }
+
+    /** The alerts with these ids that exist, oldest first. */
+    public List<AlertView> findAll(Collection<UUID> alertIds) {
+        if (alertIds.isEmpty()) {
+            return List.of();
+        }
+        return mapper.selectByIds(alertIds).stream().map(Alerts::view)
+                .sorted(Comparator.comparing(AlertView::createdAt)).toList();
     }
 
     public Optional<AlertView> find(UUID alertId) {
@@ -103,8 +127,8 @@ public class Alerts {
                 instant(row.getWindowStart()), instant(row.getWindowEnd()), row.getCount(), row.getThreshold(),
                 instant(row.getFirstEventAt()), instant(row.getLastEventAt()), row.getSummary(),
                 OpsJson.mapper().readValue(row.getSampleEventIds(), EVENT_IDS),
-                OpsJson.mapper().readValue(row.getSamples(), SAMPLES), row.getIncidentId(),
-                instant(row.getCreatedAt()), instant(row.getStoredAt()));
+                OpsJson.mapper().readValue(row.getSamples(), SAMPLES), instant(row.getCreatedAt()),
+                instant(row.getStoredAt()));
     }
 
     private static String name(Severity severity) {

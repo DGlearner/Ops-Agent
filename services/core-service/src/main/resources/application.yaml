@@ -38,6 +38,10 @@ spring:
   mvc:
     problemdetails:
       enabled: true
+  modulith:
+    events:
+      # Events whose listener had not finished (a crash, a failure) are delivered again at startup.
+      republish-outstanding-events-on-restart: true
 
 mybatis-plus:
   type-handlers-package: io.github.dglearner.opsagent.core.shared
@@ -65,6 +69,9 @@ ops:
   catalog:
     # Load the shop's services and dependencies from catalog/topology.json at startup (local profile only, below).
     seed: false
+  incident:
+    # An alert joins an incident only if the incident had an alert within this time of it (docs/project-design.md §8.4).
+    correlation-gap: 10m
 
 ---
 spring:

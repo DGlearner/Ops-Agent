@@ -33,7 +33,6 @@ public class AlertRecord {
     private String summary;
     private String sampleEventIds;
     private String samples;
-    private UUID incidentId;
     private OffsetDateTime createdAt;
     private OffsetDateTime storedAt;
 
@@ -179,14 +178,6 @@ public class AlertRecord {
 
     public void setSamples(String samples) {
         this.samples = samples;
-    }
-
-    public UUID getIncidentId() {
-        return incidentId;
-    }
-
-    public void setIncidentId(UUID incidentId) {
-        this.incidentId = incidentId;
     }
 
     public OffsetDateTime getCreatedAt() {
