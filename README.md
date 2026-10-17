@@ -61,7 +61,7 @@ cd deploy/shop && docker compose up -d                  # MySQL 8.4（与 Ops-Ag
 - 请求生成工具也可以先用 `./gradlew :shop:load-generator:installDist` 安装，再运行 `shop/load-generator/build/install/load-generator/bin/load-generator`（Windows 上运行同目录下的 `.bat`）。
 - 运行结束时，请求生成工具核对重复请求、库存账目和资金（已付款的订单都扣了款，取消的都没扣），有任何不一致就以非 0 退出。参数见 `--help`。
 - 故障场景：`--scenario payment-timeout` 等 8 个，见设计文档 §10。管理端口上的 `/actuator/faults` 可以手动注入延迟和错误。
-- 日志：`logs/shop/<服务名>.log`，每行一条 ECS JSON，带 `trace.id`。
+- 日志：`logs/shop/<服务名>.log`，每行一条 ECS JSON，带 `trace.id`。用 `tools/log-shipper` 送进 Ops-Agent 检测，见 [docs/shop-design.md](docs/shop-design.md) §12.2、§14。
 - 指标：`http://localhost:819x/actuator/prometheus`，管理端口只监听 127.0.0.1。
 
 下单示例：

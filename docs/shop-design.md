@@ -618,12 +618,20 @@ R0 修复后（§13）用同样的参数重跑了全部 8 个场景（种子 42�
 
 关闭 Agent 后，平台仍然要能检测异常、生成和查询告警。
 
-### 12.2 日志接入
+### 12.2 日志接入（R2 已实现）
 
-- 靶场的文件日志是 ECS JSON，而 stream-processor 现有的应用日志解析器面向 logfmt。需要新增 JSON 适配，把 ECS 字段映射到统一事件，用真实日志代替模拟文本。
-- 保留时间、环境、服务、实例、稳定的事件名或错误码，以及 `trace.id`、`span.id`、`order_id`。时间统一用 UTC，区分事件时间和接收时间。
-- 采集器要说明文件轮转、断点续传和重试的方式；同一事件重复投递不能放大窗口计数。
-- 丢弃 `shop.faults` logger（§10.1）。故障清单只作为评测答案保存，不进入检测和 Agent 的输入。
+```
+logs/shop/*.log ──log-shipper──HTTP──▶ ingest-service ──▶ logs.raw ──▶ stream-processor ──▶ logs.normalized ──▶ alerts
+```
+
+- **解析：** stream-processor 的 `app_service` 解析器认出以 `{` 开头的 ECS JSON 行。事件类型取 `event.action`（§8.1）；消息取 `message`；其他字段展平成带点的名字，保留 `trace.id`、`span.id`、`order_id`、`error.type` 等，去掉进程信息和堆栈。时间用日志里的 `@timestamp`（UTC），接收时间另记在 `received_at`。
+- **采集器（`tools/log-shipper`）：** 跟踪目录下的 `*.log`，只发送完整的行，每批最多 500 行。
+  - 断点续传：每批被 ingest 接受后保存读到的位置；重启后从这个位置继续。
+  - 重试：429、5xx 或者没有应答时重发同一批，按 Retry-After 或退避（最长 30 s）等待，这个文件暂停读取。
+  - 不重复计数：每批的 Idempotency-Key 由主机、文件、文件身份、代数和起始位置算出，重试和重启都不变；ingest 据此给出同样的 `event_id`，stream-processor 只计一次（R0）。
+  - 轮转：文件被换成新文件（inode 变了；Windows 上看创建时间），或者变得比已读位置还短，就从头读，代数加一，这样新内容不会被当成重复。旧文件里最后一次读取之后写入的行会丢，最多一个轮询周期（1 s）：轮转后的文件被压缩了，不读。
+  - 丢弃 `shop.faults` logger 的行（§10.1）；超过 16 KB 的行截断并标记。
+  - 启动时已有的文件默认从末尾开始读（`--from-start` 从头读）；运行中新出现的文件从头读。
 
 ### 12.3 指标接入
 
@@ -642,6 +650,22 @@ R0 修复后（§13）用同样的参数重跑了全部 8 个场景（种子 42�
 | 补偿不收敛 | 待办数量、最老待办的等待时间、FAILED 待办 | 短暂重试是正常的；持续积压或需要人工处理时才升级 |
 
 阈值用正常负载的基线和故障实验来校准。每条规则记录数据源、分组键、窗口、触发和恢复条件、抑制方式、预期结果和版本。
+
+### 12.4.1 第一批实测（2026-10-17）
+
+开发服务器，靶场三个服务、ingest-service、stream-processor、采集器和请求生成工具都在固定的 CPU 和内存上限下运行（§11.6）。依次运行：正常负载每秒 10 单 60 s；`mysql-down`（基线 20 s、故障 30 s、恢复 30 s，每秒 5 单）；`inventory-errors`（同样的时长）。
+
+| 阶段 | 产生的告警 | 距注入 |
+|---|---|---|
+| 正常负载 | 无 | — |
+| `mysql-down` | `shop-database-unavailable`（order-service） | 1.1 s |
+| | `shop-recovery-failing`：order-service 的 3 个恢复步骤、payment-service 的 1 个 | 16–21 s |
+| `inventory-errors` | `shop-dependency-call-failures`（order-service → inventory） | 2.3 s |
+
+- 采集链路：采集器发送 7264 行，丢弃 2 行 `shop.faults`；`logs.normalized` 里没有一行 `shop.faults`，没有重复的 `event_id`，也没有进入 `logs.unparsed` 的靶场日志。
+- `mysql-down` 时 inventory 和 payment 没有“数据库不可用”告警：订单服务自己的库先不可用，下单在写订单时就失败了，请求根本没有到达这两个服务。payment 的问题由后台恢复失败的告警反映出来。
+- 一次 MySQL 停机产生了 5 条告警，来自两个服务、两条规则。它们是同一个根因，应该在关联阶段（§12.5、R3）合并成一个 Incident。
+- 告警只写到了 Kafka 的 `alerts`，还没有落库和查询，那需要 core-service（R2 的后半部分，先确定 D1）。
 
 ### 12.5 告警关联
 
@@ -663,7 +687,7 @@ R0 修复后（§13）用同样的参数重跑了全部 8 个场景（种子 42�
 | S5 | 故障注入与恢复机制（对账、待办重试、卡单清理）、场景脚本与标准答案记录 | 每个场景都有测试或端到端演示，故障恢复后核对仍然通过（§10.2 实测） |
 | R0 | 修正与复验，清单见下（已完成） | 每一项都有回归测试；三个服务的正常、重复、超时、补偿路径回归通过 |
 | R1 | 限量抢购基线：单商品模式、逐订单核对、实验数据准备、实验记录补全（§11）（已完成，结果见 §11.6） | 并发竞争和售罄的结果可重复；订单、库存、支付逐单核对通过 |
-| R2 | 第一个 Ops 闭环：靶场 JSON 日志接入；core-service 先做告警模块（落库与查询）；首个场景 `mysql-down` | 故障产生可查询的告警，带来源、时间和事件证据；重复投递不误报 |
+| R2 | 第一个 Ops 闭环：靶场 JSON 日志接入；core-service 先做告警模块（落库与查询）；首个场景 `mysql-down` | 故障产生可查询的告警，带来源、时间和事件证据；重复投递不误报。**日志接入和检测已完成**（§12.2、§12.4.1）；告警落库与查询待 D1 确定后开始 |
 | R3 | 指标与关联：Prometheus + Alertmanager 接入（积压指标已在 R1 实现，§8.3）、支付超时和库存热点锁场景、自动关联 | 正常售罄不误报；有触发和恢复记录；关联测试覆盖同时发生的独立故障 |
 | R4 | 按实测瓶颈选择优化（§11.4） | 正确性不倒退；改善由可复现的实验支撑 |
 | R5 | Agent 问答与受控工具排查；少量可疑行为规则 | 回答引用证据，原因不明时转人工；安全规则有正常行为作对照 |
@@ -697,3 +721,14 @@ cd deploy/shop && docker compose up -d                   # MySQL 8.4，首次启
 ```
 
 Windows 上用 `gradlew.bat`，也可以直接在 IDEA 里运行三个服务的主类。所有端口只监听 127.0.0.1，从别的机器访问见 §3。
+
+把靶场日志送进 Ops-Agent（§12.2），另外需要 Ops-Agent 的 Kafka 和 Redis、ingest-service、stream-processor：
+
+```bash
+cd deploy/compose && docker compose up -d kafka redis kafka-init
+./gradlew :services:ingest-service:bootRun
+./gradlew :services:stream-processor:bootRun
+./gradlew :tools:log-shipper:run --args="--dir logs/shop"     # 读位置保存在 logs/shop/.log-shipper-state.json
+```
+
+告警在 Kafka 的 `alerts` topic 里，可以用 Kafka UI 看（`docker compose --profile tools up -d`，http://localhost:8089）。
