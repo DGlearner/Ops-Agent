@@ -83,7 +83,9 @@ class Traffic {
             OrderMix.OrderRequest request = mix.next();
             ShopClient.Response response = client.placeOrder(key, request);
             sent.incrementAndGet();
-            count(outcome(response));
+            String outcome = outcome(response);
+            count(outcome);
+            impact.record(outcome);
             if (mix.duplicate()) {
                 client.placeOrder(key, request);
             }
@@ -131,12 +133,14 @@ class Traffic {
     }
 
     private final LabProperties properties;
+    private final CustomerImpact impact;
     private final ShopClient client;
     private Run normal;
     private final List<Run> sales = new ArrayList<>();
 
-    Traffic(LabProperties properties, JsonMapper json) {
+    Traffic(LabProperties properties, CustomerImpact impact, JsonMapper json) {
         this.properties = properties;
+        this.impact = impact;
         this.client = new ShopClient(Options.parse(properties.generatorArgs().toArray(String[]::new)), json);
     }
 

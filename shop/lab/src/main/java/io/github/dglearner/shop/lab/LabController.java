@@ -35,12 +35,15 @@ class LabController {
     private final Faults faults;
     private final GroundTruth groundTruth;
     private final OpsAgentView opsAgent;
+    private final CustomerImpact impact;
 
-    LabController(Traffic traffic, Faults faults, GroundTruth groundTruth, OpsAgentView opsAgent) {
+    LabController(Traffic traffic, Faults faults, GroundTruth groundTruth, OpsAgentView opsAgent,
+            CustomerImpact impact) {
         this.traffic = traffic;
         this.faults = faults;
         this.groundTruth = groundTruth;
         this.opsAgent = opsAgent;
+        this.impact = impact;
     }
 
     @GetMapping("/state")
@@ -101,12 +104,13 @@ class LabController {
         Instant from = episodes.stream().map(Episode::startedAt).min(Comparator.naturalOrder()).orElseThrow()
                 .minus(Scoring.LEAD);
         try {
-            Scoring.Report report = Scoring.score(episodes, opsAgent.alertsSince(from), opsAgent.incidentsSince(from),
-                    Instant.now());
+            Scoring.Report report = Scoring.score(episodes, opsAgent.alertsSince(from),
+                    opsAgent.incidentsSince(from.minus(Duration.ofHours(1))), impact::failuresBetween, Instant.now());
             result.put("from", from);
             result.put("summary", report.summary());
             result.put("episodes", report.episodes().reversed());
             result.put("false_alarms", report.falseAlarms());
+            result.put("alerts_on_customer_trouble", report.troubleAlerts());
         } catch (RestClientException e) {
             result.put("message", "Ops-Agent (core-service) cannot be reached: " + e.getMessage());
         }

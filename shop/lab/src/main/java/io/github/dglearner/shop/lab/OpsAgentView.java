@@ -46,7 +46,8 @@ class OpsAgentView {
             List<String> subjects = new ArrayList<>();
             i.path("subjects").forEach(s -> subjects.add(s.asString()));
             incidents.add(new Scoring.Incident(i.path("incident_id").asString(), i.path("title").asString(), subjects,
-                    i.path("alert_count").asInt(), Instant.parse(i.path("opened_at").asString())));
+                    i.path("alert_count").asInt(), Instant.parse(i.path("opened_at").asString()),
+                    Instant.parse(i.path("last_alert_at").asString())));
         }
         return incidents;
     }

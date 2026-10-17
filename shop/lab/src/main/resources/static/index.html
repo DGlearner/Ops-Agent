@@ -34,7 +34,8 @@
   th { color: var(--muted); font-weight: 500; font-size: 12px; border-top: 0; }
   .muted { color: var(--muted); font-size: 12px; }
   .on { color: var(--warn); font-weight: 600; }
-  .verdict-correct { color: var(--ok); font-weight: 600; }
+  .verdict-correct, .verdict-overload { color: var(--ok); font-weight: 600; }
+  .verdict-missed_overload { color: var(--bad); font-weight: 600; }
   .verdict-missed, .verdict-false_alarm, .verdict-wrong_split, .verdict-not_injected { color: var(--bad); font-weight: 600; }
   .verdict-pending { color: var(--muted); }
   .chips span { display: inline-block; margin: 0 6px 4px 0; padding: 1px 8px; border-radius: 10px;
@@ -89,6 +90,7 @@
 const $ = id => document.getElementById(id);
 const time = t => t ? new Date(t).toLocaleTimeString() : '';
 const verdicts = { correct: '正确', missed: '漏报', wrong_split: 'Incident 数量不对', false_alarm: '误报',
+                   overload: '顾客订单失败，已告警', missed_overload: '顾客订单失败，未告警',
                    not_injected: '注入失败', pending: '等待中' };
 
 async function call(method, path, body) {
@@ -159,12 +161,14 @@ async function evaluate() {
       <td>${time(e.episode.started_at)}–${time(e.episode.ended_at)}</td>
       <td><b>${e.episode.name}</b><div class="muted">${e.episode.target}</div></td>
       <td class="verdict-${e.verdict}">${verdicts[e.verdict] || e.verdict}</td>
-      <td>${e.first_alert_after_s != null ? e.first_alert_after_s + ' s' : '—'}</td>
+      <td>${e.first_alert_after_seconds != null ? e.first_alert_after_seconds + ' s' : '—'}</td>
       <td>${e.alerts.length}</td>
+      <td>${e.customer_failures}</td>
       <td>${e.incidents.length} / 应为 ${e.episode.expected_incidents}<div class="chips">${
           e.incidents.map(i => `<span title="${i.title}">${i.subjects.join(' + ')}（${i.alert_count} 条告警）</span>`).join('')}</div></td>
     </tr>`).join('');
   const falseAlarms = r.false_alarms.map(a => `<li>${time(a.created_at)} ${a.rule_id}：${a.summary}</li>`).join('');
+  const trouble = r.alerts_on_customer_trouble.map(a => `<li>${time(a.created_at)} ${a.rule_id}：${a.summary}</li>`).join('');
   $('evaluation').innerHTML = `
     <div class="summary">
       <div><b>${s.faults}</b><span class="muted">故障演练</span></div>
@@ -172,11 +176,13 @@ async function evaluate() {
       <div><b>${s.correct}</b><span class="muted">检出且 Incident 正确</span></div>
       <div><b>${s.mean_first_alert_after_s ?? '—'}</b><span class="muted">平均首条告警（秒）</span></div>
       <div><b>${s.false_alarms}</b><span class="muted">误报</span></div>
+      <div><b>${s.alerts_on_customer_trouble}</b><span class="muted">没注入故障、但顾客订单确实失败时的告警</span></div>
     </div>
-    <table><thead><tr><th>时间</th><th>演练</th><th>结果</th><th>首条告警</th><th>告警</th><th>Incident</th></tr></thead>
+    <table><thead><tr><th>时间</th><th>演练</th><th>结果</th><th>首条告警</th><th>告警</th><th>失败订单</th><th>Incident</th></tr></thead>
     <tbody>${rows}</tbody></table>
-    ${falseAlarms ? `<h2 style="margin-top:16px">故障窗口之外的告警（误报）</h2><ul>${falseAlarms}</ul>` : ''}
-    <p class="muted">一次演练的窗口：开始前 30 秒到结束后 5 分钟。</p>`;
+    ${falseAlarms ? `<h2 style="margin-top:16px">误报：故障窗口之外、顾客订单也都正常时的告警</h2><ul>${falseAlarms}</ul>` : ''}
+    ${trouble ? `<h2 style="margin-top:16px">没注入故障、但顾客订单确实失败时的告警</h2><ul>${trouble}</ul>` : ''}
+    <p class="muted">一次演练的窗口：开始前 30 秒到结束后 5 分钟，最多到下一次演练开始。失败订单：控制台自己发出的订单里，服务不可用、结果未知、5xx 或没有应答的数量（售罄、被拒卡不算）。</p>`;
 }
 
 refresh();
