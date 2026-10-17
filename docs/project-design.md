@@ -40,23 +40,21 @@
  +------------------+                             v
                                     +---------------------------+
    rules.changelog (compact) -----> |     stream-processor      |
-   topology.changelog (compact) --> |  Kafka Streams            |
+                                    |  Kafka Streams            |
                                     |  parse -> redact          |
-                                    |  -> rule match            |
+                                    |  -> rule match -> dedup   |
                                     |  -> sliding-window count  |
-                                    |  -> dedup -> alerts       |
-                                    |  -> re-key by dep. group  |
-                                    |  -> session-window merge  |
+                                    |  -> suppression -> alerts |
                                     +---------------------------+
                                       | logs.normalized  | alerts
-                                      | logs.unparsed    | incident.candidates
+                                      | logs.unparsed    |
                                       v                  v
  +--------------------------------------------------------------+
  |  core-service  (Spring Boot, Spring Modulith)                |
- |  identity | catalog | rules | alerting | incident | (tools)  |
+ |  identity | catalog | rules | alerting -> incident | (tools)  |
+ |  alerts correlated into incidents along the catalog (§8.4)   |
  |  PostgreSQL + pgvector, Redis                                |
- |  outbox -> incident.events, rules.changelog,                 |
- |            topology.changelog                                |
+ |  outbox -> incident.events, rules.changelog                  |
  +--------------------------------------------------------------+
         ^  REST + SSE                     |  agent.tasks.*  ^ agent.results
         |                                 v                 |
@@ -66,9 +64,9 @@
 
 **数据流约定：**
 
-- 规则和服务拓扑的"事实来源"在 core-service 的数据库里。变更通过 Outbox 写入两个 compacted topic，stream-processor 以 GlobalKTable 加载，实现热更新。
+- 规则和服务拓扑的"事实来源"在 core-service 的数据库里。规则变更通过 Outbox 写入 compacted topic，stream-processor 以 GlobalKTable 加载，实现热更新。服务拓扑只在 core 内部用于告警关联（§8.4），不再发给 stream-processor。
 - stream-processor 只读写 Kafka，不连数据库，因此可以独立扩容和重放。
-- core-service 消费 `alerts` 和 `incident.candidates`，按业务键幂等落库。
+- core-service 消费 `alerts`，按告警 id 幂等落库，再在 core 内部把告警关联成 Incident（§8.4）。
 
 ---
 
@@ -160,7 +158,7 @@ JSON Schema 放在仓库根目录 `contracts/kafka/`，供 Python 侧使用；Ja
 |---|---|---|---|
 | 解析 | `logs.raw` | `logs.normalized`、`logs.unparsed` | 按 `source_type` 选择解析器，之后统一脱敏（§8.1–8.2） |
 | 检测 | `logs.normalized` + 规则全局表 | `alerts` | 规则匹配 → 滑动窗口计数 → 达到阈值 → 去重（§8.3） |
-| 聚合 | `alerts` + 拓扑全局表 | `incident.candidates` | 按依赖组重分区 → 会话窗口合并（§8.4） |
+| ~~聚合~~ | — | — | 不再在 stream-processor 中做，改在 core-service 关联（§8.4） |
 
 ### 6.4 `services/core-service`
 
@@ -169,10 +167,10 @@ JSON Schema 放在仓库根目录 `contracts/kafka/`，供 Python 侧使用；Ja
 | 模块 | 职责 | 阶段 |
 |---|---|---|
 | `identity` | 用户、团队、角色；登录与 JWT 签发；权限校验 | J3 |
-| `catalog` | 服务、服务依赖、依赖组计算、日志源与 API Key；拓扑变更发布到 `topology.changelog` | J3 |
+| `catalog` | 服务、服务依赖、日志源与 API Key | 服务与依赖已实现（R3）；日志源与 API Key 待做 |
 | `rules` | 规则的增删改查、版本、启停、校验；变更发布到 `rules.changelog` | J3 |
 | `alerting` | 消费 `alerts` 并落库；静默规则；告警查询 | 落库与查询已实现（R2，2026-10-17）；静默规则待做 |
-| `incident` | 消费 `incident.candidates`；Incident 生命周期状态机、指派、评论、时间线；领域事件发布到 `incident.events` | J4 |
+| `incident` | 把告警关联成 Incident（§8.4）；生命周期状态机、时间线；以后加指派、评论，领域事件发布到 `incident.events` | 关联、状态机、时间线与查询已实现（R3，2026-10-17） |
 | `shared` | 错误处理（ProblemDetail）、分页、审计字段、Outbox 配置 | J3 |
 | `tools`、`agentops`、`knowledge`、`chat`、`scheduling` | 为 Agent 预留，等 Agent 方案确定后设计 | 待定 |
 
@@ -275,9 +273,9 @@ JSON Schema 放在仓库根目录 `contracts/kafka/`，供 Python 侧使用；Ja
 | `logs.normalized` | service（缺失时用 host） | `NormalizedEvent` | 6 | 3 天 | stream-processor | stream-processor（检测）、core（J5，日志检索） |
 | `logs.unparsed` | source_type | `UnparsedLog` | 1 | 7 天 | stream-processor | 离线分析 |
 | `rules.changelog` | rule_id | `RuleDefinition`（删除为 tombstone） | 1 | compact | core（outbox） | stream-processor |
-| `topology.changelog` | service | `TopologyEntry` | 1 | compact | core（outbox） | stream-processor |
+| `topology.changelog` | service | `TopologyEntry` | 1 | compact | core（outbox） | stream-processor。不再使用（§8.4） |
 | `alerts` | group_key | `Alert` | 6 | 7 天 | stream-processor | stream-processor（聚合）、core |
-| `incident.candidates` | group_key | `IncidentCandidate` | 6 | 7 天 | stream-processor | core |
+| `incident.candidates` | group_key | `IncidentCandidate` | 6 | 7 天 | stream-processor | core。不再使用（§8.4） |
 | `incident.events` | incident_id | `IncidentEvent` | 3 | 30 天 | core（outbox） | 推送、Agent 派发（待定） |
 | `agent.tasks.high` / `.low`、`agent.results` | task_id | 待定 | 3 | 3 / 7 天 | core / agent | agent / core |
 | `<topic>.dlt` | 原 key | 原消息 + 错误头 | 1 | 14 天 | Spring Kafka 错误处理器 | 人工排查、重放 |
@@ -311,7 +309,7 @@ JSON Schema 放在仓库根目录 `contracts/kafka/`，供 Python 侧使用；Ja
 
 **`RuleDefinition`**（`rules.changelog`）：见 §8.3。
 
-**`TopologyEntry`**（`topology.changelog`）：`service`、`group_key`（依赖组，由 core 计算）、`depends_on`、`team`、`version`。
+**`TopologyEntry`**（`topology.changelog`）：`service`、`group_key`（依赖组，由 core 计算）、`depends_on`、`team`、`version`。 不再使用：关联改在 core-service（§8.4），topic 和契约保留，供以后需要时使用。
 
 **`Alert`**（`alerts`）
 
@@ -331,7 +329,7 @@ JSON Schema 放在仓库根目录 `contracts/kafka/`，供 Python 侧使用；Ja
 | `summary` | 按规则模板生成的描述 |
 | `created_at` | 产生时间 |
 
-**`IncidentCandidate`**（`incident.candidates`）：`group_key`、`session_start`、`session_end`、`alert_ids`、`services`、`hosts`、`max_severity`、`alert_count`、`merged_from`（被合并掉的旧会话起点，供 core 合并已存在的 Incident）。
+**`IncidentCandidate`**（`incident.candidates`）：`group_key`、`session_start`、`session_end`、`alert_ids`、`services`、`hosts`、`max_severity`、`alert_count`、`merged_from`（被合并掉的旧会话起点，供 core 合并已存在的 Incident）。 不再使用：关联改在 core-service（§8.4），topic 和契约保留，供以后需要时使用。
 
 **`IncidentEvent`**（`incident.events`）：`event_id`、`incident_id`、`type`（`OPENED`、`ALERT_ATTACHED`、`STATUS_CHANGED`、`ASSIGNED`、`COMMENTED`、`MERGED`）、`actor_type`（`USER`、`SYSTEM`、`AGENT`）、`actor_id`、`from_status`、`to_status`、`payload`、`occurred_at`。
 
@@ -415,13 +413,17 @@ Agent 方案确定前，Java 侧只承诺以下原则，不实现具体接口：
 - **样例数据的结果：** 重放 `datasets/aiops_mixed_incident_small.jsonl` 产生 7 条告警：SSH 暴力破解、MySQL 连接被拒绝、MySQL 连接数过多、payment-api 数据库连接错误、web-01 的 5xx 突增、api-gateway 容器 OOM、api-gateway 频繁重启（拓扑测试和真实 Kafka 上的端到端运行结果一致）。
 - **规则来源：** J3 之前没有 core-service，stream-processor 在 `local` 配置下启动时把 `default-rules.json` 写入 `rules.changelog`；J3 起由 core-service 管理。
 
-### 8.4 告警聚合
+### 8.4 告警关联（R3 起，在 core-service 中）
 
-1. **依赖组：** core-service 把服务依赖图的每个连通分量算作一个依赖组，`group_key` 取组内的根服务名（没有上游依赖的服务；多个时取字典序最小者）。结果按服务写入 `topology.changelog`。
-2. **重分区：** stream-processor 收到告警后，按 `service`（缺失时按 host）查拓扑全局表得到 `group_key`，以它为新 key 重分区。查不到时 `group_key` 取服务名自身。
-3. **会话窗口：** 在 `group_key` 上做 `SessionWindows`（间隔 5 分钟），聚合为 `IncidentCandidate`，每次更新都输出。
-4. **会话合并：** 两个会话因新告警而合并时，输出的候选带 `merged_from`，core 据此把旧 Incident 合并进新 Incident。
-5. **效果：** MySQL 不可用 → 应用数据库连接错误 → Nginx 5xx，这三类告警会进入同一个 Incident。
+**原设计与改动。** 原设计在 stream-processor 里把服务依赖图的每个连通分量算作一个依赖组，同组的告警用 5 分钟间隔的会话窗口合成一个 Incident。对电商靶场这样不成立：order 依赖 inventory 和 payment，三者又都依赖同一个 MySQL，整个靶场是一个连通分量，同时发生的两个独立故障（支付报错和库存报错）会被强行合成一个 Incident，而这正是要求分开的反例（shop-design §12.5）。改为：
+
+- **关联放在 core-service 的 incident 模块：** 指标告警（以后经 Alertmanager）也会进 core，两类告警只在这里汇合；Incident 的状态和人工操作也在这里；告警量很小，不需要流处理。
+- **主体（subject）：** 每条告警指向一个组件。调用其他服务失败的告警（规则按 `fields.dependency` 分组）指向被调用方；其他告警指向产生告警的服务（没有服务时取主机）。
+- **规则：** 一条新告警加入一个活跃的 Incident（open、acknowledged、investigating、mitigated），条件是：这个 Incident 在关联间隔内有过告警（默认 15 分钟，比规则常见的 10 分钟抑制期长，持续的故障再次告警时仍在同一个 Incident 里）；并且新告警的主体与这个 Incident 的某个主体之间有依赖路径，方向不限，或者是同一个组件。**只是有共同的依赖不算相关**：payment 和 inventory 都依赖 MySQL，但它们之间没有路径。多个候选时选最近有告警的那个。
+- **不自动合并、不断定根因：** 已有的 Incident 不会被自动合并；只给出提示 `shared_dependencies`，即所有主体都依赖的组件（不含主体本身），例如一次 MySQL 停机的 Incident 主体是 order-service 和 payment-service，提示 shop-mysql。
+- **可靠性：** 告警模块在存储告警的事务里发布 `AlertStored`（Spring Modulith 的事件发布登记）；incident 模块在提交之后异步处理，失败或进程崩溃后重新投递，已经关联过的告警跳过；关联用 PostgreSQL 的事务级 advisory lock 串行执行，并发和多实例时都不会为相关告警各开一个 Incident。
+- **拓扑来源：** catalog 模块的服务与依赖（`GET /api/v1/topology`）；local profile 启动时从 `catalog/topology.json` 载入靶场的拓扑。
+- **已知局限：** 两个相关组件在间隔内先后出现独立故障，会被放进同一个 Incident；Incident 只按时间和依赖判断，不看告警内容。需要时人工处理（合并、拆分的接口待做）。
 
 ### 8.5 Incident 生命周期
 

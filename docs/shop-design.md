@@ -673,6 +673,17 @@ logs/shop/*.log ──log-shipper──HTTP──▶ ingest-service ──▶ lo
 
 关联的依据是环境、服务依赖、时间、异常类型和 trace。服务之间有依赖，不等于是同一次故障：同时发生的独立支付故障和独立库存故障要作为反例来测试。证据不足时保留多个 Incident，不强行合并，也不断定根因。
 
+**实现（R3）：** core-service 的 incident 模块按 project-design §8.4 关联：每条告警指向一个主体（调用失败指向被调用方，否则是告警所在的服务），时间上接近、主体之间有依赖路径才放进同一个 Incident，只有共同依赖不算。拓扑来自 catalog 模块，local profile 下从 `catalog/topology.json` 载入靶场的四个组件。反例用新场景 `independent-faults` 产生：同时注入支付报错（30%）和库存报错（50%）。
+
+**实测（2026-10-17）：** 先跑 `independent-faults`，4 分钟后跑 `mysql-down`。为了不用等满 15 分钟，这次把关联间隔设为 3 分钟。
+
+| 场景 | 标准答案 | 得到的 Incident |
+|---|---|---|
+| `independent-faults` | 两个独立故障：payment、inventory | **2 个**：主体 inventory-service（注入后 5 s），主体 payment-service（注入后 16 s） |
+| `mysql-down` | 一个故障：MySQL | **1 个**，含 5 条告警（数据库不可用 1 条，后台恢复失败 4 条），主体 order-service 和 payment-service，共同依赖提示 `shop-mysql` |
+
+一次 MySQL 停机原来是来自两个服务、两条规则的 5 条告警，现在是一个 Incident，而两个同时发生的独立故障没有被它们共同的 MySQL 连在一起。局限见 project-design §8.4：两个相关组件在间隔内先后出现独立故障，会被放进同一个 Incident，要靠人工处理。
+
 ---
 
 ## 13. 阶段与验收
@@ -688,7 +699,7 @@ logs/shop/*.log ──log-shipper──HTTP──▶ ingest-service ──▶ lo
 | R0 | 修正与复验，清单见下（已完成） | 每一项都有回归测试；三个服务的正常、重复、超时、补偿路径回归通过 |
 | R1 | 限量抢购基线：单商品模式、逐订单核对、实验数据准备、实验记录补全（§11）（已完成，结果见 §11.6） | 并发竞争和售罄的结果可重复；订单、库存、支付逐单核对通过 |
 | R2 | 第一个 Ops 闭环：靶场 JSON 日志接入；core-service 先做告警模块（落库与查询）；首个场景 `mysql-down` | 故障产生可查询的告警，带来源、时间和事件证据；重复投递不误报。**已完成**（§12.2、§12.4.1；持久层按 D1 用 MyBatis-Plus） |
-| R3 | 指标与关联：Prometheus + Alertmanager 接入（积压指标已在 R1 实现，§8.3）、支付超时和库存热点锁场景、自动关联 | 正常售罄不误报；有触发和恢复记录；关联测试覆盖同时发生的独立故障 |
+| R3 | 指标与关联：Prometheus + Alertmanager 接入（积压指标已在 R1 实现，§8.3）、支付超时和库存热点锁场景、自动关联 | 正常售罄不误报；有触发和恢复记录；关联测试覆盖同时发生的独立故障。**自动关联已完成**（§12.5）；Prometheus + Alertmanager 与两个指标场景待做 |
 | R4 | 按实测瓶颈选择优化（§11.4） | 正确性不倒退；改善由可复现的实验支撑 |
 | R5 | Agent 问答与受控工具排查；少量可疑行为规则 | 回答引用证据，原因不明时转人工；安全规则有正常行为作对照 |
 
