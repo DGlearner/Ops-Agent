@@ -51,15 +51,15 @@
                                       v                  v
  +--------------------------------------------------------------+
  |  core-service  (Spring Boot, Spring Modulith)                |
- |  identity | catalog | rules | alerting -> incident | (tools)  |
+ |  catalog | alerting -> incident -> agentops | (rules, ...)   |
  |  alerts correlated into incidents along the catalog (§8.4)   |
  |  PostgreSQL + pgvector, Redis                                |
  |  outbox -> incident.events, rules.changelog                  |
  +--------------------------------------------------------------+
         ^  REST + SSE                     |  agent.tasks.*  ^ agent.results
         |                                 v                 |
- [web console] (later)            [agent-runtime, Python] (TBD)
-                                  calls core-service tools (read-only)
+ [web console] (later)            [agent-runtime, Python]
+                                  reads core-service's API (read-only)
 ```
 
 **数据流约定：**
@@ -84,7 +84,7 @@ Ops-Agent/
     core-service/
   contracts/
     kafka/                  JSON Schema for every Kafka message (shared with Python)
-  agent/                    Python agent runtime (TBD)
+  agent/                    Python agent runtime: incident analysis (§6.5)
   deploy/compose/           local infrastructure (Kafka, PostgreSQL, Redis)
   datasets/                 sample logs for replay and tests
   tools/                    replay tool and other dev scripts
@@ -172,11 +172,21 @@ JSON Schema 放在仓库根目录 `contracts/kafka/`，供 Python 侧使用；Ja
 | `alerting` | 消费 `alerts` 并落库；静默规则；告警查询 | 落库与查询已实现（R2，2026-10-17）；静默规则待做 |
 | `incident` | 把告警关联成 Incident（§8.4）；生命周期状态机、时间线；以后加指派、评论，领域事件发布到 `incident.events` | 关联、状态机、时间线与查询已实现（R3，2026-10-17） |
 | `shared` | 错误处理（ProblemDetail）、分页、审计字段、Outbox 配置 | J3 |
-| `tools`、`agentops`、`knowledge`、`chat`、`scheduling` | 为 Agent 预留，等 Agent 方案确定后设计 | 待定 |
+| `agentops` | 向 Agent 派发 Incident 分析任务（自动或手动）；校验 Agent 的结论并落库；查询（§7.6） | 已实现（P4 第一版，2026-10-17） |
+| `tools`、`knowledge`、`chat`、`scheduling` | 为 Agent 预留：工具调用的鉴权与审计、知识库、问答、巡检 | 待定 |
 
-### 6.5 `agent/`（Python，待定）
+### 6.5 `agent/`（Python）
 
-本阶段只放一个 README。Java 侧为它预留的边界见 §7.6。
+Agent 运行时（`agent/README.md`）。从 `agent.tasks.high` 取任务，通过 core-service 的只读接口查看 Incident，结论写回 `agent.results`。
+
+| 模块 | 作用 |
+|---|---|
+| `worker` | Kafka 消费与生产；结果送达后才提交任务的 offset；读不懂的任务转入 `agent.tasks.dlt`；过了截止时间的任务跳过 |
+| `analyst` | 工具调用循环：模型最多调用 8 次工具，用完后只给它 `submit_analysis`；格式不对的提交退回改正；引用了本 Incident 没有的证据，退回一次 |
+| `tools` | 5 个只读工具，都映射到 core-service 已有的接口：本 Incident 的告警（含样本日志）、时间线、拓扑、前后时间段的告警、同时段的其他 Incident。结果只保留分析需要的字段 |
+| `llm` | 任何兼容 OpenAI Chat Completions、支持工具调用的接口（配置见 README）；不支持指定 `tool_choice` 的接口自动退回 `auto` |
+| `baseline` | 不用大模型的对照：直接取 Incident 的共同依赖或告警指向作为答案 |
+| `contracts` | 按 `contracts/kafka/` 的 schema 校验收发的消息，与 Java 端共用 |
 
 ---
 
@@ -261,6 +271,8 @@ JSON Schema 放在仓库根目录 `contracts/kafka/`，供 Python 侧使用；Ja
 | | `POST /api/v1/incidents/{id}/transitions` | `{ "to_status": "acknowledged", "note": "..." }`，非法迁移返回 409 | SRE、DEVELOPER |
 | | `PUT /api/v1/incidents/{id}/assignee` | `{ "user_id": "..." }` | SRE |
 | | `POST /api/v1/incidents/{id}/comments` | 评论，写入时间线 | SRE、DEVELOPER |
+| agentops | `POST /api/v1/incidents/{id}/analyses` | 请求 Agent 分析，返回 202 和待完成的分析；已有一个在等待时返回那一个（已实现） | SRE、DEVELOPER |
+| | `GET /api/v1/incidents/{id}/analyses`，`GET /api/v1/analyses/{id}` | 分析结果，新的在前：状态、摘要、是否不确定、假设（组件、原因、置信度、证据）、建议、被拒收的证据（已实现） | 团队范围 |
 | 实时推送 | `GET /api/v1/stream` | SSE：告警与 Incident 变更（多实例时经 Redis Pub/Sub 广播） | 登录用户 |
 
 ### 7.4 Kafka topic
@@ -277,7 +289,9 @@ JSON Schema 放在仓库根目录 `contracts/kafka/`，供 Python 侧使用；Ja
 | `alerts` | group_key | `Alert` | 6 | 7 天 | stream-processor | stream-processor（聚合）、core |
 | `incident.candidates` | group_key | `IncidentCandidate` | 6 | 7 天 | stream-processor | core。不再使用（§8.4） |
 | `incident.events` | incident_id | `IncidentEvent` | 3 | 30 天 | core（outbox） | 推送、Agent 派发（待定） |
-| `agent.tasks.high` / `.low`、`agent.results` | task_id | 待定 | 3 | 3 / 7 天 | core / agent | agent / core |
+| `agent.tasks.high` | task_id | `AgentTask` | 3 | 3 天 | core（agentops） | agent |
+| `agent.tasks.low` | task_id | `AgentTask` | 3 | 3 天 | 以后的批量、巡检任务 | agent |
+| `agent.results` | task_id | `AgentResult` | 3 | 7 天 | agent | core（agentops） |
 | `<topic>.dlt` | 原 key | 原消息 + 错误头 | 1 | 14 天 | Spring Kafka 错误处理器 | 人工排查、重放 |
 | `stream-processor.dlt` | 原 key | 原始字节 + 错误头 | 1 | 14 天 | Kafka Streams（`errors.dead.letter.queue.topic.name`） | 人工排查 |
 
@@ -333,13 +347,25 @@ JSON Schema 放在仓库根目录 `contracts/kafka/`，供 Python 侧使用；Ja
 
 **`IncidentEvent`**（`incident.events`）：`event_id`、`incident_id`、`type`（`OPENED`、`ALERT_ATTACHED`、`STATUS_CHANGED`、`ASSIGNED`、`COMMENTED`、`MERGED`）、`actor_type`（`USER`、`SYSTEM`、`AGENT`）、`actor_id`、`from_status`、`to_status`、`payload`、`occurred_at`。
 
-### 7.6 为 Agent 预留的边界（待定）
+### 7.6 Agent 的边界（P4 第一版已实现）
 
-Agent 方案确定前，Java 侧只承诺以下原则，不实现具体接口：
+1. Agent 只能通过 core-service 的**只读接口**访问数据，不连数据库，也不登录被监控的机器。现在的工具：告警与 Incident 详情、时间线、拓扑、按时间段查告警和 Incident；日志检索、指标、最近的变更随 P2、P3 加入。
+2. 任务通过 `agent.tasks.high` 派发，结果写回 `agent.results`，由 core 校验后落库（`AgentTask`、`AgentResult`，schema 在 `contracts/kafka/`）。
+3. 以后：每个任务携带短期、限定范围的任务 token；工具调用经过鉴权、限流，并写入审计表。identity 模块（P5）之前，core-service 只监听 127.0.0.1。
 
-1. Agent 只能通过 core-service 提供的**只读工具接口**访问数据（候选工具：日志检索、指标查询、告警与 Incident 详情、拓扑、最近部署、知识库检索）。
-2. 异步任务通过 `agent.tasks.high` / `agent.tasks.low` 派发，结果写回 `agent.results`，由 core 校验后落库。
-3. 每个任务携带短期、限定范围的任务 token；工具调用经过鉴权、限流、超时、脱敏，并写入审计表。
+**派发（agentops 模块）：**
+
+- Incident 1 分钟（`ops.agent.settle-after`）没有新告警，就自动派发一次分析，让 Agent 看到完整的 Incident，而不是第一条告警。之后又有新告警，再安静 1 分钟后重新分析；每个 Incident 最多自动分析 3 次。最近 1 小时之外的 Incident（例如停机一段时间后启动）只在有人请求时分析。“安静”按告警到达 core 的时间算，不按告警自身的时间。
+- 同一个 Incident 同时只有一个分析在等待（部分唯一索引）；再次请求返回这一个。
+- 请求和事件在同一个事务里落库（Modulith 事件登记表），事务提交后才发出任务；发送失败时重启后重发，已过截止时间的任务不再发送。
+- 3 分钟（`ops.agent.timeout`）没有回答，分析记为超时；迟到的回答照样保存。
+
+**校验（落库之前）：**
+
+- 只接受等待中或已超时的分析的回答，重复的回答不改变已有结果。
+- 每条证据都要是这个 Incident 真实有的：它的告警 id、这些告警的样本事件 id、服务目录里的名字、它自己的 id。其余的证据（编造的 id、其他 Incident 的告警）单独存入 `rejected_evidence`，不作为支持显示。
+- 校验后某个假设一条证据都没有了，整个分析标为“不确定”。
+- 摘要、假设、建议的数量和长度有上限。
 
 ---
 
@@ -470,7 +496,7 @@ PostgreSQL，schema `core`，Flyway 管理。主键为 UUIDv7（`uuid` 类型）
 - 幂等：`alerts.id` 为消息中的 `alert_id`，写入用 `ON CONFLICT (id) DO NOTHING`；`incidents` 在 `(group_key, session_start)` 上有唯一约束。
 - **告警模块的实现（R2）：** 消费 `alerts` 时用 `read_committed`（stream-processor 以 exactly-once 事务写入）。读不懂的消息立即转入 `alerts.dlt`；其他失败（典型的是数据库不可用）按 1 s 起、翻倍到 30 s 的退避一直重试，期间这个分区暂停，告警不会因为停库而丢失。查询用 MyBatis-Plus 的 Lambda 条件构造器；分页按 `(created_at, id)` 做键集分页，因为告警 id 由内容推导（UUIDv5），不是按时间递增的 UUIDv7，游标里同时带上最后一条的创建时间和 id。
 - **暂时的访问边界：** identity 模块（JWT）完成之前，core-service 只监听 127.0.0.1，接口不做认证。
-- 后续（Agent 相关）的表在 Agent 方案确定后补充。
+- **`incident_analyses`（P4）：** `id`（即任务 id）、`incident_id`、`status`（`pending`、`completed`、`failed`、`timed_out`）、`requested_by`（`system`、`user`）、`requested_at`、`deadline`、`completed_at`、`summary`、`uncertain`、`hypotheses`、`next_steps`、`rejected_evidence`（jsonb）、`model`、`tool_calls`、`duration_ms`、`error`。`incident_id` 上有 `status = 'pending'` 的部分唯一索引。
 
 ---
 
@@ -573,7 +599,7 @@ Agent 在最上层：它只能通过第 3 层的只读工具看到第 1、2 层�
 | 1 采集 | 日志、指标、trace、变更记录、服务拓扑 | 日志 ✓（采集器 + ingest）、拓扑 ✓（catalog）；指标、变更记录未做；trace 只有 ID，存在日志字段里 |
 | 2 确定性检测与关联 | 规则、基线异常、告警关联成 Incident | 规则 ✓、关联 ✓（§8.4）；基线异常未做 |
 | 3 只读查询工具 | 告警、Incident、证据、日志检索、指标、拓扑、变更 | 告警、Incident、拓扑 ✓；日志检索、指标、变更未做 |
-| 4 Agent | 调用第 3 层的工具，给出带证据引用的分析和归因 | 未开始 |
+| 4 Agent | 调用第 3 层的工具，给出带证据引用的分析和归因 | Incident 归因第一版 ✓（§6.5、§7.6），有不用大模型的基线作对照 |
 
 **原则：**
 
@@ -593,6 +619,8 @@ Agent 在最上层：它只能通过第 3 层的只读工具看到第 1、2 层�
 | R1 | 抢购基线：单商品模式、逐单核对、积压指标、固定资源下的性能实验 |
 | R2 | 靶场 JSON 日志接入（采集器、ECS 解析、事件名、靶场规则）；core-service 的告警模块（落库、查询、证据） |
 | R3（关联） | catalog 模块；incident 模块：按依赖路径关联（§8.4）、生命周期、时间线；反例场景 `independent-faults` |
+| P1 第一版 | 演练控制台（shop-design §15）：流量、抢购、9 个故障场景、标准答案、顾客视角的评测 |
+| P4 第一版 | Agent 契约；core 的 agentops 模块（派发、证据校验、查询）；Python Agent（工具调用循环、基线对照）；控制台展示分析并给归因打分 |
 
 ### 14.3 接下来
 
@@ -601,7 +629,7 @@ Agent 在最上层：它只能通过第 3 层的只读工具看到第 1、2 层�
 | **P1 演练控制台与评测** | 本机网页（shop-design §15）：持续的正常流量和抢购；一键注入、清除故障；简单的攻击；标准答案时间线。按标准答案自动给 Ops-Agent 打分。故障和攻击的种类逐步增加：先接入已有的 9 个场景，再加资源类故障（CPU、内存、线程池）、进程崩溃、坏的发布，以及攻击（登录暴力破解、请求洪水、SQL 注入特征、绕过订单服务调用内部接口） | 控制台上的每个操作都有标准答案记录；评测按每次演练给出：是否检出、首条告警延迟、Incident 数量和划分是否正确、正常时段的误报 |
 | **P2 补齐确定性底座** | 日志存储与检索（D4）；Prometheus + Alertmanager（连接池、延迟、积压等指标告警进入 core，带触发和恢复）；变更记录（发布、配置变更）；新故障和攻击的规则；无规则的基线异常检测（日志模板 + 频率基线），与规则检测在同一套演练上对比 | 新故障和攻击都能被检出；基线检测与规则检测的检出率、误报、延迟对比有记录 |
 | **P3 只读工具 API** | 给 Agent 和 Ops-Agent 界面用：检索日志（按服务、时间、trace ID）、Incident 及其证据、指标查询、拓扑、最近的变更 | OpenAPI 文档；每个工具有集成测试；只读 |
-| **P4 Agent** | 先做 Incident 归因分析：读取证据，给出带引用的根因假设和排查建议，可以回答“不确定”；结果存档并在界面展示（D2、D5） | 在演练上评估归因：正确、部分正确、错误、不确定各占多少；每条结论都能追溯到证据 |
+| **P4 Agent** | 第一版已完成（§14.2）。接下来：在同一组演练上对比大模型与基线的归因；工具随 P2、P3 增加（日志检索、指标、变更）；工具调用审计 | 在演练上评估归因：正确、部分正确、错误、不确定各占多少；每条结论都能追溯到证据 |
 | **P5 加固** | identity（JWT，对外部署前必须完成）；规则管理移入 core（版本、经 Outbox 发布到 `rules.changelog`）；`incident.events`；Ops-Agent 界面 | 未认证请求被拒；规则变更不重启生效 |
 
 ### 14.4 待定事项
@@ -612,7 +640,7 @@ Agent 在最上层：它只能通过第 3 层的只读工具看到第 1、2 层�
 | D2 | Agent 的功能范围 | P3 的工具、P4 | 先做 Incident 归因分析（2026-10-17）；问答、巡检以后再定 |
 | D3 | 被监控的业务 | 数据集、规则、评测 | **已定：电商靶场**，保留 MySQL（2026-10-17）；是否接入真实服务器日志作为第二个环境，以后再定 |
 | D4 | 日志存储与检索：PostgreSQL（按天分区、全文检索）还是 OpenSearch | P2、P3 | P2 开工前确定 |
-| D5 | Agent 的实现语言：Python 还是 Java（Spring AI） | P4 | P4 开工前确定 |
+| D5 | Agent 的实现语言：Python 还是 Java（Spring AI） | P4 | **已定：Python**（2026-10-17），经 Kafka 和只读 HTTP 接口与 Java 端交互 |
 
 ---
 
