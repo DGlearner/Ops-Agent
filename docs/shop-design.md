@@ -688,6 +688,8 @@ logs/shop/*.log ──log-shipper──HTTP──▶ ingest-service ──▶ lo
 
 ## 13. 阶段与验收
 
+> 2026-10-17 起，路线图统一放在 project-design §14；下表保留 S0–S5 和 R0–R5 的记录，R3 之后的工作按 project-design §14.3 推进。
+
 | 阶段 | 内容 | 验收 |
 |---|---|---|
 | S0 | 本文档、MySQL Compose、Gradle 模块、shop-common（错误处理、UUIDv7、`X-Trace-Id`、公共默认配置） | `./gradlew build` 通过 |
@@ -719,8 +721,6 @@ logs/shop/*.log ──log-shipper──HTTP──▶ ingest-service ──▶ lo
 
 R2 不必等 R4 完成；R4 的优化项按瓶颈选择，不要求全做。Agent 框架的选择不阻塞 R0–R3。R2 起 core-service 先做告警模块，与 `project-design.md` 中 J3/J4 的划分不同，届时同步更新那份文档；D1（持久层框架）需在 R2 之前确定。
 
----
-
 ## 14. 运行
 
 ```bash
@@ -748,3 +748,26 @@ cd deploy/compose && docker compose up -d kafka redis kafka-init
 ./gradlew :services:core-service:bootRun
 curl "localhost:8080/api/v1/alerts?service=order-service&limit=20"     # 也可以按 severity、rule_id、from、to 过滤
 ```
+
+---
+
+## 15. 演练控制台（P1，project-design §14.3）
+
+一个本机网页，让人不写命令就能制造各种运维问题，再看 Ops-Agent 能不能发现和解释。它属于靶场这一侧：Ops-Agent 看不到它，也不知道它做了什么。
+
+```
+浏览器 ──▶ shop/lab（127.0.0.1:8090）──┬──▶ 三个服务的业务接口（流量、攻击）
+                                       ├──▶ 三个服务的管理端口、docker（故障）
+                                       ├──▶ runs/lab/ground-truth.jsonl（标准答案）
+                                       └──▶ core-service API（只用于评测：Ops-Agent 看到了什么）
+```
+
+**功能：**
+
+- **流量：** 后台持续下单，可以调速率、重复请求和被拒卡的比例；开一场抢购（商品、库存、速率、时长）。正常流量是基线：这期间 Ops-Agent 不该告警。
+- **故障：** 一键注入、一键清除。先接入已有的 9 个场景（§10.2，含 `independent-faults`）；之后加资源类故障（CPU、内存、线程池）、进程崩溃和坏的发布。注入的故障都有有效期，忘了清除也会自己结束。
+- **攻击：** 之后加入，见 project-design §14.3 P1。
+- **标准答案：** 每次注入、清除、攻击都记一条演练记录（时间、目标、描述、预期），写入 `runs/lab/ground-truth.jsonl`，不进任何服务的日志。
+- **评测：** 对每次演练，查 Ops-Agent（core-service）在这段时间及之后几分钟里的告警和 Incident：是否检出，第一条告警晚了多久，产生了几个 Incident、分得对不对；正常流量时段里的告警算作误报。
+
+控制台复用请求生成工具的代码（订单生成、调用客户端、故障定义），只监听 127.0.0.1。
