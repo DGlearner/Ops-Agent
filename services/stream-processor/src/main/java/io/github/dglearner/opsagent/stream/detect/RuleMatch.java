@@ -23,7 +23,9 @@ public record RuleMatch(
         UUID eventId,
         Instant eventTime,
         String service,
-        String host) {
+        String host,
+        String message,
+        String traceId) {
 
     /** Correlation group until topology information is applied: the service, else the host. */
     public String groupKey() {

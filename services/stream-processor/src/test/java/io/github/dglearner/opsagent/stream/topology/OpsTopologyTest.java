@@ -98,6 +98,11 @@ class OpsTopologyTest {
         assertThat(alert.firstEventAt()).isEqualTo(T0);
         assertThat(alert.lastEventAt()).isEqualTo(T0.plusSeconds(20));
         assertThat(alert.sampleEventIds()).hasSize(3);
+        assertThat(alert.samples()).hasSize(3).first().satisfies(sample -> {
+            assertThat(sample.eventId()).isEqualTo(alert.sampleEventIds().getFirst());
+            assertThat(sample.timestamp()).isEqualTo(T0);
+            assertThat(sample.message()).contains("Failed password for root from 198.51.100.7");
+        });
         assertThat(alert.summary()).isEqualTo("3 failures from 198.51.100.7 on app-01 in 5m");
         assertThat(alert.createdAt()).isEqualTo(NOW);
     }
@@ -212,7 +217,12 @@ class OpsTopologyTest {
                     "\"error_type\":\"CannotGetJdbcConnectionException\"");
         }
 
-        assertThat(alerts.readValuesToList())
+        List<Alert> out = alerts.readValuesToList();
+        assertThat(out).allSatisfy(alert -> assertThat(alert.samples()).hasSize(3).allSatisfy(sample -> {
+            assertThat(sample.message()).isEqualTo("database_unavailable seen");
+            assertThat(sample.traceId()).isEqualTo("trace-" + alert.service());
+        }));
+        assertThat(out)
                 .extracting(Alert::ruleId, Alert::service)
                 .containsExactlyInAnyOrder(
                         Tuple.tuple("shop-database-unavailable", "order-service"),
@@ -276,8 +286,9 @@ class OpsTopologyTest {
     /** A shop service's ECS JSON log line, shipped as an app_service record. */
     private void shopLog(String service, Instant time, String level, String action, String extraFields) {
         String line = "{\"@timestamp\":\"" + time + "\",\"log\":{\"level\":\"" + level + "\",\"logger\":\"x.Y\"},"
-                + "\"service\":{\"name\":\"" + service + "\"},\"message\":\"m\",\"event\":{\"action\":\"" + action
-                + "\"}," + extraFields + "}";
+                + "\"service\":{\"name\":\"" + service + "\"},\"message\":\"" + action + " seen\","
+                + "\"trace.id\":\"trace-" + service + "\",\"event\":{\"action\":\"" + action + "\"},"
+                + extraFields + "}";
         RawLogRecord record = new RawLogRecord(Ids.newId(), null, "test", SourceType.APP_SERVICE, "kozy", service,
                 "logs/shop/" + service + ".log", line, time.plusSeconds(1));
         raw.pipeInput("kozy", record, time.plusSeconds(1));

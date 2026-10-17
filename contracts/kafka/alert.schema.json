@@ -103,6 +103,35 @@
     "created_at": {
       "type": "string",
       "format": "date-time"
+    },
+    "samples": {
+      "type": "array",
+      "maxItems": 5,
+      "description": "Matching events as evidence. Optional: alerts written before it existed have none.",
+      "items": {
+        "type": "object",
+        "required": [
+          "event_id",
+          "timestamp"
+        ],
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "trace_id": {
+            "type": "string"
+          }
+        }
+      }
     }
   }
 }

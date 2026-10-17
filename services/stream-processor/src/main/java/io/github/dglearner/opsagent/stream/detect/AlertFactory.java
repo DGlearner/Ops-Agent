@@ -39,7 +39,8 @@ public final class AlertFactory {
                 agg.lastEventAt(),
                 agg.sampleEventIds(),
                 summary(rule, agg.count()),
-                now);
+                now,
+                agg.samples());
     }
 
     /** Fills {@code {count} {threshold} {window} {rule} {host} {service}} and any group-by attribute. */

@@ -47,7 +47,9 @@ final class Samples {
                 "ssh-brute-force", 1, "ssh-brute-force|host=app-01|fields.src_ip=198.51.100.240", Severity.MEDIUM,
                 "sshd", "sshd", "app-01", Map.of("host", "app-01", "fields.src_ip", "198.51.100.240"),
                 T0.minus(Duration.ofMinutes(5)), T0, 5, 5, T0.minusSeconds(200), T0, List.of(EVENT_ID),
-                "5 failed SSH logins from 198.51.100.240 on app-01 within 5m", T0);
+                "5 failed SSH logins from 198.51.100.240 on app-01 within 5m", T0,
+                List.of(new Alert.Sample(EVENT_ID, T0, "Failed password for root from 198.51.100.240 port 22 ssh2",
+                        null)));
     }
 
     static IncidentCandidate candidate() {

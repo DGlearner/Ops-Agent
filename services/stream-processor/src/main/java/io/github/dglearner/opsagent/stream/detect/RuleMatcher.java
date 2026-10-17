@@ -12,6 +12,9 @@ public final class RuleMatcher {
 
     static final String MISSING = "unknown";
 
+    /** Messages kept as alert evidence are cut to this length (the alert contract allows 500). */
+    static final int SAMPLE_MESSAGE_LENGTH = 500;
+
     public static Optional<RuleMatch> match(RuleDefinition rule, NormalizedEvent event) {
         if (!rule.enabled() || !matches(rule.match(), event)) {
             return Optional.empty();
@@ -22,7 +25,19 @@ public final class RuleMatcher {
         }
         return Optional.of(new RuleMatch(rule.ruleId(), rule.version(), rule.window(), rule.threshold(),
                 rule.severity(), rule.suppressFor(), rule.summaryTemplate(), fingerprint(rule.ruleId(), groupValues),
-                groupValues, event.eventId(), event.timestamp(), event.service(), event.host()));
+                groupValues, event.eventId(), event.timestamp(), event.service(), event.host(),
+                shorten(event.message()), traceId(event)));
+    }
+
+    private static String shorten(String message) {
+        return message == null || message.length() <= SAMPLE_MESSAGE_LENGTH ? message
+                : message.substring(0, SAMPLE_MESSAGE_LENGTH - 1) + "…";
+    }
+
+    /** The trace id of a structured application log, where there is one. */
+    private static String traceId(NormalizedEvent event) {
+        Object traceId = event.fields().get("trace.id");
+        return traceId == null ? null : traceId.toString();
     }
 
     static boolean matches(RuleDefinition.Match match, NormalizedEvent event) {

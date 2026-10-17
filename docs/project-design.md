@@ -108,7 +108,7 @@ Ops-Agent/
 | 消息 | Kafka（KRaft 单节点）；客户端随 Spring Boot 管理（Kafka 4.2.1、Spring Kafka 4.1.1） | broker 4.2.2 |
 | 流处理 | Kafka Streams（`exactly_once_v2`） | 4.2.1 |
 | 数据库 | PostgreSQL + pgvector；Flyway 管理迁移 | PG 18.6，pgvector 0.8.7 |
-| 持久层 | **待定（§14 D1）**：MyBatis-Plus 或 Spring Data JPA | — |
+| 持久层 | MyBatis-Plus（2026-10-17 确定，§14 D1）：手写 SQL 与 CRUD 辅助并存，国内岗位最常见 | 3.5.17（Boot 4 starter） |
 | 缓存与状态 | Redis（Lettuce 客户端） | 8.8.3 |
 | API 文档 | springdoc-openapi | 3.1.1 |
 | 测试 | JUnit 6、AssertJ、Testcontainers 2、Kafka Streams TopologyTestDriver | 随 Boot 管理 |
@@ -326,6 +326,7 @@ JSON Schema 放在仓库根目录 `contracts/kafka/`，供 Python 侧使用；Ja
 | `window_start`、`window_end`、`count`、`threshold` | 窗口与计数 |
 | `first_event_at`、`last_event_at` | 窗口内首尾事件时间 |
 | `sample_event_ids` | 最多 5 个触发事件 |
+| `samples` | 这些事件本身，作为证据：`event_id`、`timestamp`、`message`（已脱敏，截断到 500 字符）、`trace_id`（结构化应用日志才有）。事件不另外存储，告警里没有证据就无从查起 |
 | `group_values` | 分组字段的取值 |
 | `summary` | 按规则模板生成的描述 |
 | `created_at` | 产生时间 |
@@ -572,7 +573,7 @@ java tools/Replay.java datasets/aiops_mixed_incident_small.jsonl
 
 | 编号 | 事项 | 影响 | 默认方案 |
 |---|---|---|---|
-| D1 | 持久层：MyBatis-Plus（国内岗位更常见）或 Spring Data JPA（海外更常见） | core-service（J3 起） | J3 开工前确定 |
+| D1 | 持久层：MyBatis-Plus（国内岗位更常见）或 Spring Data JPA（海外更常见） | core-service（J3 起） | **已定：MyBatis-Plus**（2026-10-17） |
 | D2 | Agent 部分的功能与实现方式 | §7.6 的边界、agent 相关表与 topic 的消息格式 | 待定 |
 | D3 | 被监控的业务是否采用电商微服务靶场；是否接入真实服务器日志作为第二个环境 | 数据集、默认规则、评测 | 电商靶场 |
 | D4 | 中文全文检索（zhparser / pg_jieba）还是 OpenSearch | 知识库与日志检索 | 与 D2 一起决定 |
