@@ -1,0 +1,31 @@
+spring:
+  application:
+    name: lab
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+    default-property-inclusion: non_null
+
+server:
+  port: 8090
+  # It can stop databases and break services: reachable from this machine only.
+  address: 127.0.0.1
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+shop:
+  lab:
+    order-url: http://localhost:8091
+    inventory-url: http://localhost:8092
+    payment-url: http://localhost:8093
+    order-admin: http://localhost:8191
+    inventory-admin: http://localhost:8192
+    payment-admin: http://localhost:8193
+    mysql-container: ops-shop-mysql-1
+    ground-truth: runs/lab/ground-truth.jsonl
+    # Only to score what Ops-Agent saw; the lab never tells Ops-Agent anything.
+    ops-agent-url: http://localhost:8080
+    max-fault-duration: 10m

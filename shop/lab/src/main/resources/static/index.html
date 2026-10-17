@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>故障演练控制台</title>
+<style>
+  :root { --bg: #f6f7f9; --card: #fff; --text: #1d2330; --muted: #667085; --line: #e4e7ec;
+          --ok: #067647; --bad: #b42318; --warn: #b54708; --accent: #3359d8; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111418; --card: #1a1f26; --text: #e6e9ef; --muted: #98a2b3; --line: #2b323c;
+            --ok: #47cd89; --bad: #f97066; --warn: #fdb022; --accent: #7a96f5; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.5 system-ui, "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg);
+         color: var(--text); }
+  header { padding: 20px 24px 8px; }
+  h1 { margin: 0; font-size: 20px; }
+  header p { margin: 4px 0 0; color: var(--muted); }
+  main { display: grid; gap: 16px; padding: 16px 24px 32px; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  section.wide { grid-column: 1 / -1; }
+  h2 { margin: 0 0 12px; font-size: 16px; }
+  label { display: inline-flex; flex-direction: column; gap: 2px; margin: 0 12px 8px 0; color: var(--muted); font-size: 12px; }
+  input { width: 90px; padding: 5px 7px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg);
+          color: var(--text); font: inherit; }
+  button { padding: 6px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text);
+           font: inherit; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { color: var(--bad); }
+  button:disabled { opacity: .5; cursor: default; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 6px 8px; border-top: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; border-top: 0; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .on { color: var(--warn); font-weight: 600; }
+  .verdict-correct { color: var(--ok); font-weight: 600; }
+  .verdict-missed, .verdict-false_alarm, .verdict-wrong_split, .verdict-not_injected { color: var(--bad); font-weight: 600; }
+  .verdict-pending { color: var(--muted); }
+  .chips span { display: inline-block; margin: 0 6px 4px 0; padding: 1px 8px; border-radius: 10px;
+                background: var(--bg); border: 1px solid var(--line); font-size: 12px; }
+  #message { min-height: 20px; color: var(--bad); padding: 0 24px; }
+  .summary { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 12px; }
+  .summary div { min-width: 110px; }
+  .summary b { display: block; font-size: 20px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>故障演练控制台</h1>
+  <p>在这里制造流量和故障，再看 Ops-Agent 有没有发现、有没有分对。这里的操作只记作标准答案，Ops-Agent 看不到。</p>
+</header>
+<div id="message"></div>
+<main>
+  <section>
+    <h2>正常流量</h2>
+    <label>每秒订单<input id="rate" type="number" value="5" min="0.5" max="300" step="0.5"></label>
+    <label>重复请求比例<input id="dup" type="number" value="0.05" min="0" max="1" step="0.05"></label>
+    <label>被拒卡比例<input id="decline" type="number" value="0.05" min="0" max="1" step="0.05"></label>
+    <div><button class="primary" onclick="startTraffic()">开始 / 调整</button> <button onclick="stopTraffic()">停止</button></div>
+    <div id="traffic" class="muted" style="margin-top:10px">没有流量</div>
+  </section>
+
+  <section>
+    <h2>抢购</h2>
+    <label>商品<input id="sku" value="SKU-2001"></label>
+    <label>库存<input id="stock" type="number" value="100" min="0"></label>
+    <label>每秒订单<input id="saleRate" type="number" value="50" min="1" max="300"></label>
+    <label>持续秒数<input id="saleDuration" type="number" value="30" min="1" max="600"></label>
+    <div><button class="primary" onclick="flashSale()">开抢</button></div>
+    <p class="muted">售罄是正常结果：抢购期间 Ops-Agent 不应告警。</p>
+  </section>
+
+  <section class="wide">
+    <h2>故障</h2>
+    <p class="muted">两次故障之间最好隔开 15 分钟以上（Ops-Agent 的关联间隔），否则后一次的告警可能被并入前一次的 Incident。</p>
+    <table>
+      <thead><tr><th>场景</th><th>目标</th><th>做什么</th><th>持续秒数</th><th></th></tr></thead>
+      <tbody id="faults"></tbody>
+    </table>
+  </section>
+
+  <section class="wide">
+    <h2>演练评测 <button onclick="evaluate()" style="margin-left:8px">刷新</button></h2>
+    <div id="evaluation" class="muted">点“刷新”，对照标准答案查看 Ops-Agent 的告警和 Incident。</div>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const time = t => t ? new Date(t).toLocaleTimeString() : '';
+const verdicts = { correct: '正确', missed: '漏报', wrong_split: 'Incident 数量不对', false_alarm: '误报',
+                   not_injected: '注入失败', pending: '等待中' };
+
+async function call(method, path, body) {
+  const response = await fetch(path, { method, headers: { 'Content-Type': 'application/json' },
+                                       body: body ? JSON.stringify(body) : undefined });
+  if (!response.ok) {
+    const text = await response.text();
+    let detail = text;
+    try { detail = JSON.parse(text).detail || JSON.parse(text).message || text; } catch (e) {}
+    $('message').textContent = method + ' ' + path + ' 失败：' + detail;
+    throw new Error(detail);
+  }
+  $('message').textContent = '';
+  return response.status === 204 || response.headers.get('content-length') === '0' ? null : response.json().catch(() => null);
+}
+
+const startTraffic = () => call('POST', '/api/lab/traffic', { rate: +$('rate').value, duplicate_rate: +$('dup').value,
+                                                              decline_rate: +$('decline').value }).then(refresh);
+const stopTraffic = () => call('DELETE', '/api/lab/traffic').then(refresh);
+const flashSale = () => call('POST', '/api/lab/flash-sale', { sku: $('sku').value, stock: +$('stock').value,
+                                                              rate: +$('saleRate').value, duration_s: +$('saleDuration').value }).then(refresh);
+const inject = name => call('POST', '/api/lab/faults/' + name, { duration_s: +$('d-' + name).value }).then(refresh);
+const clearFault = name => call('DELETE', '/api/lab/faults/' + name).then(refresh);
+
+function renderTraffic(runs) {
+  if (!runs.length) { $('traffic').textContent = '没有流量'; return; }
+  $('traffic').innerHTML = runs.map(r => {
+    const outcomes = Object.entries(r.last_minute).map(([k, v]) => `<span>${k} ${v}</span>`).join('');
+    return `<div><b>${r.label}</b>：每秒 ${r.rate} 单，已发 ${r.sent} 单${r.until ? '，到 ' + time(r.until) : ''}
+            <div class="chips">最近一分钟 ${outcomes || '—'}</div></div>`;
+  }).join('');
+}
+
+function renderFaults(faults) {
+  const body = $('faults');
+  faults.forEach(f => {
+    let row = $('row-' + f.name);
+    if (!row) {
+      row = document.createElement('tr');
+      row.id = 'row-' + f.name;
+      row.innerHTML = `<td><b>${f.name}</b><div class="muted" id="s-${f.name}"></div></td><td>${f.target}</td>
+        <td>${f.fault}<div class="muted">预期：${f.expected}</div></td>
+        <td><input id="d-${f.name}" type="number" value="60" min="5" max="600"></td>
+        <td><button class="primary" id="i-${f.name}" onclick="inject('${f.name}')">注入</button>
+            <button class="danger" id="c-${f.name}" onclick="clearFault('${f.name}')">清除</button></td>`;
+      body.appendChild(row);
+    }
+    const on = !!f.active_since;
+    $('s-' + f.name).innerHTML = on ? `<span class="on">进行中</span>，到 ${time(f.ends_at)} 自动清除` : '';
+    $('i-' + f.name).disabled = on;
+    $('c-' + f.name).disabled = !on;
+  });
+}
+
+async function refresh() {
+  try {
+    const state = await call('GET', '/api/lab/state');
+    renderTraffic(state.traffic);
+    renderFaults(state.faults);
+  } catch (e) {}
+}
+
+async function evaluate() {
+  const r = await call('GET', '/api/lab/evaluation');
+  if (r.message) { $('evaluation').textContent = r.message; return; }
+  const s = r.summary;
+  const rows = r.episodes.map(e => `<tr>
+      <td>${time(e.episode.started_at)}–${time(e.episode.ended_at)}</td>
+      <td><b>${e.episode.name}</b><div class="muted">${e.episode.target}</div></td>
+      <td class="verdict-${e.verdict}">${verdicts[e.verdict] || e.verdict}</td>
+      <td>${e.first_alert_after_s != null ? e.first_alert_after_s + ' s' : '—'}</td>
+      <td>${e.alerts.length}</td>
+      <td>${e.incidents.length} / 应为 ${e.episode.expected_incidents}<div class="chips">${
+          e.incidents.map(i => `<span title="${i.title}">${i.subjects.join(' + ')}（${i.alert_count} 条告警）</span>`).join('')}</div></td>
+    </tr>`).join('');
+  const falseAlarms = r.false_alarms.map(a => `<li>${time(a.created_at)} ${a.rule_id}：${a.summary}</li>`).join('');
+  $('evaluation').innerHTML = `
+    <div class="summary">
+      <div><b>${s.faults}</b><span class="muted">故障演练</span></div>
+      <div><b>${s.detected}</b><span class="muted">检出</span></div>
+      <div><b>${s.correct}</b><span class="muted">检出且 Incident 正确</span></div>
+      <div><b>${s.mean_first_alert_after_s ?? '—'}</b><span class="muted">平均首条告警（秒）</span></div>
+      <div><b>${s.false_alarms}</b><span class="muted">误报</span></div>
+    </div>
+    <table><thead><tr><th>时间</th><th>演练</th><th>结果</th><th>首条告警</th><th>告警</th><th>Incident</th></tr></thead>
+    <tbody>${rows}</tbody></table>
+    ${falseAlarms ? `<h2 style="margin-top:16px">故障窗口之外的告警（误报）</h2><ul>${falseAlarms}</ul>` : ''}
+    <p class="muted">一次演练的窗口：开始前 30 秒到结束后 5 分钟。</p>`;
+}
+
+refresh();
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>

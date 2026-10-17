@@ -26,5 +26,6 @@ include(
     "shop:payment-service",
     "shop:order-service",
     "shop:load-generator",
+    "shop:lab",
     "tools:log-shipper",
 )
