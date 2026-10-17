@@ -1,0 +1,62 @@
+spring:
+  application:
+    name: core-service
+  profiles:
+    default: local
+  datasource:
+    url: jdbc:postgresql://localhost:5432/opsagent
+    username: opsagent
+    password: ${POSTGRES_PASSWORD:opsagent-dev}
+    hikari:
+      # Every connection works in schema core (created by Flyway), so the SQL uses unqualified table names. Set on
+      # the pool rather than in the URL, which deployments and test containers replace.
+      schema: core
+      maximum-pool-size: 10
+      connection-timeout: 2000 # ms
+      data-source-properties:
+        # A query on a database that stopped answering fails after 30 s instead of hanging for good.
+        socketTimeout: 30
+  flyway:
+    schemas: core
+    default-schema: core
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+    default-property-inclusion: non_null
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: ops-core-service
+      auto-offset-reset: earliest
+      # stream-processor writes with exactly-once transactions: only read what it committed.
+      isolation-level: read_committed
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      # Only used to put unreadable messages on their dead-letter topic.
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+  mvc:
+    problemdetails:
+      enabled: true
+
+mybatis-plus:
+  type-handlers-package: io.github.dglearner.opsagent.core.shared
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
+
+server:
+  port: 8080
+  # Until the identity module (JWT) exists the API has no authentication, so it is reachable from this machine only.
+  address: 127.0.0.1
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true

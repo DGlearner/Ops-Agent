@@ -4,6 +4,7 @@ spring-boot = "4.1.1"
 spring-modulith = "2.1.1"
 springdoc = "3.1.1"
 json-schema-validator = "3.0.8"
+mybatis-plus = "3.5.17"
 
 [libraries]
 spring-boot-dependencies = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "spring-boot" }
@@ -11,6 +12,7 @@ spring-boot-gradle-plugin = { module = "org.springframework.boot:spring-boot-gra
 spring-modulith-bom = { module = "org.springframework.modulith:spring-modulith-bom", version.ref = "spring-modulith" }
 springdoc-webmvc-ui = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc" }
 json-schema-validator = { module = "com.networknt:json-schema-validator", version.ref = "json-schema-validator" }
+mybatis-plus-boot-starter = { module = "com.baomidou:mybatis-plus-spring-boot4-starter", version.ref = "mybatis-plus" }
 
 # Versions from the Spring Boot BOM
 jackson-databind = { module = "tools.jackson.core:jackson-databind" }
@@ -23,3 +25,4 @@ assertj-core = { module = "org.assertj:assertj-core" }
 testcontainers-junit-jupiter = { module = "org.testcontainers:testcontainers-junit-jupiter" }
 testcontainers-kafka = { module = "org.testcontainers:testcontainers-kafka" }
 testcontainers-mysql = { module = "org.testcontainers:testcontainers-mysql" }
+testcontainers-postgresql = { module = "org.testcontainers:testcontainers-postgresql" }

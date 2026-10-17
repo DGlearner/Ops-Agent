@@ -20,6 +20,7 @@ include(
     "libs:ops-contracts",
     "services:ingest-service",
     "services:stream-processor",
+    "services:core-service",
     "shop:shop-common",
     "shop:inventory-service",
     "shop:payment-service",
