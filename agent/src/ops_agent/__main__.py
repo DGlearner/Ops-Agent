@@ -56,7 +56,8 @@ def main(argv: list[str] | None = None) -> None:
     stop = threading.Event()
     for sig in (signal.SIGINT, signal.SIGTERM):
         signal.signal(sig, lambda *_: stop.set())
-    Worker.connect(analyst, schemas, settings.kafka_bootstrap, settings.group_id).run(stop)
+    Worker.connect(analyst, schemas, settings.kafka_bootstrap, settings.group_id,
+                   settings.kafka_address_family).run(stop)
 
 
 if __name__ == "__main__":

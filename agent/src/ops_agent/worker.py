@@ -29,13 +29,15 @@ class Worker:
         self._producer = producer
 
     @classmethod
-    def connect(cls, analyst: Analyst, schemas: Schemas, bootstrap: str, group_id: str) -> "Worker":
+    def connect(cls, analyst: Analyst, schemas: Schemas, bootstrap: str, group_id: str,
+                address_family: str = "any") -> "Worker":
         from confluent_kafka import Consumer, Producer
-        consumer = Consumer({"bootstrap.servers": bootstrap, "group.id": group_id, "enable.auto.commit": False,
+        common = {"bootstrap.servers": bootstrap, "broker.address.family": address_family}
+        consumer = Consumer({**common, "group.id": group_id, "enable.auto.commit": False,
                              "auto.offset.reset": "earliest",
                              # An analysis takes up to the task's deadline (minutes) between two polls.
                              "max.poll.interval.ms": 900_000})
-        producer = Producer({"bootstrap.servers": bootstrap, "enable.idempotence": True, "acks": "all"})
+        producer = Producer({**common, "enable.idempotence": True, "acks": "all"})
         return cls(analyst, schemas, consumer, producer)
 
     def handle(self, raw: bytes | str) -> tuple[AgentTask, str] | None:

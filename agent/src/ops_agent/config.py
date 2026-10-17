@@ -15,6 +15,9 @@ class Settings(BaseSettings):
 
     core_url: str = "http://127.0.0.1:8080"
     kafka_bootstrap: str = "localhost:9092"
+    # The Compose stack publishes Kafka on 127.0.0.1 only, while "localhost" also resolves to ::1, which librdkafka
+    # tries first and logs as a failure each time. any: both.
+    kafka_address_family: Literal["any", "v4", "v6"] = "v4"
     group_id: str = "ops-agent"
 
     # llm: a language model calls the tools and draws the conclusion. baseline: no model, the incident's own
