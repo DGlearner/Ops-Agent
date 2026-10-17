@@ -16,8 +16,8 @@ class OpsAgentView {
 
     private final RestClient http;
 
-    OpsAgentView(LabProperties properties, RestClient.Builder builder) {
-        this.http = builder.baseUrl(properties.opsAgentUrl()).build();
+    OpsAgentView(LabProperties properties) {
+        this.http = RestClient.builder().baseUrl(properties.opsAgentUrl()).build();
     }
 
     List<Scoring.Alert> alertsSince(Instant from) {
