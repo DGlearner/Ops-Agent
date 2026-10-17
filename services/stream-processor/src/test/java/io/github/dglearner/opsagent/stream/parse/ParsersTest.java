@@ -105,6 +105,56 @@ class ParsersTest {
     }
 
     @Test
+    void ecsJsonLineTakesItsTypeFromEventActionAndKeepsItsFields() {
+        NormalizedEvent e = parsed(raw(SourceType.APP_SERVICE, "kozy", null, """
+                {"@timestamp":"2026-10-16T10:10:47.123456789Z","log":{"level":"WARN",\
+                "logger":"io.github.dglearner.shop.order.order.OrderService"},"process":{"pid":1,\
+                "thread":{"name":"exec-1"}},"service":{"name":"order-service","node":{}},\
+                "message":"Inventory reservation failed: no response within the read timeout",\
+                "trace.id":"dc83b5e63bb1cc9ccd114163b66d80fc","span.id":"ee08a3fcd75b8efe",\
+                "event":{"action":"dependency_call_failed"},"dependency":"inventory","operation":"reserve",\
+                "order_id":"01a1441a","failure":"TIMEOUT","attempt":2,"ecs":{"version":"8.11"}}"""));
+
+        assertThat(e.eventType()).isEqualTo("dependency_call_failed");
+        assertThat(e.severity()).isEqualTo(Severity.LOW);
+        assertThat(e.service()).isEqualTo("order-service");
+        assertThat(e.component()).isEqualTo("OrderService");
+        assertThat(e.timestamp()).isEqualTo(Instant.parse("2026-10-16T10:10:47.123456789Z"));
+        assertThat(e.message()).isEqualTo("Inventory reservation failed: no response within the read timeout");
+        assertThat(e.fields()).containsEntry("dependency", "inventory").containsEntry("failure", "TIMEOUT")
+                .containsEntry("order_id", "01a1441a").containsEntry("trace.id", "dc83b5e63bb1cc9ccd114163b66d80fc")
+                .containsEntry("attempt", 2L).containsEntry("level", "WARN")
+                .doesNotContainKeys("process.pid", "ecs.version", "event.action", "message", "@timestamp");
+    }
+
+    @Test
+    void ecsJsonErrorKeepsTheErrorTypeButNotTheStackTrace() {
+        NormalizedEvent error = parsed(raw(SourceType.APP_SERVICE, "kozy", "inventory-service", """
+                {"@timestamp":"2026-10-16T10:11:00Z","log":{"level":"ERROR","logger":"x.ApiExceptionHandler"},\
+                "message":"Unhandled error","event":{"action":"unhandled_error"},\
+                "error":{"type":"java.lang.IllegalStateException","message":"boom",\
+                "stack_trace":"java.lang.IllegalStateException: boom\\n\\tat x.y(Y.java:1)"}}"""));
+        NormalizedEvent startup = parsed(raw(SourceType.APP_SERVICE, "kozy", null, """
+                {"@timestamp":"2026-10-16T10:00:00Z","log":{"level":"INFO","logger":"x.OrderApplication"},\
+                "message":"Started OrderApplication in 12.1 seconds","service":{"name":"order-service"}}"""));
+
+        assertThat(error.eventType()).isEqualTo("unhandled_error");
+        assertThat(error.severity()).isEqualTo(Severity.MEDIUM);
+        assertThat(error.fields()).containsEntry("error.type", "java.lang.IllegalStateException")
+                .doesNotContainKey("error.stack_trace");
+        assertThat(startup.eventType()).isEqualTo("app_log");
+        assertThat(startup.severity()).isEqualTo(Severity.INFO);
+    }
+
+    @Test
+    void brokenJsonIsUnparsed() {
+        assertThat(registry.parse(raw(SourceType.APP_SERVICE, "kozy", null, "{\"@timestamp\":\"2026-10-16T10:00:00Z\"")))
+                .isInstanceOf(ParseOutcome.Unparsed.class);
+        assertThat(registry.parse(raw(SourceType.APP_SERVICE, "kozy", null, "{\"message\":\"no time\"}")))
+                .isInstanceOf(ParseOutcome.Unparsed.class);
+    }
+
+    @Test
     void dockerOomKill() {
         NormalizedEvent e = parsed(raw(SourceType.DOCKER, "app-02", "api-gateway",
                 "2026-01-01T00:13:40Z dockerd[18631]: event=die container=api-gateway.1 "
@@ -136,13 +186,14 @@ class ParsersTest {
     }
 
     @Test
-    void secretsAreRedactedInUnparsedLinesToo() {
-        ParseOutcome outcome = registry.parse(raw(SourceType.APP_SERVICE, "app-01", "auth-api",
-                "{\"@timestamp\":\"2026-01-01T00:00:00Z\",\"message\":\"login\","
+    void secretsAreRedactedInJsonLinesFieldsIncluded() {
+        NormalizedEvent e = parsed(raw(SourceType.APP_SERVICE, "app-01", "auth-api",
+                "{\"@timestamp\":\"2026-01-01T00:00:00Z\",\"message\":\"login with password=fake-secret-12\","
                         + "\"http\":{\"request\":{\"headers\":{\"Authorization\":\"Bearer fake-opaque-12\"}}}}"));
 
-        assertThat(outcome).isInstanceOfSatisfying(ParseOutcome.Unparsed.class, u ->
-                assertThat(u.log().raw().message()).doesNotContain("fake-opaque-12").contains("\"Authorization\":\"***\""));
+        assertThat(e.message()).isEqualTo("login with password=***");
+        assertThat(e.fields()).containsEntry("http.request.headers.Authorization", "***");
+        assertThat(e.toString()).doesNotContain("fake-");
     }
 
     @Test

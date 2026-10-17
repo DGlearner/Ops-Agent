@@ -33,6 +33,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -196,6 +197,29 @@ class OpsTopologyTest {
     }
 
     @Test
+    void shopDatabaseOutageAlertsOncePerServiceWhileSellingOutDoesNot() {
+        start(DetectionTime.EVENT);
+        DefaultRules.load().forEach(rule -> rules.pipeInput(rule.ruleId(), rule));
+
+        for (int i = 0; i < 60; i++) {
+            shopLog("inventory-service", T0.plusMillis(500L * i), "INFO", "reservation_rejected",
+                    "\"code\":\"INSUFFICIENT_STOCK\",\"sku\":\"SKU-2001\"");
+        }
+        for (int i = 0; i < 5; i++) {
+            shopLog("order-service", T0.plusSeconds(40 + i), "WARN", "database_unavailable",
+                    "\"error_type\":\"CannotGetJdbcConnectionException\"");
+            shopLog("inventory-service", T0.plusSeconds(40 + i), "WARN", "database_unavailable",
+                    "\"error_type\":\"CannotGetJdbcConnectionException\"");
+        }
+
+        assertThat(alerts.readValuesToList())
+                .extracting(Alert::ruleId, Alert::service)
+                .containsExactlyInAnyOrder(
+                        Tuple.tuple("shop-database-unavailable", "order-service"),
+                        Tuple.tuple("shop-database-unavailable", "inventory-service"));
+    }
+
+    @Test
     void sampleDatasetRaisesTheExpectedAlerts() {
         start(DetectionTime.EVENT);
         DefaultRules.load().forEach(rule -> rules.pipeInput(rule.ruleId(), rule));
@@ -247,6 +271,16 @@ class OpsTopologyTest {
                 OpsTopology.UNPARSED.deserializer());
         alerts = driver.createOutputTopic(Topics.ALERTS, OpsTopology.STRING.deserializer(),
                 OpsTopology.ALERT.deserializer());
+    }
+
+    /** A shop service's ECS JSON log line, shipped as an app_service record. */
+    private void shopLog(String service, Instant time, String level, String action, String extraFields) {
+        String line = "{\"@timestamp\":\"" + time + "\",\"log\":{\"level\":\"" + level + "\",\"logger\":\"x.Y\"},"
+                + "\"service\":{\"name\":\"" + service + "\"},\"message\":\"m\",\"event\":{\"action\":\"" + action
+                + "\"}," + extraFields + "}";
+        RawLogRecord record = new RawLogRecord(Ids.newId(), null, "test", SourceType.APP_SERVICE, "kozy", service,
+                "logs/shop/" + service + ".log", line, time.plusSeconds(1));
+        raw.pipeInput("kozy", record, time.plusSeconds(1));
     }
 
     private void burst(Instant eventTime, Instant receivedAt) {

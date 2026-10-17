@@ -128,6 +128,8 @@ class RedactorTest {
     void masksSecretFieldsByName() {
         Map<String, Object> fields = redactor.redactFields(Map.of("Password", "x", "client-secret", "y", "port", 22));
 
+        assertThat(redactor.redactFields(Map.of("http.request.headers.Authorization", "Bearer x", "user.password", "y")))
+                .containsEntry("http.request.headers.Authorization", "***").containsEntry("user.password", "***");
         assertThat(fields).containsEntry("Password", "***").containsEntry("client-secret", "***")
                 .containsEntry("port", 22);
     }

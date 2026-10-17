@@ -55,7 +55,7 @@ public class ParserRegistry {
                 p.severity(),
                 p.timestamp() != null ? p.timestamp() : raw.receivedAt(),
                 raw.receivedAt(),
-                redactor.redact(raw.message()),
+                redactor.redact(p.message() != null ? p.message() : raw.message()),
                 redactor.redactFields(p.fields()),
                 p.tags()));
     }

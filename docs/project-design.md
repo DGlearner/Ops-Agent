@@ -356,10 +356,11 @@ Agent 方案确定前，Java 侧只承诺以下原则，不实现具体接口：
 | `linux` | syslog（`Mon DD HH:MM:SS host prog[pid]: body`） | `ssh_login_failed`、`ssh_invalid_user`（low）；`ssh_login_success`；`sudo_command`；`cron_job`；`systemd_event`；`kernel_oom`（high）；其余为 `syslog` |
 | `mysql` | syslog 前缀 + MySQL 消息 | `mysql_connection_refused`、`mysql_too_many_connections`（high）；`mysql_access_denied`（low）；`mysql_slow_query`（latency ≥ 1 s 或 `Query_time` ≥ 1，medium）；`mysql_query`；`mysql_ready` |
 | `app_service` | `ISO时间 LEVEL key=value ...`（logfmt） | `app_db_connection_error`（有 `db_host` 且错误含 connection refused，medium）；`app_http_server_error`（`status` ≥ 500）；`app_login_failed`；其余 `app_log`，级别由 LEVEL 决定 |
+| `app_service` | 每行一个 ECS JSON 对象（以 `{` 开头的行；Spring Boot 的结构化日志，如电商靶场） | `event.action` 本身（如 `dependency_call_failed`、`database_unavailable`，见 shop-design §8.1）；没有时按级别取 `app_error`（medium）、`app_warning`（low）、`app_log`。`message` 作为消息；其余字段展平成带点的名字（`trace.id`、`error.type`、`order_id`），去掉进程信息和堆栈 |
 | `docker` | `ISO时间 dockerd[pid]: key=value ...` | `container_oom_killed`（high）；`container_died`（exitCode ≠ 0，medium）；`container_restarted`（medium）；`container_unhealthy`（medium）；其余 `container_event` |
 
 - **时间：** syslog 不带年份，用 `received_at` 的年份补全（跨年时取离 `received_at` 最近的年份）。
-- **无法解析：** 写入 `logs.unparsed` 并带上原因，不静默丢弃。
+- **无法解析：** 写入 `logs.unparsed` 并带上原因，不静默丢弃。JSON 行解析失败或缺少 `@timestamp` 也算无法解析。
 - **对 v1 的修正：** v1 只接受 `linux`、`mysql`、`app_service` 三类，样例数据中约 32% 的 nginx 和 docker 日志在接入时就会被拒绝；v1 的 app 日志正则要求"时间 服务名 级别"的顺序，与样例数据"时间 级别 key=value"的格式不符，导致应用侧的数据库连接错误无法被识别。
 
 ### 8.2 脱敏
@@ -409,7 +410,7 @@ Agent 方案确定前，Java 侧只承诺以下原则，不实现具体接口：
 - **重复事件：** 同一条日志投递多次（例如客户端带同一个 `Idempotency-Key` 重试，§6.2）只计一次。计数前按 `fingerprint` + `event_id` 丢掉重复的匹配；只记匹配过规则的事件，保留窗口加宽限期的时长，相隔更久的副本不可能落进同一个窗口。Kafka 的 exactly-once 只防止流处理自身产生的重复，代替不了这一步。
 - **告警抑制：** 同一个 `fingerprint` 在 `suppress_for` 时间内只发一次告警。抑制期限、窗口和过期清理都用同一个检测时间（由 `detection-time` 决定是事件时间还是接收时间），日志自身的时间只作为告警里的证据。抑制状态保存在 Kafka Streams 的状态存储中，与 offset 一起提交，重启或重放时不会重复告警；过期的记录按流时间定期清理。
 - **热更新：** 规则来自 `rules.changelog` 的全局表；规则变更后，新进入的事件立即按新规则匹配。
-- **默认规则（从 v1 移植并扩充，见 `services/stream-processor/src/main/resources/rules/default-rules.json`）：** SSH 暴力破解（5 分钟 ≥ 5，按 host + 来源 IP）；MySQL 连接被拒绝（1 分钟 ≥ 1）；MySQL 连接数过多；MySQL 慢查询（5 分钟 ≥ 3）；应用数据库连接错误（5 分钟 ≥ 2，按 service + host）；Nginx 5xx（5 分钟 ≥ 5，按 host）；容器 OOM（≥ 1）；容器频繁重启（15 分钟 ≥ 3，按容器）；内核 OOM；磁盘使用告警（node-exporter 报告 warning 或 critical）。
+- **默认规则（从 v1 移植并扩充，见 `services/stream-processor/src/main/resources/rules/default-rules.json`）：** SSH 暴力破解（5 分钟 ≥ 5，按 host + 来源 IP）；MySQL 连接被拒绝（1 分钟 ≥ 1）；MySQL 连接数过多；MySQL 慢查询（5 分钟 ≥ 3）；应用数据库连接错误（5 分钟 ≥ 2，按 service + host）；Nginx 5xx（5 分钟 ≥ 5，按 host）；容器 OOM（≥ 1）；容器频繁重启（15 分钟 ≥ 3，按容器）；内核 OOM；磁盘使用告警（node-exporter 报告 warning 或 critical）。电商靶场（按 `event.action`）：服务连不上数据库（1 分钟 ≥ 3，按服务）；调用其他服务失败（1 分钟 ≥ 10，按服务 + 被调用方）；未处理的异常（≥ 1）；库存结算被拒、需要人工处理（≥ 1）；后台恢复步骤反复失败（5 分钟 ≥ 3）。售罄等正常业务结果不设规则。
 - **样例数据的结果：** 重放 `datasets/aiops_mixed_incident_small.jsonl` 产生 7 条告警：SSH 暴力破解、MySQL 连接被拒绝、MySQL 连接数过多、payment-api 数据库连接错误、web-01 的 5xx 突增、api-gateway 容器 OOM、api-gateway 频繁重启（拓扑测试和真实 Kafka 上的端到端运行结果一致）。
 - **规则来源：** J3 之前没有 core-service，stream-processor 在 `local` 配置下启动时把 `default-rules.json` 写入 `rules.changelog`；J3 起由 core-service 管理。
 

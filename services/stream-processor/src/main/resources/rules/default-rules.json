@@ -128,5 +128,70 @@
     "severity": "medium",
     "suppress_for": "PT1H",
     "summary_template": "Disk {fields.mount} on {host} is at {fields.usage_percent}%"
+  },
+  {
+    "rule_id": "shop-database-unavailable",
+    "version": 1,
+    "enabled": true,
+    "name": "Shop service cannot use its database",
+    "match": {"event_types": ["database_unavailable"]},
+    "group_by": ["service"],
+    "window": "PT1M",
+    "threshold": 3,
+    "severity": "high",
+    "suppress_for": "PT10M",
+    "summary_template": "{service} answered {count} requests with DATABASE_UNAVAILABLE within {window}"
+  },
+  {
+    "rule_id": "shop-dependency-call-failures",
+    "version": 1,
+    "enabled": true,
+    "name": "Shop service calls to another service failing",
+    "match": {"event_types": ["dependency_call_failed"]},
+    "group_by": ["service", "fields.dependency"],
+    "window": "PT1M",
+    "threshold": 10,
+    "severity": "medium",
+    "suppress_for": "PT10M",
+    "summary_template": "{count} failed calls from {service} to {fields.dependency} within {window}"
+  },
+  {
+    "rule_id": "shop-unhandled-errors",
+    "version": 1,
+    "enabled": true,
+    "name": "Unhandled error in a shop service",
+    "match": {"event_types": ["unhandled_error"]},
+    "group_by": ["service"],
+    "window": "PT5M",
+    "threshold": 1,
+    "severity": "high",
+    "suppress_for": "PT15M",
+    "summary_template": "{count} unhandled errors in {service} within {window}"
+  },
+  {
+    "rule_id": "shop-inventory-task-failed",
+    "version": 1,
+    "enabled": true,
+    "name": "Stock settlement refused, needs manual review",
+    "match": {"event_types": ["inventory_task_failed"]},
+    "group_by": ["service"],
+    "window": "PT5M",
+    "threshold": 1,
+    "severity": "high",
+    "suppress_for": "PT30M",
+    "summary_template": "Inventory refused {count} settlements within {window}; the stock of those orders needs manual review"
+  },
+  {
+    "rule_id": "shop-recovery-failing",
+    "version": 1,
+    "enabled": true,
+    "name": "Shop background recovery keeps failing",
+    "match": {"event_types": ["recovery_step_failed"]},
+    "group_by": ["service", "fields.step"],
+    "window": "PT5M",
+    "threshold": 3,
+    "severity": "medium",
+    "suppress_for": "PT15M",
+    "summary_template": "Recovery step {fields.step} of {service} failed {count} times within {window}"
   }
 ]

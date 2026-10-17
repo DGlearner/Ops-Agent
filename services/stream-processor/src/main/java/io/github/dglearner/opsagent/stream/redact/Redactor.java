@@ -210,8 +210,11 @@ public final class Redactor {
         return changed;
     }
 
+    /** A secret's name, also as the last part of a flattened name such as {@code http.request.headers.Authorization}. */
     private static boolean isSecretName(String name) {
-        return SECRET_FIELD_NAMES.contains(name.toLowerCase(Locale.ROOT).replace('-', '_'));
+        String normalized = name.toLowerCase(Locale.ROOT).replace('-', '_');
+        return SECRET_FIELD_NAMES.contains(normalized)
+                || SECRET_FIELD_NAMES.contains(normalized.substring(normalized.lastIndexOf('.') + 1));
     }
 
     private static boolean looksLikeJson(String text) {
