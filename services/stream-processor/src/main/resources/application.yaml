@@ -34,5 +34,7 @@ ops:
     # "ingest" lets an old dataset be replayed more than once; see DetectionTime.
     detection-time: event
     max-sample-events: 5
+    # A fingerprint without a match for this long has stopped; if it returns, it alerts again (see AlertSuppressor).
+    quiet-period: 2m
     # Until core-service manages rules (J3), publish rules/default-rules.json at startup.
     seed-rules: true

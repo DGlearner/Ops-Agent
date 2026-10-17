@@ -190,15 +190,46 @@ class OpsTopologyTest {
     void ingestTimeModeSuppressesForTheSpanOfReceiveTime() {
         start(DetectionTime.INGEST);
         rules.pipeInput("ssh", sshRule(3, true));
-        // An old dataset replayed a month later, faster than it was written: 20 log minutes per 6 received ones.
+        // An old dataset replayed a month later and three times faster than it was written: a failure every 30 s of
+        // receive time, 90 s of log time apart, without a pause, for 12 minutes.
         Instant received = T0.plus(Duration.ofDays(30));
+        for (int i = 0; i <= 24; i++) {
+            sshFailure(T0.plusSeconds(90L * i), received.plusSeconds(30L * i), "198.51.100.7");
+        }
 
-        burst(T0, received);
-        burst(T0.plus(Duration.ofMinutes(20)), received.plus(Duration.ofMinutes(6)));
-        burst(T0.plus(Duration.ofMinutes(40)), received.plus(Duration.ofMinutes(12)));
+        // suppress_for is 10 minutes of receive time: one alert at the third failure, the next one 10 minutes later.
+        List<Alert> out = alerts.readValuesToList();
+        assertThat(out).hasSize(2);
+        assertThat(Duration.between(out.get(0).windowEnd(), out.get(1).windowEnd())).isGreaterThanOrEqualTo(
+                Duration.ofMinutes(10));
+    }
 
-        // suppress_for is 10 minutes of receive time: the second burst is suppressed, the third alerts again.
+    @Test
+    void aProblemThatWentQuietAndCameBackAlertsAgainWithinTheSuppression() {
+        start(DetectionTime.EVENT);
+        rules.pipeInput("ssh", sshRule(3, true));
+
+        for (int i = 0; i < 3; i++) {
+            sshFailure(T0.plusSeconds(i), "198.51.100.7");
+        }
+        // Quiet for more than the 2-minute quiet period, then back 4 minutes in, well within the 10-minute suppression.
+        for (int i = 0; i < 6; i++) {
+            sshFailure(T0.plusSeconds(240 + 10L * i), "198.51.100.7");
+        }
+
         assertThat(alerts.readValuesToList()).hasSize(2);
+    }
+
+    @Test
+    void aProblemThatGoesOnWithoutPauseAlertsOncePerSuppression() {
+        start(DetectionTime.EVENT);
+        rules.pipeInput("ssh", sshRule(3, true));
+
+        for (int i = 0; i < 16; i++) {
+            sshFailure(T0.plusSeconds(30L * i), "198.51.100.7");
+        }
+
+        assertThat(alerts.readValuesToList()).hasSize(1);
     }
 
     @Test
@@ -266,7 +297,7 @@ class OpsTopologyTest {
     private void start(DetectionTime detectionTime) {
         StreamsBuilder builder = new StreamsBuilder();
         new OpsTopology(ParserRegistry.withDefaultParsers(),
-                new StreamProperties(Duration.ofSeconds(30), detectionTime, 5, false),
+                new StreamProperties(Duration.ofSeconds(30), detectionTime, 5, false, Duration.ofMinutes(2)),
                 Clock.fixed(NOW, ZoneOffset.UTC)).addTo(builder);
         Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "ops-topology-test");

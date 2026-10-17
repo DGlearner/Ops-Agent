@@ -65,6 +65,7 @@ public class OpsTopology {
     static final Serde<RuleMatch> MATCH = JsonSerde.of(RuleMatch.class);
     static final Serde<WindowAggregate> AGGREGATE = JsonSerde.of(WindowAggregate.class);
     static final Serde<Alert> ALERT = JsonSerde.of(Alert.class);
+    static final Serde<AlertSuppressor.State> SUPPRESSION = JsonSerde.of(AlertSuppressor.State.class);
 
     private static final List<Duration> WINDOW_TIERS = RuleDefinition.SUPPORTED_WINDOWS.stream().sorted().toList();
 
@@ -125,9 +126,9 @@ public class OpsTopology {
             builder.addStateStore(Stores.windowStoreBuilder(
                     Stores.persistentWindowStore(dedupStore, dedupRetention, dedupRetention, false),
                     STRING, Serdes.Long()));
-            String suppressionStore = "alert-suppression-" + tier;
+            String suppressionStore = "alert-state-" + tier;
             builder.addStateStore(Stores.keyValueStoreBuilder(
-                    Stores.persistentKeyValueStore(suppressionStore), STRING, Serdes.Long()));
+                    Stores.persistentKeyValueStore(suppressionStore), STRING, SUPPRESSION));
 
             // Named like the repartition topic groupByKey used to create, so the internal topic name is unchanged.
             matches.filter((fingerprint, match) -> window.equals(match.window()), Named.as("tier-" + tier))
@@ -143,7 +144,8 @@ public class OpsTopology {
                             Materialized.<String, WindowAggregate, WindowStore<Bytes, byte[]>>as("windows-" + tier)
                                     .withKeySerde(STRING).withValueSerde(AGGREGATE))
                     .toStream(Named.as("window-updates-" + tier))
-                    .process(() -> new AlertSuppressor(suppressionStore, clock), Named.as("suppress-" + tier),
+                    .process(() -> new AlertSuppressor(suppressionStore, clock, properties.quietPeriod()),
+                            Named.as("suppress-" + tier),
                             suppressionStore)
                     .to(Topics.ALERTS, Produced.with(STRING, ALERT).withName("write-alerts-" + tier));
         }
