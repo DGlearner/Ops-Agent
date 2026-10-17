@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/DGlearner/Ops-Agent/contracts/kafka/agent-result.schema.json",
+  "title": "AgentResult",
+  "description": "The agent's answer to an AgentTask. Topic agent.results, key = task_id. core-service checks the evidence before storing it.",
+  "type": "object",
+  "required": ["task_id", "incident_id", "status", "uncertain", "hypotheses", "next_steps", "tool_calls", "duration_ms", "completed_at"],
+  "properties": {
+    "task_id": {"type": "string", "format": "uuid"},
+    "incident_id": {"type": "string", "format": "uuid"},
+    "status": {"enum": ["completed", "failed"]},
+    "summary": {"type": "string", "maxLength": 4000},
+    "uncertain": {"type": "boolean"},
+    "hypotheses": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "required": ["component", "cause", "confidence", "evidence"],
+        "properties": {
+          "component": {"type": "string", "minLength": 1},
+          "cause": {"type": "string", "maxLength": 2000},
+          "confidence": {"enum": ["high", "medium", "low"]},
+          "evidence": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "object",
+              "required": ["kind", "id"],
+              "properties": {
+                "kind": {"enum": ["alert", "event", "topology", "incident"]},
+                "id": {"type": "string", "minLength": 1},
+                "note": {"type": "string", "maxLength": 1000}
+              }
+            }
+          }
+        }
+      }
+    },
+    "next_steps": {"type": "array", "maxItems": 10, "items": {"type": "string", "maxLength": 1000}},
+    "model": {"type": "string"},
+    "tool_calls": {"type": "integer", "minimum": 0},
+    "duration_ms": {"type": "integer", "minimum": 0},
+    "error": {"type": "string"},
+    "completed_at": {"type": "string", "format": "date-time"}
+  }
+}

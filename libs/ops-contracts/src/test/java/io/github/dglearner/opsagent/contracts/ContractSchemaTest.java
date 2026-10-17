@@ -31,7 +31,9 @@ class ContractSchemaTest {
                 Arguments.of("rule-definition", Samples.rule()),
                 Arguments.of("topology-entry", Samples.topology()),
                 Arguments.of("alert", Samples.alert()),
-                Arguments.of("incident-candidate", Samples.candidate()));
+                Arguments.of("incident-candidate", Samples.candidate()),
+                Arguments.of("agent-task", Samples.agentTask()),
+                Arguments.of("agent-result", Samples.agentResult()));
     }
 
     @ParameterizedTest(name = "{0}")

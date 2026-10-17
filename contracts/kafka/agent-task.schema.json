@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/DGlearner/Ops-Agent/contracts/kafka/agent-task.schema.json",
+  "title": "AgentTask",
+  "description": "Work for the agent runtime. Topic agent.tasks.high, key = task_id.",
+  "type": "object",
+  "required": ["task_id", "kind", "incident_id", "requested_by", "requested_at", "deadline", "language"],
+  "properties": {
+    "task_id": {"type": "string", "format": "uuid"},
+    "kind": {"enum": ["incident_analysis"]},
+    "incident_id": {"type": "string", "format": "uuid"},
+    "requested_by": {"enum": ["system", "user"]},
+    "requested_at": {"type": "string", "format": "date-time"},
+    "deadline": {"type": "string", "format": "date-time"},
+    "language": {"type": "string", "minLength": 2}
+  }
+}

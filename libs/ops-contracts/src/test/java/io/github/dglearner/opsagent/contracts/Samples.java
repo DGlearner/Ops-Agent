@@ -57,6 +57,20 @@ final class Samples {
                 List.of("mysql", "auth-api"), List.of("db-01", "app-01"), Severity.HIGH, 2, List.of());
     }
 
+    static AgentTask agentTask() {
+        return new AgentTask(UUID.fromString("01a14d7e-1c2b-7a00-8000-000000000001"), AgentTask.INCIDENT_ANALYSIS,
+                UUID.fromString("01a14d7e-1c2b-7a00-8000-000000000002"), "system", T0, T0.plusSeconds(180), "zh");
+    }
+
+    static AgentResult agentResult() {
+        return new AgentResult(agentTask().taskId(), agentTask().incidentId(), AgentResult.COMPLETED,
+                "order-service and payment-service lost their shared MySQL", false,
+                List.of(new AgentResult.Hypothesis("shop-mysql", "The shop's MySQL stopped answering", "high",
+                        List.of(new AgentResult.Evidence("alert", alert().alertId().toString(), "DATABASE_UNAVAILABLE"),
+                                new AgentResult.Evidence("topology", "shop-mysql", "shared dependency")))),
+                List.of("Check the MySQL container"), "test-model", 4, 5300, null, T0.plusSeconds(20));
+    }
+
     private Samples() {
     }
 }
