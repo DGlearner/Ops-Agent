@@ -92,6 +92,18 @@ class LabController {
                 Duration.ofSeconds(request.durationS()));
     }
 
+    /** What Ops-Agent saw in the last three hours: its incidents and the agent's analyses, newest first. */
+    @GetMapping("/incidents")
+    Map<String, Object> incidents() {
+        Map<String, Object> result = new LinkedHashMap<>();
+        try {
+            result.put("incidents", opsAgent.incidentsSince(Instant.now().minus(Duration.ofHours(3))));
+        } catch (RestClientException e) {
+            result.put("message", "Ops-Agent (core-service) cannot be reached: " + e.getMessage());
+        }
+        return result;
+    }
+
     /** The episodes scored against what Ops-Agent reported since the first of them. */
     @GetMapping("/evaluation")
     Map<String, Object> evaluation() {

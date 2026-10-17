@@ -7,7 +7,10 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 
 /**
  * Scores what Ops-Agent reported against the ground truth (docs/shop-design.md §15).
@@ -20,6 +23,9 @@ import java.util.function.BiFunction;
  * <p>Whether an alert without an injected fault behind it is a false alarm depends on what the customers saw: the
  * lab's own orders. If some of them failed around the alert, the shop really was in trouble (a flash sale beyond
  * what it can take, say) and the alert is right; if none did, it is a false alarm.
+ *
+ * <p>A fault is attributed correctly if, for each of its targets, the latest analysis of one of the episode's
+ * incidents names that target as the most likely cause.
  */
 final class Scoring {
 
@@ -33,13 +39,40 @@ final class Scoring {
     record Alert(String alertId, String ruleId, String service, String summary, Instant createdAt) {
     }
 
-    /** An incident as Ops-Agent's API returned it. */
-    record Incident(String incidentId, String title, List<String> subjects, int alertCount, Instant openedAt,
-            Instant lastAlertAt) {
+    /** An incident as Ops-Agent's API returned it, with its analyses by the agent, newest first. */
+    record Incident(String incidentId, String title, String status, List<String> subjects, int alertCount,
+            Instant openedAt, Instant lastAlertAt, List<Analysis> analyses) {
+
+        Incident(String incidentId, String title, List<String> subjects, int alertCount, Instant openedAt,
+                Instant lastAlertAt) {
+            this(incidentId, title, "open", subjects, alertCount, openedAt, lastAlertAt, List.of());
+        }
+
+        Optional<Analysis> latestCompleted() {
+            return analyses.stream().filter(a -> a.status().equals("completed")).findFirst();
+        }
     }
 
+    /**
+     * An analysis by the agent. {@code status}: pending, completed, failed or timed_out. {@code rejectedEvidence}:
+     * how many of its citations core-service found the incident does not have.
+     */
+    record Analysis(String analysisId, String status, String requestedBy, Instant requestedAt, String model,
+            Boolean uncertain, String summary, List<Hypothesis> hypotheses, List<String> nextSteps,
+            int rejectedEvidence, Integer toolCalls, Long durationMs, String error) {
+    }
+
+    record Hypothesis(String component, String cause, String confidence, int evidence) {
+    }
+
+    /**
+     * {@code attribution} (faults with incidents only): {@code correct}, {@code partial} (some of the targets),
+     * {@code not_first} (a target is among the hypotheses, not first), {@code wrong}, {@code pending} (no answer
+     * yet) or {@code failed} (the agent did not answer). {@code attributedTo}: the first hypotheses.
+     */
     record EpisodeScore(Episode episode, String verdict, boolean detected, Double firstAlertAfterSeconds,
-            int customerFailures, Instant windowFrom, Instant windowTo, List<Alert> alerts, List<Incident> incidents) {
+            int customerFailures, Instant windowFrom, Instant windowTo, List<Alert> alerts, List<Incident> incidents,
+            String attribution, List<String> attributedTo) {
     }
 
     /** {@code unexplainedAlerts} are the false alarms; {@code troubleAlerts} had failing customer orders behind them. */
@@ -72,7 +105,8 @@ final class Scoring {
             Double delay = inWindow.isEmpty() ? null
                     : Duration.between(episode.startedAt(), inWindow.getFirst().createdAt()).toMillis() / 1000.0;
             scores.add(new EpisodeScore(episode, verdict(episode, inWindow, active, failures, settled),
-                    !inWindow.isEmpty(), delay, failures, windowFrom, windowTo, inWindow, active));
+                    !inWindow.isEmpty(), delay, failures, windowFrom, windowTo, inWindow, active,
+                    attribution(episode, active), firstHypotheses(active)));
             if (episode.kind().equals("fault")) {
                 faultWindows.add(new Instant[] {windowFrom, windowTo});
             }
@@ -96,6 +130,9 @@ final class Scoring {
         summary.put("mean_first_alert_after_s", faults.stream().filter(s -> s.firstAlertAfterSeconds() != null)
                 .mapToDouble(EpisodeScore::firstAlertAfterSeconds).average().stream().boxed().findFirst()
                 .map(v -> Math.round(v * 10) / 10.0).orElse(null));
+        summary.put("analysed", faults.stream().filter(s -> s.attribution() != null
+                && !s.attribution().equals("pending") && !s.attribution().equals("failed")).count());
+        summary.put("attributed", faults.stream().filter(s -> "correct".equals(s.attribution())).count());
         summary.put("false_alarms", falseAlarms.size());
         summary.put("alerts_on_customer_trouble", trouble.size());
         return new Report(scores, falseAlarms, trouble, summary);
@@ -122,6 +159,37 @@ final class Scoring {
             return settled ? "missed" : "pending";
         }
         return incidents.size() == episode.expectedIncidents() ? "correct" : "wrong_split";
+    }
+
+    private static String attribution(Episode episode, List<Incident> incidents) {
+        if (!episode.kind().equals("fault") || incidents.isEmpty()) {
+            return null;
+        }
+        List<Analysis> analyses = incidents.stream().map(Incident::latestCompleted).flatMap(Optional::stream).toList();
+        if (analyses.isEmpty()) {
+            boolean waiting = incidents.stream().anyMatch(i -> i.analyses().isEmpty()
+                    || i.analyses().getFirst().status().equals("pending"));
+            return waiting ? "pending" : "failed";
+        }
+        Set<String> targets = Set.of(episode.target().split(",\\s*"));
+        Set<String> first = analyses.stream().filter(a -> !a.hypotheses().isEmpty())
+                .map(a -> a.hypotheses().getFirst().component()).collect(Collectors.toSet());
+        long hits = targets.stream().filter(first::contains).count();
+        if (hits == targets.size()) {
+            return "correct";
+        }
+        if (hits > 0) {
+            return "partial";
+        }
+        boolean mentioned = analyses.stream().flatMap(a -> a.hypotheses().stream())
+                .anyMatch(h -> targets.contains(h.component()));
+        return mentioned ? "not_first" : "wrong";
+    }
+
+    private static List<String> firstHypotheses(List<Incident> incidents) {
+        return incidents.stream().map(Incident::latestCompleted).flatMap(Optional::stream)
+                .filter(a -> !a.hypotheses().isEmpty()).map(a -> a.hypotheses().getFirst().component())
+                .distinct().toList();
     }
 
     private static boolean within(Instant t, Instant from, Instant to) {

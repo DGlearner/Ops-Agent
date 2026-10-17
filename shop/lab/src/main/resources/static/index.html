@@ -44,12 +44,20 @@
   .summary { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 12px; }
   .summary div { min-width: 110px; }
   .summary b { display: block; font-size: 20px; }
+  .analysis { margin: 0; }
+  .analysis li { margin-bottom: 4px; }
+  .tag { display: inline-block; padding: 0 6px; border-radius: 4px; font-size: 12px; border: 1px solid var(--line); }
+  .tag.warn { color: var(--warn); border-color: var(--warn); }
+  .attr-correct { color: var(--ok); font-weight: 600; }
+  .attr-partial, .attr-not_first { color: var(--warn); font-weight: 600; }
+  .attr-wrong, .attr-failed { color: var(--bad); font-weight: 600; }
+  .attr-pending { color: var(--muted); }
 </style>
 </head>
 <body>
 <header>
   <h1>故障演练控制台</h1>
-  <p>在这里制造流量和故障，再看 Ops-Agent 有没有发现、有没有分对。这里的操作只记作标准答案，Ops-Agent 看不到。</p>
+  <p>在这里制造流量和故障，再看 Ops-Agent 有没有发现、有没有分对、Agent 有没有找到原因。这里的操作只记作标准答案，Ops-Agent 看不到。</p>
 </header>
 <div id="message"></div>
 <main>
@@ -82,6 +90,12 @@
   </section>
 
   <section class="wide">
+    <h2>Ops-Agent 看到的：Incident 与 Agent 分析</h2>
+    <p class="muted">Incident 没有新告警 1 分钟后，Agent 会自动分析。下面是最近 3 小时的 Incident，每 5 秒刷新。</p>
+    <div id="incidents" class="muted">读取中…</div>
+  </section>
+
+  <section class="wide">
     <h2>演练评测 <button onclick="evaluate()" style="margin-left:8px">刷新</button></h2>
     <div id="evaluation" class="muted">点“刷新”，对照标准答案查看 Ops-Agent 的告警和 Incident。</div>
   </section>
@@ -92,6 +106,11 @@ const time = t => t ? new Date(t).toLocaleTimeString() : '';
 const verdicts = { correct: '正确', missed: '漏报', wrong_split: 'Incident 数量不对', false_alarm: '误报',
                    overload: '顾客订单失败，已告警', missed_overload: '顾客订单失败，未告警',
                    not_injected: '注入失败', pending: '等待中' };
+const attributions = { correct: '归因正确', partial: '部分正确', not_first: '答案不在第一位', wrong: '归因错误',
+                       pending: '等待 Agent', failed: 'Agent 失败' };
+const analysisStates = { pending: '分析中', completed: '已完成', failed: '失败', timed_out: '超时' };
+const confidences = { high: '高', medium: '中', low: '低' };
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 async function call(method, path, body) {
   const response = await fetch(path, { method, headers: { 'Content-Type': 'application/json' },
@@ -153,19 +172,51 @@ async function refresh() {
   } catch (e) {}
 }
 
+function renderAnalysis(incident) {
+  const latest = incident.analyses[0];
+  if (!latest) return '<span class="muted">还没有分析（Incident 安静 1 分钟后开始）</span>';
+  const done = incident.analyses.find(a => a.status === 'completed');
+  let html = latest.status !== 'completed'
+    ? `<div class="muted">最新一次：${analysisStates[latest.status] || latest.status}${latest.error ? '：' + esc(latest.error) : ''}</div>` : '';
+  if (done) {
+    const hypotheses = done.hypotheses.map(h => `<li><b>${esc(h.component)}</b>（置信度${confidences[h.confidence] || h.confidence}，${h.evidence} 条证据）：${esc(h.cause)}</li>`).join('');
+    html += `<div>${done.uncertain ? '<span class="tag warn">不确定</span> ' : ''}${esc(done.summary)}</div>
+      <ol class="analysis">${hypotheses}</ol>
+      ${done.next_steps.length ? `<div class="muted">建议：${done.next_steps.map(esc).join('；')}</div>` : ''}
+      <div class="muted">${esc(done.model)} · 调用工具 ${done.tool_calls ?? 0} 次 · ${((done.duration_ms ?? 0) / 1000).toFixed(1)} s${
+        done.rejected_evidence ? ` · <span class="tag warn">${done.rejected_evidence} 条证据被拒收</span>` : ''}</div>`;
+  }
+  return html;
+}
+
+async function loadIncidents() {
+  try {
+    const r = await call('GET', '/api/lab/incidents');
+    if (r.message) { $('incidents').textContent = r.message; return; }
+    if (!r.incidents.length) { $('incidents').textContent = '最近 3 小时没有 Incident'; return; }
+    $('incidents').innerHTML = `<table><thead><tr><th>时间</th><th>Incident</th><th>Agent 的结论</th></tr></thead><tbody>${
+      r.incidents.map(i => `<tr>
+        <td>${time(i.opened_at)}–${time(i.last_alert_at)}<div class="muted">${esc(i.status)}</div></td>
+        <td><b>${esc(i.title)}</b><div class="chips"><span>${i.subjects.map(esc).join(' + ')}</span><span>${i.alert_count} 条告警</span></div></td>
+        <td>${renderAnalysis(i)}</td></tr>`).join('')}</tbody></table>`;
+  } catch (e) {}
+}
+
 async function evaluate() {
   const r = await call('GET', '/api/lab/evaluation');
   if (r.message) { $('evaluation').textContent = r.message; return; }
   const s = r.summary;
   const rows = r.episodes.map(e => `<tr>
       <td>${time(e.episode.started_at)}–${time(e.episode.ended_at)}</td>
-      <td><b>${e.episode.name}</b><div class="muted">${e.episode.target}</div></td>
+      <td><b>${e.episode.name}</b><div class="muted">根因：${e.episode.target}</div></td>
       <td class="verdict-${e.verdict}">${verdicts[e.verdict] || e.verdict}</td>
       <td>${e.first_alert_after_seconds != null ? e.first_alert_after_seconds + ' s' : '—'}</td>
       <td>${e.alerts.length}</td>
       <td>${e.customer_failures}</td>
       <td>${e.incidents.length} / 应为 ${e.episode.expected_incidents}<div class="chips">${
-          e.incidents.map(i => `<span title="${i.title}">${i.subjects.join(' + ')}（${i.alert_count} 条告警）</span>`).join('')}</div></td>
+          e.incidents.map(i => `<span title="${esc(i.title)}">${i.subjects.join(' + ')}（${i.alert_count} 条告警）</span>`).join('')}</div></td>
+      <td>${e.attribution ? `<span class="attr-${e.attribution}">${attributions[e.attribution] || e.attribution}</span>
+          <div class="muted">${e.attributed_to.length ? 'Agent：' + e.attributed_to.map(esc).join('、') : ''}</div>` : '—'}</td>
     </tr>`).join('');
   const falseAlarms = r.false_alarms.map(a => `<li>${time(a.created_at)} ${a.rule_id}：${a.summary}</li>`).join('');
   const trouble = r.alerts_on_customer_trouble.map(a => `<li>${time(a.created_at)} ${a.rule_id}：${a.summary}</li>`).join('');
@@ -175,18 +226,21 @@ async function evaluate() {
       <div><b>${s.detected}</b><span class="muted">检出</span></div>
       <div><b>${s.correct}</b><span class="muted">检出且 Incident 正确</span></div>
       <div><b>${s.mean_first_alert_after_s ?? '—'}</b><span class="muted">平均首条告警（秒）</span></div>
+      <div><b>${s.attributed} / ${s.analysed}</b><span class="muted">归因正确 / 已分析</span></div>
       <div><b>${s.false_alarms}</b><span class="muted">误报</span></div>
       <div><b>${s.alerts_on_customer_trouble}</b><span class="muted">没注入故障、但顾客订单确实失败时的告警</span></div>
     </div>
-    <table><thead><tr><th>时间</th><th>演练</th><th>结果</th><th>首条告警</th><th>告警</th><th>失败订单</th><th>Incident</th></tr></thead>
+    <table><thead><tr><th>时间</th><th>演练</th><th>结果</th><th>首条告警</th><th>告警</th><th>失败订单</th><th>Incident</th><th>归因</th></tr></thead>
     <tbody>${rows}</tbody></table>
     ${falseAlarms ? `<h2 style="margin-top:16px">误报：故障窗口之外、顾客订单也都正常时的告警</h2><ul>${falseAlarms}</ul>` : ''}
     ${trouble ? `<h2 style="margin-top:16px">没注入故障、但顾客订单确实失败时的告警</h2><ul>${trouble}</ul>` : ''}
-    <p class="muted">一次演练的窗口：开始前 30 秒到结束后 5 分钟，最多到下一次演练开始。失败订单：控制台自己发出的订单里，服务不可用、结果未知、5xx 或没有应答的数量（售罄、被拒卡不算）。</p>`;
+    <p class="muted">一次演练的窗口：开始前 30 秒到结束后 5 分钟，最多到下一次演练开始。归因：窗口内每个 Incident 取 Agent 最新完成的分析，看第一个假设是不是这次演练的根因。失败订单：控制台自己发出的订单里，服务不可用、结果未知、5xx 或没有应答的数量（售罄、被拒卡不算）。</p>`;
 }
 
 refresh();
+loadIncidents();
 setInterval(refresh, 2000);
+setInterval(loadIncidents, 5000);
 </script>
 </body>
 </html>

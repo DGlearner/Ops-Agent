@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.BiFunction;
 import org.junit.jupiter.api.Test;
@@ -56,7 +57,7 @@ class ScoringTest {
     @Test
     void noAlertIsAMissAndAFailedInjectionIsNotScored() {
         Episode missed = fault("payment-slow", 1, T0, T0.plusSeconds(60));
-        Episode failed = new Episode("f", "fault", "mysql-down", "mysql", "d", "e", 1, T0.plusSeconds(1200),
+        Episode failed = new Episode("f", "fault", "mysql-down", "shop-mysql", "d", "e", 1, T0.plusSeconds(1200),
                 T0.plusSeconds(1230), false);
         Episode running = fault("payment-errors", 1, NOW.minusSeconds(10), null);
 
@@ -90,6 +91,65 @@ class ScoringTest {
 
         assertThat(report.falseAlarms()).extracting(Scoring.Alert::createdAt).containsExactly(quiet);
         assertThat(report.troubleAlerts()).extracting(Scoring.Alert::createdAt).containsExactly(trouble);
+    }
+
+    @Test
+    void aFaultIsAttributedCorrectlyIfEachTargetIsTheFirstHypothesisOfAnIncident() {
+        Episode independent = new Episode("i", "fault", "independent-faults", "payment-service, inventory-service",
+                "d", "e", 2, T0, T0.plusSeconds(60), true);
+        List<Scoring.Alert> alerts = List.of(alert(T0.plusSeconds(5)), alert(T0.plusSeconds(16)));
+
+        assertThat(attribution(independent, alerts, List.of(analysed(T0.plusSeconds(5), "payment-service"),
+                analysed(T0.plusSeconds(16), "inventory-service", "shop-mysql")))).isEqualTo("correct");
+        assertThat(attribution(independent, alerts, List.of(analysed(T0.plusSeconds(5), "payment-service"),
+                analysed(T0.plusSeconds(16), "shop-mysql")))).isEqualTo("partial");
+    }
+
+    @Test
+    void aTargetOnlyAmongTheLaterHypothesesIsNotFirstAndNoneOfThemIsWrong() {
+        Episode mysql = new Episode("m", "fault", "mysql-down", "shop-mysql", "d", "e", 1, T0, T0.plusSeconds(30),
+                true);
+        List<Scoring.Alert> alerts = List.of(alert(T0.plusSeconds(2)));
+
+        assertThat(attribution(mysql, alerts, List.of(analysed(T0.plusSeconds(2), "order-service", "shop-mysql"))))
+                .isEqualTo("not_first");
+        assertThat(attribution(mysql, alerts, List.of(analysed(T0.plusSeconds(2), "payment-service"))))
+                .isEqualTo("wrong");
+    }
+
+    @Test
+    void anIncidentWithoutAnAnswerIsPendingUntilTheAgentFailed() {
+        Episode fault = fault("payment-errors", 1, T0, T0.plusSeconds(60));
+        List<Scoring.Alert> alerts = List.of(alert(T0.plusSeconds(5)));
+        Scoring.Analysis pending = analysis("pending");
+        Scoring.Analysis failed = analysis("failed");
+
+        assertThat(attribution(fault, alerts, List.of(withAnalyses(T0.plusSeconds(5))))).isEqualTo("pending");
+        assertThat(attribution(fault, alerts, List.of(withAnalyses(T0.plusSeconds(5), pending, failed))))
+                .isEqualTo("pending");
+        assertThat(attribution(fault, alerts, List.of(withAnalyses(T0.plusSeconds(5), failed)))).isEqualTo("failed");
+        assertThat(attribution(fault, List.of(), List.of())).isNull();
+    }
+
+    private static String attribution(Episode episode, List<Scoring.Alert> alerts, List<Scoring.Incident> incidents) {
+        return Scoring.score(List.of(episode), alerts, incidents, NO_FAILURES, NOW).episodes().getFirst()
+                .attribution();
+    }
+
+    private static Scoring.Incident analysed(Instant at, String... components) {
+        List<Scoring.Hypothesis> hypotheses = Arrays.stream(components)
+                .map(c -> new Scoring.Hypothesis(c, "cause", "medium", 2)).toList();
+        return withAnalyses(at, new Scoring.Analysis("a", "completed", "system", at, "m", false, "s", hypotheses,
+                List.of(), 0, 3, 1000L, null));
+    }
+
+    private static Scoring.Analysis analysis(String status) {
+        return new Scoring.Analysis("a", status, "system", T0, "m", null, null, List.of(), List.of(), 0, null, null,
+                null);
+    }
+
+    private static Scoring.Incident withAnalyses(Instant at, Scoring.Analysis... analyses) {
+        return new Scoring.Incident("i" + at, "t", "open", List.of("x"), 1, at, at, List.of(analyses));
     }
 
     private static Episode fault(String name, int expected, Instant start, Instant end) {

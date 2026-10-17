@@ -21,7 +21,7 @@ class GroundTruthTest {
                 dir.resolve("lab/ground-truth.jsonl"), null, Duration.ofMinutes(10));
         JsonMapper json = JsonMapper.builder().propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE).build();
         Instant start = Instant.parse("2026-10-17T10:00:00Z");
-        Episode episode = new Episode("e1", "fault", "mysql-down", "mysql", "d", "e", 1, start, null, true);
+        Episode episode = new Episode("e1", "fault", "mysql-down", "shop-mysql", "d", "e", 1, start, null, true);
 
         GroundTruth first = new GroundTruth(properties, json);
         first.record(episode);

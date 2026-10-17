@@ -8,6 +8,7 @@ import java.util.Map;
 /**
  * Fault scenarios (docs/shop-design.md §10). Each injects one fault into one service for the fault phase of a run and
  * clears it afterwards. {@code expected} says what the shop should do; it is the ground truth written to the report.
+ * {@code targetService} names the root cause as Ops-Agent's catalog does, so that attributions can be scored.
  */
 public final class Scenarios {
 
@@ -78,7 +79,7 @@ public final class Scenarios {
                         faults("inventory", "{\"path\":\"/api/v1/reservations\",\"method\":\"POST\","
                                 + "\"errors\":0.5,\"status\":503}")),
                 concat(clearFaults("payment"), clearFaults("inventory"))));
-        add(new Scenario("mysql-down", "mysql",
+        add(new Scenario("mysql-down", "shop-mysql",
                 "the shop's MySQL container is stopped for the fault phase",
                 "every service fails its database calls (503, connection errors in all logs); after MySQL is "
                         + "back, recovery closes orders interrupted mid-flight",
