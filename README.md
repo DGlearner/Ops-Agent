@@ -34,12 +34,13 @@ docker compose --profile tools up -d       # 另外启动 Kafka UI：http://loca
 ./gradlew build                                   # 编译并运行全部测试（集成测试需要 Docker）
 ./gradlew :services:ingest-service:bootRun        # 日志接入，http://localhost:8081/swagger-ui.html
 ./gradlew :services:stream-processor:bootRun     # 解析与检测，启动时写入默认规则
+./gradlew :services:core-service:bootRun         # 告警落库与查询，http://localhost:8080/swagger-ui.html
 java tools/Replay.java datasets/aiops_mixed_incident_small.jsonl
 ```
 
 开发用的 API Key 是 `dev-ingest-key`，只在 `local` profile 下有效（不指定 profile 时默认就是 `local`）。其他环境必须配置自己的 `ops.ingest.sources`，仍用开发密钥或没有配置来源时，服务拒绝启动。
 
-查看结果：`docker compose --profile tools up -d` 后打开 Kafka UI（http://localhost:8089），看 `logs.normalized`、`alerts` 等 topic。样例数据会产生 7 条告警。
+查看结果：`curl localhost:8080/api/v1/alerts` 列出告警（带触发事件作为证据）；或者 `docker compose --profile tools up -d` 后打开 Kafka UI（http://localhost:8089），看 `logs.normalized`、`alerts` 等 topic。样例数据会产生 7 条告警。
 
 ## 电商靶场（shop）
 

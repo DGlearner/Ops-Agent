@@ -665,7 +665,7 @@ logs/shop/*.log ──log-shipper──HTTP──▶ ingest-service ──▶ lo
 - 采集链路：采集器发送 7264 行，丢弃 2 行 `shop.faults`；`logs.normalized` 里没有一行 `shop.faults`，没有重复的 `event_id`，也没有进入 `logs.unparsed` 的靶场日志。
 - `mysql-down` 时 inventory 和 payment 没有“数据库不可用”告警：订单服务自己的库先不可用，下单在写订单时就失败了，请求根本没有到达这两个服务。payment 的问题由后台恢复失败的告警反映出来。
 - 一次 MySQL 停机产生了 5 条告警，来自两个服务、两条规则。它们是同一个根因，应该在关联阶段（§12.5、R3）合并成一个 Incident。
-- 告警只写到了 Kafka 的 `alerts`，还没有落库和查询，那需要 core-service（R2 的后半部分，先确定 D1）。
+- **落库与查询（R2 后半部分，2026-10-17）：** core-service 消费 `alerts` 写入 PostgreSQL，再跑一次 `mysql-down`，同样的 5 条告警都能通过 `GET /api/v1/alerts?from=…` 查到。每条带着证据：触发它的日志消息原文、时间和 `trace.id`，可以顺着 trace 去三个服务的日志里看那次请求。
 
 ### 12.5 告警关联
 
@@ -687,7 +687,7 @@ logs/shop/*.log ──log-shipper──HTTP──▶ ingest-service ──▶ lo
 | S5 | 故障注入与恢复机制（对账、待办重试、卡单清理）、场景脚本与标准答案记录 | 每个场景都有测试或端到端演示，故障恢复后核对仍然通过（§10.2 实测） |
 | R0 | 修正与复验，清单见下（已完成） | 每一项都有回归测试；三个服务的正常、重复、超时、补偿路径回归通过 |
 | R1 | 限量抢购基线：单商品模式、逐订单核对、实验数据准备、实验记录补全（§11）（已完成，结果见 §11.6） | 并发竞争和售罄的结果可重复；订单、库存、支付逐单核对通过 |
-| R2 | 第一个 Ops 闭环：靶场 JSON 日志接入；core-service 先做告警模块（落库与查询）；首个场景 `mysql-down` | 故障产生可查询的告警，带来源、时间和事件证据；重复投递不误报。**日志接入和检测已完成**（§12.2、§12.4.1）；告警落库与查询待 D1 确定后开始 |
+| R2 | 第一个 Ops 闭环：靶场 JSON 日志接入；core-service 先做告警模块（落库与查询）；首个场景 `mysql-down` | 故障产生可查询的告警，带来源、时间和事件证据；重复投递不误报。**已完成**（§12.2、§12.4.1；持久层按 D1 用 MyBatis-Plus） |
 | R3 | 指标与关联：Prometheus + Alertmanager 接入（积压指标已在 R1 实现，§8.3）、支付超时和库存热点锁场景、自动关联 | 正常售罄不误报；有触发和恢复记录；关联测试覆盖同时发生的独立故障 |
 | R4 | 按实测瓶颈选择优化（§11.4） | 正确性不倒退；改善由可复现的实验支撑 |
 | R5 | Agent 问答与受控工具排查；少量可疑行为规则 | 回答引用证据，原因不明时转人工；安全规则有正常行为作对照 |
@@ -731,4 +731,9 @@ cd deploy/compose && docker compose up -d kafka redis kafka-init
 ./gradlew :tools:log-shipper:run --args="--dir logs/shop"     # 读位置保存在 logs/shop/.log-shipper-state.json
 ```
 
-告警在 Kafka 的 `alerts` topic 里，可以用 Kafka UI 看（`docker compose --profile tools up -d`，http://localhost:8089）。
+告警在 Kafka 的 `alerts` topic 里，可以用 Kafka UI 看（`docker compose --profile tools up -d`，http://localhost:8089）。启动 core-service（需要 Compose 里的 PostgreSQL）之后，告警落库，可以查询：
+
+```bash
+./gradlew :services:core-service:bootRun
+curl "localhost:8080/api/v1/alerts?service=order-service&limit=20"     # 也可以按 severity、rule_id、from、to 过滤
+```

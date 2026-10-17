@@ -171,7 +171,7 @@ JSON Schema 放在仓库根目录 `contracts/kafka/`，供 Python 侧使用；Ja
 | `identity` | 用户、团队、角色；登录与 JWT 签发；权限校验 | J3 |
 | `catalog` | 服务、服务依赖、依赖组计算、日志源与 API Key；拓扑变更发布到 `topology.changelog` | J3 |
 | `rules` | 规则的增删改查、版本、启停、校验；变更发布到 `rules.changelog` | J3 |
-| `alerting` | 消费 `alerts` 并落库；静默规则；告警查询 | J4 |
+| `alerting` | 消费 `alerts` 并落库；静默规则；告警查询 | 落库与查询已实现（R2，2026-10-17）；静默规则待做 |
 | `incident` | 消费 `incident.candidates`；Incident 生命周期状态机、指派、评论、时间线；领域事件发布到 `incident.events` | J4 |
 | `shared` | 错误处理（ProblemDetail）、分页、审计字段、Outbox 配置 | J3 |
 | `tools`、`agentops`、`knowledge`、`chat`、`scheduling` | 为 Agent 预留，等 Agent 方案确定后设计 | 待定 |
@@ -256,7 +256,7 @@ JSON Schema 放在仓库根目录 `contracts/kafka/`，供 Python 侧使用；Ja
 | | `PATCH /api/v1/rules/{id}` | `{ "enabled": false }` 启停 | 同上 |
 | | `GET /api/v1/rules/{id}/versions` | 版本历史 | 登录用户 |
 | | `POST /api/v1/rules/validate` | 只校验，不保存 | 登录用户 |
-| alerting | `GET /api/v1/alerts`，`GET /api/v1/alerts/{id}` | 过滤：`severity`、`service`、`rule_id`、`from`、`to`、`incident_id` | 团队范围 |
+| alerting | `GET /api/v1/alerts`，`GET /api/v1/alerts/{id}` | 过滤：`severity`、`service`、`rule_id`、`from`、`to`（已实现）、`incident_id`（随 incident 模块） | 团队范围 |
 | | `GET/POST /api/v1/silences`，`DELETE /api/v1/silences/{id}` | 维护期静默 | SRE |
 | incident | `GET /api/v1/incidents`，`GET /api/v1/incidents/{id}` | 过滤：`status`、`severity`、`service`、`from`、`to` | 团队范围 |
 | | `GET /api/v1/incidents/{id}/alerts`，`GET /api/v1/incidents/{id}/timeline` | 关联告警与时间线 | 团队范围 |
@@ -458,14 +458,16 @@ PostgreSQL，schema `core`，Flyway 管理。主键为 UUIDv7（`uuid` 类型）
 | `log_source_keys` | `id`、`source_id`、`key_hash`、`created_at`、`revoked_at` | J3 |
 | `rules` | `id`（rule_id）、`name`、`team_id`、`current_version`、`enabled` | J3 |
 | `rule_versions` | `rule_id`、`version`、`definition`（jsonb）、`created_by`、`created_at` | J3 |
-| `alerts` | `id`、`rule_id`、`rule_version`、`fingerprint`、`severity`、`group_key`、`service`、`host`、`window_start`、`window_end`、`count`、`summary`、`group_values`（jsonb）、`sample_event_ids`（jsonb）、`incident_id`、`created_at` | J4 |
+| `alerts` | `id`、`rule_id`、`rule_version`、`fingerprint`、`severity`、`group_key`、`service`、`host`、`window_start`、`window_end`、`count`、`threshold`、`first_event_at`、`last_event_at`、`summary`、`group_values`（jsonb）、`sample_event_ids`（jsonb）、`samples`（jsonb，证据）、`incident_id`、`created_at`、`stored_at` | 已实现（R2） |
 | `silences` | `id`、`matcher`（jsonb）、`starts_at`、`ends_at`、`reason`、`created_by` | J4 |
 | `incidents` | `id`、`title`、`status`、`severity`、`group_key`、`session_start`、`session_end`、`services`（text[]）、`team_id`、`assignee_id`、`opened_at`、`acknowledged_at`、`resolved_at`、`closed_at`、`version` | J4 |
 | `incident_alerts` | `incident_id`、`alert_id` | J4 |
 | `incident_events` | `id`、`incident_id`、`type`、`actor_type`、`actor_id`、`from_status`、`to_status`、`payload`（jsonb）、`created_at` | J4 |
 | `event_publication` | Spring Modulith 管理 | J3 |
 
-- 幂等：`alerts.id` 为消息中的 `alert_id`；`incidents` 在 `(group_key, session_start)` 上有唯一约束。
+- 幂等：`alerts.id` 为消息中的 `alert_id`，写入用 `ON CONFLICT (id) DO NOTHING`；`incidents` 在 `(group_key, session_start)` 上有唯一约束。
+- **告警模块的实现（R2）：** 消费 `alerts` 时用 `read_committed`（stream-processor 以 exactly-once 事务写入）。读不懂的消息立即转入 `alerts.dlt`；其他失败（典型的是数据库不可用）按 1 s 起、翻倍到 30 s 的退避一直重试，期间这个分区暂停，告警不会因为停库而丢失。查询用 MyBatis-Plus 的 Lambda 条件构造器；分页按 `(created_at, id)` 做键集分页，因为告警 id 由内容推导（UUIDv5），不是按时间递增的 UUIDv7，游标里同时带上最后一条的创建时间和 id。
+- **暂时的访问边界：** identity 模块（JWT）完成之前，core-service 只监听 127.0.0.1，接口不做认证。
 - 后续（Agent 相关）的表在 Agent 方案确定后补充。
 
 ---
