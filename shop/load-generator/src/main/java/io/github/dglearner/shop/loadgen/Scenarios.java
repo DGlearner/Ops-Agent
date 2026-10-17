@@ -9,10 +9,10 @@ import java.util.Map;
  * Fault scenarios (docs/shop-design.md §10). Each injects one fault into one service for the fault phase of a run and
  * clears it afterwards. {@code expected} says what the shop should do; it is the ground truth written to the report.
  */
-final class Scenarios {
+public final class Scenarios {
 
     /** One step: an HTTP call to a service's management port, or a docker command. */
-    sealed interface Action {
+    public sealed interface Action {
         record Http(String service, String method, String path, String body) implements Action {
         }
 
@@ -20,7 +20,7 @@ final class Scenarios {
         }
     }
 
-    record Scenario(String name, String targetService, String fault, String expected, List<Action> inject,
+    public record Scenario(String name, String targetService, String fault, String expected, List<Action> inject,
             List<Action> clear) {
     }
 
@@ -86,7 +86,7 @@ final class Scenarios {
                 List.of(new Action.Docker("start", "%MYSQL%"))));
     }
 
-    static Scenario get(String name) {
+    public static Scenario get(String name) {
         Scenario scenario = ALL.get(name);
         if (scenario == null) {
             throw new IllegalArgumentException("Unknown scenario " + name + "; one of " + String.join(", ", ALL.keySet()));
@@ -94,7 +94,7 @@ final class Scenarios {
         return scenario;
     }
 
-    static List<String> names() {
+    public static List<String> names() {
         return List.copyOf(ALL.keySet());
     }
 

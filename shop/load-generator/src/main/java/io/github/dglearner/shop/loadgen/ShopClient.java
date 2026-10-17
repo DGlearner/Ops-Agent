@@ -16,16 +16,16 @@ import tools.jackson.databind.node.MissingNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /** The few shop endpoints the generator needs. Network errors come back as status 0, never as exceptions. */
-final class ShopClient {
+public final class ShopClient {
 
-    record Response(int status, JsonNode body, String traceId, long latencyMillis, String error) {
+    public record Response(int status, JsonNode body, String traceId, long latencyMillis, String error) {
 
-        String orderId() {
+        public String orderId() {
             return body.path("order_id").asString();
         }
     }
 
-    record StockRow(String sku, int total, int available, int reserved, int sold) {
+    public record StockRow(String sku, int total, int available, int reserved, int sold) {
     }
 
     private final HttpClient http = HttpClient.newBuilder()
@@ -35,12 +35,12 @@ final class ShopClient {
     private final JsonMapper json;
     private final Options options;
 
-    ShopClient(Options options, JsonMapper json) {
+    public ShopClient(Options options, JsonMapper json) {
         this.options = options;
         this.json = json;
     }
 
-    List<String> productSkus() {
+    public List<String> productSkus() {
         Response response = send(get(options.orderUrl() + "/api/v1/products"));
         require(response, "list products");
         List<String> skus = new ArrayList<>();
@@ -48,7 +48,7 @@ final class ShopClient {
         return skus;
     }
 
-    Map<String, StockRow> stock() {
+    public Map<String, StockRow> stock() {
         Response response = send(get(options.inventoryUrl() + "/api/v1/stock"));
         require(response, "read stock");
         Map<String, StockRow> stock = new LinkedHashMap<>();
@@ -58,7 +58,7 @@ final class ShopClient {
         return stock;
     }
 
-    Response placeOrder(String idempotencyKey, OrderMix.OrderRequest order) {
+    public Response placeOrder(String idempotencyKey, OrderMix.OrderRequest order) {
         ObjectNode body = json.createObjectNode();
         body.put("user_id", order.userId());
         body.put("payment_token", order.paymentToken());
@@ -72,20 +72,20 @@ final class ShopClient {
                 .build());
     }
 
-    Response order(String orderId) {
+    public Response order(String orderId) {
         return send(get(options.orderUrl() + "/api/v1/orders/" + orderId));
     }
 
-    Response payment(String orderId) {
+    public Response payment(String orderId) {
         return send(get(options.paymentUrl() + "/api/v1/payments/" + orderId));
     }
 
-    Response reservation(String orderId) {
+    public Response reservation(String orderId) {
         return send(get(options.inventoryUrl() + "/api/v1/reservations/" + orderId));
     }
 
     /** A call to a service's management port, e.g. to inject or clear a fault. */
-    Response admin(String service, String method, String path, String jsonBody) {
+    public Response admin(String service, String method, String path, String jsonBody) {
         HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(options.adminUrls().get(service) + path))
                 .timeout(Duration.ofSeconds(15));
         if (jsonBody != null) {

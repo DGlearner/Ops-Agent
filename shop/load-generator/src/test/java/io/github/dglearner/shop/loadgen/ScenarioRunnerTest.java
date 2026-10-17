@@ -106,7 +106,7 @@ class ScenarioRunnerTest {
     void commandStillRunningAtTheTimeoutIsKilledAndFails() {
         long start = System.nanoTime();
 
-        boolean ok = ScenarioRunner.runCommand(sleeper(120, 0), Duration.ofSeconds(2));
+        boolean ok = FaultActions.runCommand(sleeper(120, 0), Duration.ofSeconds(2));
 
         assertThat(ok).isFalse();
         assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(15));
@@ -116,9 +116,9 @@ class ScenarioRunnerTest {
 
     @Test
     void commandResultFollowsItsExitCode() {
-        assertThat(ScenarioRunner.runCommand(sleeper(0, 0), Duration.ofSeconds(30))).isTrue();
-        assertThat(ScenarioRunner.runCommand(sleeper(0, 3), Duration.ofSeconds(30))).isFalse();
-        assertThat(ScenarioRunner.runCommand(List.of("no-such-command-for-the-shop"), Duration.ofSeconds(5))).isFalse();
+        assertThat(FaultActions.runCommand(sleeper(0, 0), Duration.ofSeconds(30))).isTrue();
+        assertThat(FaultActions.runCommand(sleeper(0, 3), Duration.ofSeconds(30))).isFalse();
+        assertThat(FaultActions.runCommand(List.of("no-such-command-for-the-shop"), Duration.ofSeconds(5))).isFalse();
     }
 
     /** {@link Sleeper} in a child JVM; only the test classes are needed on its class path. */

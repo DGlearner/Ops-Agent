@@ -9,14 +9,14 @@ import java.util.Random;
  * Generates order requests: random users, one to three distinct SKUs, some declined cards, some limited items; or,
  * in a flash sale, one unit of the SKU on sale.
  */
-final class OrderMix {
+public final class OrderMix {
 
-    static final String HOT_SKU = "SKU-2001";
+    public static final String HOT_SKU = "SKU-2001";
 
-    record Line(String sku, int quantity) {
+    public record Line(String sku, int quantity) {
     }
 
-    record OrderRequest(String userId, List<Line> lines, String paymentToken) {
+    public record OrderRequest(String userId, List<Line> lines, String paymentToken) {
     }
 
     private final Random random;
@@ -24,7 +24,7 @@ final class OrderMix {
     private final boolean hotAvailable;
     private final Options options;
 
-    OrderMix(List<String> catalogueSkus, Options options, Random random) {
+    public OrderMix(List<String> catalogueSkus, Options options, Random random) {
         this.random = random;
         this.options = options;
         this.regularSkus = catalogueSkus.stream().filter(s -> !s.equals(HOT_SKU)).toList();
@@ -37,7 +37,7 @@ final class OrderMix {
         }
     }
 
-    synchronized OrderRequest next() {
+    public synchronized OrderRequest next() {
         String user = "u-" + (1000 + random.nextInt(options.users()));
         if (options.isFlashSale()) {
             return new OrderRequest(user, List.of(new Line(options.flashSale(), 1)), token());
@@ -59,12 +59,12 @@ final class OrderMix {
         return random.nextDouble() < options.declineRate() ? "tok_declined" : "tok_ok";
     }
 
-    synchronized boolean duplicate() {
+    public synchronized boolean duplicate() {
         return random.nextDouble() < options.duplicateRate();
     }
 
     /** Whether a duplicate goes out alongside the original (true) or after it completed (false). */
-    synchronized boolean concurrentDuplicate() {
+    public synchronized boolean concurrentDuplicate() {
         return random.nextBoolean();
     }
 }

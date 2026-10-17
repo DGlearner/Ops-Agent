@@ -10,7 +10,7 @@ import java.util.OptionalLong;
 import java.util.Set;
 
 /** Command-line options; {@link #USAGE} lists them. */
-record Options(String orderUrl, String inventoryUrl, String paymentUrl, double rate, Duration duration,
+public record Options(String orderUrl, String inventoryUrl, String paymentUrl, double rate, Duration duration,
         int concurrency, int users, double duplicateRate, double declineRate, double hotRate, OptionalLong seed,
         Duration settleTimeout, boolean verify, Path report, String scenario, Duration baseline, Duration fault,
         Duration recovery, Map<String, String> adminUrls, String mysqlContainer, String flashSale, OptionalInt stock) {
@@ -54,12 +54,12 @@ record Options(String orderUrl, String inventoryUrl, String paymentUrl, double r
             "--order-admin", "--inventory-admin", "--payment-admin", "--mysql-container", "--flash-sale", "--stock");
 
     /** Whether this run injects a fault. */
-    boolean hasScenario() {
+    public boolean hasScenario() {
         return scenario != null;
     }
 
     /** The settings that shape the load, for the run report. */
-    Map<String, Object> describe() {
+    public Map<String, Object> describe() {
         Map<String, Object> config = new LinkedHashMap<>();
         config.put("rate", rate);
         config.put("duration_s", duration.toMillis() / 1000.0);
@@ -76,11 +76,11 @@ record Options(String orderUrl, String inventoryUrl, String paymentUrl, double r
     }
 
     /** Whether every order buys one unit of {@link #flashSale()}. */
-    boolean isFlashSale() {
+    public boolean isFlashSale() {
         return flashSale != null;
     }
 
-    static Options parse(String... args) {
+    public static Options parse(String... args) {
         String orderUrl = "http://localhost:8091";
         String inventoryUrl = "http://localhost:8092";
         String paymentUrl = "http://localhost:8093";
@@ -163,7 +163,7 @@ record Options(String orderUrl, String inventoryUrl, String paymentUrl, double r
     }
 
     /** {@code 500ms}, {@code 30s}, {@code 5m} or {@code 1h}. */
-    static Duration duration(String text) {
+    public static Duration duration(String text) {
         String value = text.trim().toLowerCase(Locale.ROOT);
         try {
             if (value.endsWith("ms")) {
