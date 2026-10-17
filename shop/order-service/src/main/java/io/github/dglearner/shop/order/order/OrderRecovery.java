@@ -105,7 +105,7 @@ public class OrderRecovery {
                     orders.touch(orderId, PAYMENT_UNKNOWN);
                     count("reconcile", "payment_unreachable");
                     log.atWarn().addKeyValue(LogEvents.ACTION, "dependency_call_failed")
-                            .addKeyValue("dependency", "payment")
+                            .addKeyValue("dependency", "payment-service")
                             .addKeyValue("operation", "void").addKeyValue("order_id", orderId)
                             .addKeyValue("failure", failed.failure().kind())
                             .log("Payment reconciliation failed, will retry: {}", failed.failure().detail());

@@ -331,7 +331,7 @@ payment (payment_id PK, order_id UNIQUE, user_id, amount_cents, currency,
 | `event.action` | 服务 | 主要字段 |
 |---|---|---|
 | `order_created`、`order_paid`、`order_cancelled`、`order_payment_unknown`、`order_replayed` | order | `order_id`、`status`、`failure_reason` |
-| `dependency_call_failed` | order | `dependency`（inventory / payment）、`operation`（reserve / charge / void / confirm / release）、`failure`（NOT_SENT / TIMEOUT / ERROR）、`order_id` |
+| `dependency_call_failed` | order | `dependency`（被调用的服务：inventory-service / payment-service，与服务目录里的名字一致）、`operation`（reserve / charge / void / confirm / release）、`failure`（NOT_SENT / TIMEOUT / ERROR）、`order_id` |
 | `payment_reconciled`、`order_abandoned` | order | `order_id`、`status` |
 | `inventory_task_failed`（ERROR，需要人工处理） | order | `order_id`、`action`、`code` |
 | `stock_reserved`、`reservation_rejected`、`late_reservation_rejected`、`reservation_confirmed`、`reservation_released`、`reservation_tombstone`、`reservation_replayed` | inventory | `order_id`、`code`、`sku` |

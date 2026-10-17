@@ -111,7 +111,7 @@ public class OrderService {
             }
             case ReserveResult.Failed failed -> {
                 log.atWarn().addKeyValue(LogEvents.ACTION, "dependency_call_failed")
-                        .addKeyValue("dependency", "inventory")
+                        .addKeyValue("dependency", "inventory-service")
                         .addKeyValue("operation", "reserve").addKeyValue("order_id", orderId)
                         .addKeyValue("failure", failed.failure().kind())
                         .log("Inventory reservation failed: {}", failed.failure().detail());
@@ -130,7 +130,7 @@ public class OrderService {
                     settle(orderId, STOCK_RESERVED, CANCELLED, FailureReason.PAYMENT_DECLINED, InventoryAction.RELEASE);
             case ChargeResult.NotCharged notCharged -> {
                 log.atWarn().addKeyValue(LogEvents.ACTION, "dependency_call_failed")
-                        .addKeyValue("dependency", "payment")
+                        .addKeyValue("dependency", "payment-service")
                         .addKeyValue("operation", "charge").addKeyValue("order_id", orderId)
                         .addKeyValue("failure", notCharged.failure().kind())
                         .log("Charge request did not reach payment: {}", notCharged.failure().detail());
@@ -140,7 +140,7 @@ public class OrderService {
             case ChargeResult.Unknown unknown -> {
                 // A timeout is not a failure: the charge may have gone through. Keep the stock and reconcile.
                 log.atWarn().addKeyValue(LogEvents.ACTION, "dependency_call_failed")
-                        .addKeyValue("dependency", "payment")
+                        .addKeyValue("dependency", "payment-service")
                         .addKeyValue("operation", "charge").addKeyValue("order_id", orderId)
                         .addKeyValue("failure", unknown.failure().kind())
                         .log("Charge outcome unknown: {}", unknown.failure().detail());

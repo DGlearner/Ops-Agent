@@ -46,7 +46,7 @@ public class InventoryTasks {
             case SettleResult.Failed failed -> {
                 tasks.scheduleRetry(orderId, failed.failure().describe());
                 log.atWarn().addKeyValue(LogEvents.ACTION, "dependency_call_failed")
-                        .addKeyValue("dependency", "inventory")
+                        .addKeyValue("dependency", "inventory-service")
                         .addKeyValue("operation", action.name().toLowerCase(Locale.ROOT))
                         .addKeyValue("order_id", orderId).addKeyValue("action", action)
                         .addKeyValue("failure", failed.failure().kind())
