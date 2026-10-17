@@ -73,6 +73,14 @@ ops:
     # An alert joins an incident only if the incident had an alert within this time of it (docs/project-design.md §8.4).
     # Longer than the rules' usual suppression (10 min), so a fault that persists and alerts again stays one incident.
     correlation-gap: 15m
+  agent:
+    # Ask the agent about every incident that had no new alert for settle-after (docs/project-design.md §7.6).
+    auto-analyze: true
+    settle-after: 60s
+    # How often to look for such incidents, and for analyses the agent did not answer within timeout.
+    scan-interval: 15s
+    timeout: 3m
+    language: zh
 
 ---
 spring:

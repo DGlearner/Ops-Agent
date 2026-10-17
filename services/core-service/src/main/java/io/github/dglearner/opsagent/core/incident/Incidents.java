@@ -33,6 +33,10 @@ public class Incidents {
     public record Filter(IncidentStatus status, Severity severity, String service, Instant from, Instant to) {
     }
 
+    /** An active incident and when its latest alert arrived here (not the alert's own time). */
+    public record Settled(UUID incidentId, Instant lastAlertArrivedAt) {
+    }
+
     private static final TypeReference<Map<String, Object>> PAYLOAD = new TypeReference<>() {
     };
 
@@ -78,6 +82,16 @@ public class Incidents {
         List<IncidentRecord> page = more ? rows.subList(0, limit) : rows;
         return new IncidentPage(page.stream().map(this::view).toList(),
                 more ? page.getLast().getId().toString() : null);
+    }
+
+    /**
+     * Active incidents whose latest alert arrived between {@code from} and {@code to}: those that stopped growing and
+     * can be looked at as a whole.
+     */
+    public List<Settled> settled(Instant from, Instant to) {
+        return mapper.settled(utc(from), utc(to)).stream()
+                .map(row -> new Settled((UUID) row.get("incident_id"), instant(row.get("last_attached_at"))))
+                .toList();
     }
 
     public List<AlertView> alerts(UUID incidentId) {

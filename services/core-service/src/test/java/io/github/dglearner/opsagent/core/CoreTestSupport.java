@@ -3,13 +3,18 @@ package io.github.dglearner.opsagent.core;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.dglearner.opsagent.contracts.Alert;
+import io.github.dglearner.opsagent.contracts.Ids;
 import io.github.dglearner.opsagent.contracts.OpsJson;
+import io.github.dglearner.opsagent.contracts.Severity;
 import io.github.dglearner.opsagent.contracts.Topics;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -35,7 +40,9 @@ import tools.jackson.databind.JsonNode;
  * Shared by core-service's integration tests: one Kafka and one PostgreSQL for the whole test run (and so one Spring
  * context), and helpers to publish alerts and call the API. Tests share the database, so each uses its own names.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
+    // Incidents are analysed soon after their last alert, and the agent (absent here) is not waited for long.
+    "ops.agent.settle-after=2s", "ops.agent.scan-interval=1s", "ops.agent.timeout=5s"})
 abstract class CoreTestSupport {
 
     @ServiceConnection
@@ -55,7 +62,10 @@ abstract class CoreTestSupport {
         POSTGRES.start();
         try (Admin admin = Admin.create(Map.of("bootstrap.servers", KAFKA.getBootstrapServers()))) {
             admin.createTopics(List.of(new NewTopic(Topics.ALERTS, 3, (short) 1),
-                    new NewTopic(Topics.ALERTS + ".dlt", 1, (short) 1))).all().get();
+                    new NewTopic(Topics.ALERTS + ".dlt", 1, (short) 1),
+                    new NewTopic(Topics.AGENT_TASKS_HIGH, 3, (short) 1),
+                    new NewTopic(Topics.AGENT_RESULTS, 3, (short) 1),
+                    new NewTopic(Topics.AGENT_RESULTS + ".dlt", 1, (short) 1))).all().get();
         } catch (Exception e) {
             throw new IllegalStateException("Cannot create the test topics", e);
         }
@@ -105,5 +115,42 @@ abstract class CoreTestSupport {
 
     private URI uri(String path) {
         return URI.create("http://localhost:" + port + path);
+    }
+
+    /** Incidents opened within a day of {@code day}, once there are {@code count} with {@code alerts} in all. */
+    List<JsonNode> awaitIncidents(Instant day, int count, int alerts) throws Exception {
+        String query = "/api/v1/incidents?from=" + day.minusSeconds(3600) + "&to=" + day.plus(Duration.ofDays(1));
+        Awaitility.await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+            JsonNode page = getJson(query);
+            assertThat(page.path("items")).hasSize(count);
+            int total = 0;
+            for (JsonNode i : page.path("items")) {
+                total += i.path("alert_count").asInt();
+            }
+            assertThat(total).isEqualTo(alerts);
+        });
+        Thread.sleep(500);
+        List<JsonNode> items = new ArrayList<>();
+        getJson(query).path("items").forEach(items::add);
+        return items;
+    }
+
+    static List<String> strings(JsonNode array) {
+        List<String> values = new ArrayList<>();
+        array.forEach(v -> values.add(v.asString()));
+        return values;
+    }
+
+    static Alert alert(String ruleId, String service, String dependency, Severity severity, Instant at) {
+        Map<String, String> groupValues = new LinkedHashMap<>();
+        groupValues.put("service", service);
+        if (dependency != null) {
+            groupValues.put("fields.dependency", dependency);
+        }
+        String fingerprint = ruleId + "|" + groupValues + "|" + UUID.randomUUID();
+        UUID eventId = Ids.newId();
+        return new Alert(Ids.nameBased(fingerprint), ruleId, 1, fingerprint, severity, service, service, "kozy",
+                groupValues, at.minusSeconds(60), at, 3, 3, at.minusSeconds(1), at, List.of(eventId),
+                ruleId + " on " + service, at, List.of(new Alert.Sample(eventId, at, "m", null)));
     }
 }

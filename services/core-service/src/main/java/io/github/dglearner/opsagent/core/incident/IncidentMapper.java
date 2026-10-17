@@ -69,4 +69,14 @@ interface IncidentMapper extends BaseMapper<IncidentRecord> {
             SELECT id, type, actor_type, from_status, to_status, payload::text AS payload, created_at
             FROM incident_events WHERE incident_id = #{incidentId} ORDER BY created_at, id""")
     List<Map<String, Object>> events(@Param("incidentId") UUID incidentId);
+
+    /** Active incidents whose latest alert was attached between {@code from} and {@code to}, by arrival here. */
+    @Select("""
+            SELECT e.incident_id, max(e.created_at) AS last_attached_at
+            FROM incident_events e JOIN incidents i ON i.id = e.incident_id
+            WHERE i.status IN ('open', 'acknowledged', 'investigating', 'mitigated') AND i.updated_at >= #{from}
+              AND e.type IN ('OPENED', 'ALERT_ATTACHED')
+            GROUP BY e.incident_id
+            HAVING max(e.created_at) BETWEEN #{from} AND #{to}""")
+    List<Map<String, Object>> settled(@Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to);
 }

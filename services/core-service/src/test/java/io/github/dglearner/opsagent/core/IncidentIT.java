@@ -3,16 +3,10 @@ package io.github.dglearner.opsagent.core;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.dglearner.opsagent.contracts.Alert;
-import io.github.dglearner.opsagent.contracts.Ids;
 import io.github.dglearner.opsagent.contracts.Severity;
-import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
 
@@ -85,42 +79,5 @@ class IncidentIT extends CoreTestSupport {
         assertThat(getJson("/api/v1/incidents/" + id + "/timeline").findValuesAsString("to_status"))
                 .containsExactly("acknowledged", "resolved", "closed");
         assertThat(get("/api/v1/incidents/" + UUID.randomUUID()).statusCode()).isEqualTo(404);
-    }
-
-    /** Incidents opened within a day of {@code day}, once there are {@code count} with {@code alerts} in all. */
-    private List<JsonNode> awaitIncidents(Instant day, int count, int alerts) throws Exception {
-        String query = "/api/v1/incidents?from=" + day.minusSeconds(3600) + "&to=" + day.plus(Duration.ofDays(1));
-        Awaitility.await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
-            JsonNode page = getJson(query);
-            assertThat(page.path("items")).hasSize(count);
-            int total = 0;
-            for (JsonNode i : page.path("items")) {
-                total += i.path("alert_count").asInt();
-            }
-            assertThat(total).isEqualTo(alerts);
-        });
-        Thread.sleep(500);
-        List<JsonNode> items = new ArrayList<>();
-        getJson(query).path("items").forEach(items::add);
-        return items;
-    }
-
-    private static List<String> strings(JsonNode array) {
-        List<String> values = new ArrayList<>();
-        array.forEach(v -> values.add(v.asString()));
-        return values;
-    }
-
-    private static Alert alert(String ruleId, String service, String dependency, Severity severity, Instant at) {
-        Map<String, String> groupValues = new LinkedHashMap<>();
-        groupValues.put("service", service);
-        if (dependency != null) {
-            groupValues.put("fields.dependency", dependency);
-        }
-        String fingerprint = ruleId + "|" + groupValues + "|" + UUID.randomUUID();
-        UUID eventId = Ids.newId();
-        return new Alert(Ids.nameBased(fingerprint), ruleId, 1, fingerprint, severity, service, service, "kozy",
-                groupValues, at.minusSeconds(60), at, 3, 3, at.minusSeconds(1), at, List.of(eventId),
-                ruleId + " on " + service, at, List.of(new Alert.Sample(eventId, at, "m", null)));
     }
 }
