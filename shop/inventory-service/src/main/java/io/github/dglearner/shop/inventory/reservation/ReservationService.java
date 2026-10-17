@@ -6,6 +6,7 @@ import static io.github.dglearner.shop.inventory.reservation.ReservationStatus.R
 
 import io.github.dglearner.shop.common.ApiException;
 import io.github.dglearner.shop.common.DeadlockRetry;
+import io.github.dglearner.shop.common.LogEvents;
 import io.github.dglearner.shop.inventory.InventoryMetrics;
 import io.github.dglearner.shop.inventory.stock.StockRepository;
 import java.util.Comparator;
@@ -73,14 +74,15 @@ public class ReservationService {
                 return reservations.find(orderId).orElseThrow();
             }));
             metrics.operation("reserve", "reserved");
-            log.atInfo().addKeyValue("order_id", orderId).addKeyValue("items", describe(items))
-                    .log("Stock reserved");
+            log.atInfo().addKeyValue(LogEvents.ACTION, "stock_reserved").addKeyValue("order_id", orderId)
+                    .addKeyValue("items", describe(items)).log("Stock reserved");
             return new Outcome(reservation, true);
         } catch (DuplicateKeyException e) {
             return replayReserve(orderId, items);
         } catch (ApiException e) {
             metrics.operation("reserve", e.code().toLowerCase(Locale.ROOT));
-            log.atInfo().addKeyValue("order_id", orderId).addKeyValue("code", e.code())
+            log.atInfo().addKeyValue(LogEvents.ACTION, "reservation_rejected").addKeyValue("order_id", orderId)
+                    .addKeyValue("code", e.code())
                     .addKeyValue("sku", e.properties().get("sku")).log("Reservation rejected: {}", e.getMessage());
             throw e;
         }
@@ -92,7 +94,8 @@ public class ReservationService {
         if (existing.status() == RELEASED) {
             // The order was cancelled before this request arrived: reserving now would hold stock forever.
             metrics.operation("reserve", "late_after_release");
-            log.atWarn().addKeyValue("order_id", orderId).log("Late reservation rejected: order already released");
+            log.atWarn().addKeyValue(LogEvents.ACTION, "late_reservation_rejected").addKeyValue("order_id", orderId)
+                    .log("Late reservation rejected: order already released");
             throw new ApiException(HttpStatus.CONFLICT, "RESERVATION_RELEASED",
                     "Reservation for order " + orderId + " was already released").with("order_id", orderId);
         }
@@ -102,7 +105,8 @@ public class ReservationService {
                     "Order " + orderId + " is already reserved with different items").with("order_id", orderId);
         }
         metrics.replay("reserve");
-        log.atInfo().addKeyValue("order_id", orderId).log("Reservation request replayed");
+        log.atInfo().addKeyValue(LogEvents.ACTION, "reservation_replayed").addKeyValue("order_id", orderId)
+                .log("Reservation request replayed");
         return new Outcome(existing, false);
     }
 
@@ -156,12 +160,13 @@ public class ReservationService {
         String orderId = result.reservation().orderId();
         if (result.result().equals(REPLAYED)) {
             metrics.replay(operation);
-            log.atInfo().addKeyValue("order_id", orderId).addKeyValue("operation", operation)
-                    .log("Reservation request replayed");
+            log.atInfo().addKeyValue(LogEvents.ACTION, "reservation_replayed").addKeyValue("order_id", orderId)
+                    .addKeyValue("operation", operation).log("Reservation request replayed");
         } else {
             metrics.operation(operation, result.result());
-            log.atInfo().addKeyValue("order_id", orderId).addKeyValue("operation", operation)
-                    .addKeyValue("result", result.result())
+            log.atInfo().addKeyValue(LogEvents.ACTION, "reservation_" + result.result())
+                    .addKeyValue("order_id", orderId)
+                    .addKeyValue("operation", operation).addKeyValue("result", result.result())
                     .addKeyValue("items", describe(result.reservation().items()))
                     .log("Reservation {}", result.result().equals("tombstone")
                             ? "released before it was made (tombstone)" : result.result());

@@ -8,6 +8,7 @@ import static io.github.dglearner.shop.order.order.OrderStatus.STOCK_RESERVED;
 
 import io.github.dglearner.shop.common.ApiException;
 import io.github.dglearner.shop.common.Ids;
+import io.github.dglearner.shop.common.LogEvents;
 import io.github.dglearner.shop.order.OrderProperties;
 import io.github.dglearner.shop.order.catalog.Product;
 import io.github.dglearner.shop.order.catalog.ProductRepository;
@@ -19,6 +20,7 @@ import io.github.dglearner.shop.order.task.InventoryAction;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -84,7 +86,8 @@ public class OrderService {
             return replay(request.userId(), idempotencyKey, hash)
                     .orElseThrow(() -> new IllegalStateException("Duplicate key without an order", e));
         }
-        log.atInfo().addKeyValue("order_id", orderId).addKeyValue("user_id", request.userId())
+        log.atInfo().addKeyValue(LogEvents.ACTION, "order_created")
+                .addKeyValue("order_id", orderId).addKeyValue("user_id", request.userId())
                 .addKeyValue("amount_cents", amount).addKeyValue("items", describe(lines)).log("Order created");
 
         Order order = place(orderId, request.userId(), lines, amount, token);
@@ -107,7 +110,10 @@ public class OrderService {
                 return current(orderId);
             }
             case ReserveResult.Failed failed -> {
-                log.atWarn().addKeyValue("order_id", orderId).addKeyValue("failure", failed.failure().kind())
+                log.atWarn().addKeyValue(LogEvents.ACTION, "dependency_call_failed")
+                        .addKeyValue("dependency", "inventory")
+                        .addKeyValue("operation", "reserve").addKeyValue("order_id", orderId)
+                        .addKeyValue("failure", failed.failure().kind())
                         .log("Inventory reservation failed: {}", failed.failure().detail());
                 // Even after a timeout the reservation may exist, or still arrive: release it (§7.3).
                 return settle(orderId, CREATED, CANCELLED, FailureReason.INVENTORY_UNAVAILABLE, InventoryAction.RELEASE);
@@ -123,14 +129,20 @@ public class OrderService {
             case ChargeResult.Declined declined ->
                     settle(orderId, STOCK_RESERVED, CANCELLED, FailureReason.PAYMENT_DECLINED, InventoryAction.RELEASE);
             case ChargeResult.NotCharged notCharged -> {
-                log.atWarn().addKeyValue("order_id", orderId).addKeyValue("failure", notCharged.failure().kind())
+                log.atWarn().addKeyValue(LogEvents.ACTION, "dependency_call_failed")
+                        .addKeyValue("dependency", "payment")
+                        .addKeyValue("operation", "charge").addKeyValue("order_id", orderId)
+                        .addKeyValue("failure", notCharged.failure().kind())
                         .log("Charge request did not reach payment: {}", notCharged.failure().detail());
                 yield settle(orderId, STOCK_RESERVED, CANCELLED, FailureReason.PAYMENT_UNAVAILABLE,
                         InventoryAction.RELEASE);
             }
             case ChargeResult.Unknown unknown -> {
                 // A timeout is not a failure: the charge may have gone through. Keep the stock and reconcile.
-                log.atWarn().addKeyValue("order_id", orderId).addKeyValue("failure", unknown.failure().kind())
+                log.atWarn().addKeyValue(LogEvents.ACTION, "dependency_call_failed")
+                        .addKeyValue("dependency", "payment")
+                        .addKeyValue("operation", "charge").addKeyValue("order_id", orderId)
+                        .addKeyValue("failure", unknown.failure().kind())
                         .log("Charge outcome unknown: {}", unknown.failure().detail());
                 orders.transition(orderId, STOCK_RESERVED, PAYMENT_UNKNOWN, null);
                 yield current(orderId);
@@ -157,7 +169,8 @@ public class OrderService {
                         .with("order_id", order.orderId()).with("status", order.status());
             }
             metrics.replayed();
-            log.atInfo().addKeyValue("order_id", order.orderId()).log("Order request replayed");
+            log.atInfo().addKeyValue(LogEvents.ACTION, "order_replayed").addKeyValue("order_id", order.orderId())
+                    .log("Order request replayed");
             return new Result(order, true);
         });
     }
@@ -183,7 +196,13 @@ public class OrderService {
     private static void logOutcome(Order order) {
         var event = order.status() == CANCELLED && order.failureReason().dependencyFailure()
                 ? log.atWarn() : log.atInfo();
-        event = event.addKeyValue("order_id", order.orderId()).addKeyValue("status", order.status())
+        event = event.addKeyValue(LogEvents.ACTION, switch (order.status()) {
+                    case PAID -> "order_paid";
+                    case CANCELLED -> "order_cancelled";
+                    case PAYMENT_UNKNOWN -> "order_payment_unknown";
+                    default -> "order_" + order.status().name().toLowerCase(Locale.ROOT);
+                })
+                .addKeyValue("order_id", order.orderId()).addKeyValue("status", order.status())
                 .addKeyValue("amount_cents", order.amountCents());
         if (order.failureReason() != null) {
             event = event.addKeyValue("failure_reason", order.failureReason());

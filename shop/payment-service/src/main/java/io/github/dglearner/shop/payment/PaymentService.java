@@ -2,6 +2,7 @@ package io.github.dglearner.shop.payment;
 
 import io.github.dglearner.shop.common.ApiException;
 import io.github.dglearner.shop.common.Ids;
+import io.github.dglearner.shop.common.LogEvents;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Locale;
 import java.util.Objects;
@@ -47,10 +48,12 @@ public class PaymentService {
         String reason = decision.declineReason() == null ? "none" : decision.declineReason().toLowerCase(Locale.ROOT);
         registry.counter("shop.payments", "status", payment.status().name().toLowerCase(Locale.ROOT), "reason", reason)
                 .increment();
-        log.atInfo().addKeyValue("order_id", payment.orderId()).addKeyValue("payment_id", payment.paymentId())
+        boolean succeeded = payment.status() == PaymentStatus.SUCCEEDED;
+        log.atInfo().addKeyValue(LogEvents.ACTION, succeeded ? "payment_succeeded" : "payment_declined")
+                .addKeyValue("order_id", payment.orderId()).addKeyValue("payment_id", payment.paymentId())
                 .addKeyValue("amount_cents", payment.amountCents()).addKeyValue("status", payment.status())
                 .addKeyValue("decline_reason", payment.declineReason())
-                .log(payment.status() == PaymentStatus.SUCCEEDED ? "Payment succeeded" : "Payment declined");
+                .log(succeeded ? "Payment succeeded" : "Payment declined");
         return new Outcome(payment, true);
     }
 
@@ -71,7 +74,8 @@ public class PaymentService {
         }
         Payment voided = payments.find(orderId).orElseThrow().payment();
         registry.counter("shop.payments", "status", "voided", "reason", "none").increment();
-        log.atInfo().addKeyValue("order_id", orderId).addKeyValue("payment_id", voided.paymentId())
+        log.atInfo().addKeyValue(LogEvents.ACTION, "payment_voided").addKeyValue("order_id", orderId)
+                .addKeyValue("payment_id", voided.paymentId())
                 .log("Payment voided before any charge arrived");
         return new Outcome(voided, true);
     }
@@ -84,8 +88,9 @@ public class PaymentService {
             registry.counter("shop.payments", "status", decision.status().name().toLowerCase(Locale.ROOT),
                     "reason", decision.declineReason() == null ? "none"
                             : decision.declineReason().toLowerCase(Locale.ROOT)).increment();
-            log.atWarn().addKeyValue("order_id", payment.orderId()).addKeyValue("payment_id", payment.paymentId())
-                    .addKeyValue("status", decision.status())
+            log.atWarn().addKeyValue(LogEvents.ACTION, "interrupted_charge_resolved")
+                    .addKeyValue("order_id", payment.orderId())
+                    .addKeyValue("payment_id", payment.paymentId()).addKeyValue("status", decision.status())
                     .log("Interrupted charge resolved from the provider's record");
         }
     }
@@ -97,7 +102,8 @@ public class PaymentService {
         if (existing.status() == PaymentStatus.VOIDED) {
             // Reconciliation gave up on this charge and cancelled the order: it must not go through now.
             registry.counter("shop.payments", "status", "refused_after_void", "reason", "none").increment();
-            log.atWarn().addKeyValue("order_id", request.orderId()).log("Late charge refused: payment was voided");
+            log.atWarn().addKeyValue(LogEvents.ACTION, "late_charge_refused").addKeyValue("order_id", request.orderId())
+                    .log("Late charge refused: payment was voided");
             throw new ApiException(HttpStatus.CONFLICT, "PAYMENT_VOIDED",
                     "The payment for order " + request.orderId() + " was voided").with("order_id", request.orderId());
         }
@@ -106,7 +112,7 @@ public class PaymentService {
                 && existing.currency().equals(request.currency())
                 && Objects.equals(stored.paymentToken(), request.paymentToken());
         if (!same) {
-            log.atWarn().addKeyValue("order_id", request.orderId())
+            log.atWarn().addKeyValue(LogEvents.ACTION, "charge_mismatch").addKeyValue("order_id", request.orderId())
                     .log("Charge request differs from the existing payment for this order");
             throw new ApiException(HttpStatus.UNPROCESSABLE_CONTENT, "PAYMENT_MISMATCH",
                     "Order " + request.orderId() + " already has a payment with different details")
@@ -118,8 +124,8 @@ public class PaymentService {
                     .with("order_id", request.orderId()).with("payment_id", existing.paymentId());
         }
         registry.counter("shop.idempotent.replays", "operation", "charge").increment();
-        log.atInfo().addKeyValue("order_id", existing.orderId()).addKeyValue("payment_id", existing.paymentId())
-                .log("Charge request replayed");
+        log.atInfo().addKeyValue(LogEvents.ACTION, "charge_replayed").addKeyValue("order_id", existing.orderId())
+                .addKeyValue("payment_id", existing.paymentId()).log("Charge request replayed");
         return new Outcome(existing, false);
     }
 }

@@ -106,6 +106,7 @@ class ShopCommonWebTest {
                 .contains("\"service\":{\"name\":\"common-test\"")
                 .contains("\"trace.id\":\"" + traceId + "\"")
                 .contains("\"span.id\":")
+                .contains("\"event\":{\"action\":\"unhandled_error\"}")
                 .contains("\"stack_trace\":\"java.lang.IllegalStateException: secret internals");
     }
 
@@ -118,6 +119,10 @@ class ShopCommonWebTest {
             assertThat(response.body()).contains("\"code\":\"DATABASE_UNAVAILABLE\"");
             assertThat(response.headers().firstValue("Retry-After")).hasValue("1");
         }
+        Path logFile = Path.of(environment.getRequiredProperty("logging.file.name"));
+        assertThat(Files.readAllLines(logFile).stream()
+                .filter(l -> l.contains("\"event\":{\"action\":\"database_unavailable\"}")).count())
+                .as("each outage is logged with a stable event name").isGreaterThanOrEqualTo(3);
     }
 
     @Test

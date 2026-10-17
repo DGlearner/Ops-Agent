@@ -6,6 +6,7 @@ import static io.github.dglearner.shop.order.order.OrderStatus.PAID;
 import static io.github.dglearner.shop.order.order.OrderStatus.PAYMENT_UNKNOWN;
 import static io.github.dglearner.shop.order.order.OrderStatus.STOCK_RESERVED;
 
+import io.github.dglearner.shop.common.LogEvents;
 import io.github.dglearner.shop.order.OrderProperties;
 import io.github.dglearner.shop.order.client.PaymentClient;
 import io.github.dglearner.shop.order.client.PaymentClient.VoidResult;
@@ -103,7 +104,10 @@ public class OrderRecovery {
                 case VoidResult.Failed failed -> {
                     orders.touch(orderId, PAYMENT_UNKNOWN);
                     count("reconcile", "payment_unreachable");
-                    log.atWarn().addKeyValue("order_id", orderId).addKeyValue("failure", failed.failure().kind())
+                    log.atWarn().addKeyValue(LogEvents.ACTION, "dependency_call_failed")
+                            .addKeyValue("dependency", "payment")
+                            .addKeyValue("operation", "void").addKeyValue("order_id", orderId)
+                            .addKeyValue("failure", failed.failure().kind())
                             .log("Payment reconciliation failed, will retry: {}", failed.failure().detail());
                 }
             }
@@ -121,7 +125,9 @@ public class OrderRecovery {
 
     private void recovered(String action, String result, Order order) {
         count(action, result);
-        var event = log.atInfo().addKeyValue("order_id", order.orderId()).addKeyValue("status", order.status());
+        var event = log.atInfo()
+                .addKeyValue(LogEvents.ACTION, action.equals("reconcile") ? "payment_reconciled" : "order_abandoned")
+                .addKeyValue("order_id", order.orderId()).addKeyValue("status", order.status());
         if (order.failureReason() != null) {
             event = event.addKeyValue("failure_reason", order.failureReason());
         }
@@ -137,7 +143,9 @@ public class OrderRecovery {
         try {
             step.run();
         } catch (RuntimeException e) {
-            log.warn("Recovery step '{}' failed: {}", name, e.getMessage());
+            log.atWarn().addKeyValue(LogEvents.ACTION, "recovery_step_failed").addKeyValue("step", name)
+                    .addKeyValue("error_type", e.getClass().getSimpleName())
+                    .log("Recovery step '{}' failed: {}", name, e.getMessage());
         }
     }
 }

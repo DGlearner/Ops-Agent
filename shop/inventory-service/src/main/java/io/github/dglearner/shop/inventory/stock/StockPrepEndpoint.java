@@ -1,5 +1,6 @@
 package io.github.dglearner.shop.inventory.stock;
 
+import io.github.dglearner.shop.common.LogEvents;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,7 +35,8 @@ public class StockPrepEndpoint {
         }
         if (stock.prepare(sku, available)) {
             Stock prepared = stock.find(sku).orElseThrow();
-            log.atInfo().addKeyValue("sku", sku).addKeyValue("available", available)
+            log.atInfo().addKeyValue(LogEvents.ACTION, "stock_prepared")
+                    .addKeyValue("sku", sku).addKeyValue("available", available)
                     .addKeyValue("sold", prepared.sold()).log("Stock prepared for an experiment");
             return new WebEndpointResponse<>(prepared, 200);
         }

@@ -326,6 +326,23 @@ payment (payment_id PK, order_id UNIQUE, user_id, amount_cents, currency,
 - **文件**：`logs/shop/<服务名>.log`，每行一条 ECS JSON。字段包括 `@timestamp`、`log.level`、`service.name`、`message`、trace 和 span ID，以及业务字段（`order_id`、`sku`、`status`、`failure_reason` 等）。
 - 业务字段用 SLF4J 2 的 `addKeyValue` 写入，不拼接在 message 里，便于采集后直接按字段过滤。
 - 订单、预留、支付的每次状态变化记一条 INFO；下游调用失败记 WARN；未预期的异常记 ERROR。
+- 每条业务日志都带稳定的事件名 `event.action`（ECS 字段，Spring Boot 写成嵌套的 `"event":{"action":…}`）。消息正文会随细节变化，检测规则只匹配事件名和字段，不匹配正文。
+
+| `event.action` | 服务 | 主要字段 |
+|---|---|---|
+| `order_created`、`order_paid`、`order_cancelled`、`order_payment_unknown`、`order_replayed` | order | `order_id`、`status`、`failure_reason` |
+| `dependency_call_failed` | order | `dependency`（inventory / payment）、`operation`（reserve / charge / void / confirm / release）、`failure`（NOT_SENT / TIMEOUT / ERROR）、`order_id` |
+| `payment_reconciled`、`order_abandoned` | order | `order_id`、`status` |
+| `inventory_task_failed`（ERROR，需要人工处理） | order | `order_id`、`action`、`code` |
+| `stock_reserved`、`reservation_rejected`、`late_reservation_rejected`、`reservation_confirmed`、`reservation_released`、`reservation_tombstone`、`reservation_replayed` | inventory | `order_id`、`code`、`sku` |
+| `stock_restocked`、`stock_prepared` | inventory | `sku` |
+| `payment_succeeded`、`payment_declined`、`payment_voided`、`late_charge_refused`、`charge_mismatch`、`charge_replayed`、`interrupted_charge_resolved` | payment | `order_id`、`payment_id`、`status` |
+| `database_unavailable` | 三个服务 | `error_type` |
+| `deadlock_retry` | 三个服务 | `operation`、`attempt` |
+| `recovery_step_failed` | order、payment | `step`、`error_type` |
+| `unhandled_error`（ERROR） | 三个服务 | `error` |
+
+故障注入的日志（`shop.faults` logger）不带事件名，采集时整条丢弃（§10.1）。
 
 ### 8.2 Trace
 

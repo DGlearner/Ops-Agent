@@ -25,7 +25,8 @@ public final class DeadlockRetry {
                 if (attempt >= MAX_ATTEMPTS || !isDeadlock(e)) {
                     throw e;
                 }
-                log.atWarn().addKeyValue("operation", operation).addKeyValue("attempt", attempt)
+                log.atWarn().addKeyValue(LogEvents.ACTION, "deadlock_retry").addKeyValue("operation", operation)
+                        .addKeyValue("attempt", attempt)
                         .log("Transaction chosen as deadlock victim, retrying");
             }
         }

@@ -53,7 +53,8 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler({TransientDataAccessException.class, DataAccessResourceFailureException.class,
             RecoverableDataAccessException.class, CannotCreateTransactionException.class})
     ResponseEntity<ProblemDetail> databaseUnavailable(NestedRuntimeException e) {
-        log.atWarn().addKeyValue("error_type", e.getClass().getSimpleName())
+        log.atWarn().addKeyValue(LogEvents.ACTION, "database_unavailable")
+                .addKeyValue("error_type", e.getClass().getSimpleName())
                 .log("Database unavailable: {}", e.getMostSpecificCause().getMessage());
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .header(HttpHeaders.RETRY_AFTER, "1")
@@ -63,7 +64,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     /** Anything unexpected: logged with its stack trace, answered without internals. */
     @ExceptionHandler
     ResponseEntity<ProblemDetail> unexpected(Exception e) {
-        log.error("Unhandled error", e);
+        log.atError().addKeyValue(LogEvents.ACTION, "unhandled_error").setCause(e).log("Unhandled error");
         return ResponseEntity.internalServerError()
                 .body(problem(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Unexpected server error"));
     }

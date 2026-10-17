@@ -1,7 +1,8 @@
 package io.github.dglearner.shop.order.task;
 
-import io.github.dglearner.shop.order.client.InventoryClient;
+import io.github.dglearner.shop.common.LogEvents;
 import io.github.dglearner.shop.order.client.InventoryClient.SettleResult;
+import io.github.dglearner.shop.order.client.InventoryClient;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Locale;
 import org.slf4j.Logger;
@@ -36,14 +37,18 @@ public class InventoryTasks {
             }
             case SettleResult.Conflict conflict -> {
                 tasks.markFailed(orderId, conflict.code());
-                log.atError().addKeyValue("order_id", orderId).addKeyValue("action", action)
+                log.atError().addKeyValue(LogEvents.ACTION, "inventory_task_failed").addKeyValue("order_id", orderId)
+                        .addKeyValue("action", action)
                         .addKeyValue("code", conflict.code())
                         .log("Inventory refused the settlement; stock for this order needs manual review");
                 yield "conflict";
             }
             case SettleResult.Failed failed -> {
                 tasks.scheduleRetry(orderId, failed.failure().describe());
-                log.atWarn().addKeyValue("order_id", orderId).addKeyValue("action", action)
+                log.atWarn().addKeyValue(LogEvents.ACTION, "dependency_call_failed")
+                        .addKeyValue("dependency", "inventory")
+                        .addKeyValue("operation", action.name().toLowerCase(Locale.ROOT))
+                        .addKeyValue("order_id", orderId).addKeyValue("action", action)
                         .addKeyValue("failure", failed.failure().kind())
                         .log("Inventory {} failed, will retry: {}", action.name().toLowerCase(Locale.ROOT),
                                 failed.failure().detail());

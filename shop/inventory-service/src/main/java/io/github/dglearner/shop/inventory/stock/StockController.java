@@ -1,6 +1,7 @@
 package io.github.dglearner.shop.inventory.stock;
 
 import io.github.dglearner.shop.common.ApiException;
+import io.github.dglearner.shop.common.LogEvents;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.slf4j.Logger;
@@ -40,7 +41,8 @@ public class StockController {
         if (!stock.restock(sku, request.quantity())) {
             throw unknownSku(sku);
         }
-        log.atInfo().addKeyValue("sku", sku).addKeyValue("quantity", request.quantity()).log("Stock restocked");
+        log.atInfo().addKeyValue(LogEvents.ACTION, "stock_restocked").addKeyValue("sku", sku)
+                .addKeyValue("quantity", request.quantity()).log("Stock restocked");
         return get(sku);
     }
 
