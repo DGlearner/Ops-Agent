@@ -41,7 +41,7 @@ class IncidentCorrelator {
     private final Duration gap;
 
     IncidentCorrelator(IncidentMapper mapper, Catalog catalog,
-            @Value("${ops.incident.correlation-gap:10m}") Duration gap) {
+            @Value("${ops.incident.correlation-gap:15m}") Duration gap) {
         this.mapper = mapper;
         this.catalog = catalog;
         this.gap = gap;

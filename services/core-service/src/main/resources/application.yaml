@@ -71,7 +71,8 @@ ops:
     seed: false
   incident:
     # An alert joins an incident only if the incident had an alert within this time of it (docs/project-design.md §8.4).
-    correlation-gap: 10m
+    # Longer than the rules' usual suppression (10 min), so a fault that persists and alerts again stays one incident.
+    correlation-gap: 15m
 
 ---
 spring:

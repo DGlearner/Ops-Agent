@@ -1,5 +1,6 @@
 package io.github.dglearner.shop.loadgen;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -67,6 +68,16 @@ final class Scenarios {
                 List.of(new Action.Http("inventory", "POST", "/actuator/rowlock",
                         "{\"sku\":\"SKU-1001\",\"duration\":\"%FAULT%\"}")),
                 List.of(new Action.Http("inventory", "DELETE", "/actuator/rowlock", null))));
+        // Two faults with no cause in common, at once: the counterexample for correlation (docs/shop-design.md §12.5).
+        add(new Scenario("independent-faults", "payment-service, inventory-service",
+                "30% of charge requests and, independently, 50% of reservation requests fail with 503",
+                "two separate problems: Ops-Agent should keep them in two incidents, although both services use "
+                        + "the same MySQL",
+                concat(faults("payment", "{\"path\":\"/api/v1/payments\",\"method\":\"POST\",\"errors\":0.3,"
+                                + "\"status\":503}"),
+                        faults("inventory", "{\"path\":\"/api/v1/reservations\",\"method\":\"POST\","
+                                + "\"errors\":0.5,\"status\":503}")),
+                concat(clearFaults("payment"), clearFaults("inventory"))));
         add(new Scenario("mysql-down", "mysql",
                 "the shop's MySQL container is stopped for the fault phase",
                 "every service fails its database calls (503, connection errors in all logs); after MySQL is "
@@ -95,6 +106,12 @@ final class Scenarios {
     private static List<Action> faults(String service, String rule) {
         String expiring = rule.substring(0, rule.lastIndexOf('}')) + ",\"duration\":\"%EXPIRY%\"}";
         return List.of(new Action.Http(service, "POST", "/actuator/faults", expiring));
+    }
+
+    private static List<Action> concat(List<Action> first, List<Action> second) {
+        List<Action> both = new ArrayList<>(first);
+        both.addAll(second);
+        return List.copyOf(both);
     }
 
     private static List<Action> clearFaults(String service) {
