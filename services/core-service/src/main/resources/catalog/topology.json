@@ -1,0 +1,12 @@
+{
+  "services": [
+    {"name": "order-service", "kind": "service", "description": "Shop: places orders, orchestrates reservation and payment",
+     "depends_on": ["inventory-service", "payment-service", "shop-mysql"]},
+    {"name": "inventory-service", "kind": "service", "description": "Shop: stock and reservations",
+     "depends_on": ["shop-mysql"]},
+    {"name": "payment-service", "kind": "service", "description": "Shop: simulated payment provider",
+     "depends_on": ["shop-mysql"]},
+    {"name": "shop-mysql", "kind": "database", "description": "Shop: the MySQL instance of all three services",
+     "depends_on": []}
+  ]
+}

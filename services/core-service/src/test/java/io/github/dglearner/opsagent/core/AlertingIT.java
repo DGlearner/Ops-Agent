@@ -4,13 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.dglearner.opsagent.contracts.Alert;
 import io.github.dglearner.opsagent.contracts.Ids;
-import io.github.dglearner.opsagent.contracts.OpsJson;
 import io.github.dglearner.opsagent.contracts.Severity;
 import io.github.dglearner.opsagent.contracts.Topics;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -18,76 +13,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
 import org.awaitility.Awaitility;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.jdbc.core.simple.JdbcClient;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.kafka.KafkaContainer;
-import org.testcontainers.postgresql.PostgreSQLContainer;
-import org.testcontainers.utility.DockerImageName;
 import tools.jackson.databind.JsonNode;
 
 /** Alerts from Kafka into PostgreSQL and out through the API, against real Kafka and PostgreSQL. */
-@Testcontainers
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class AlertingIT {
-
-    @Container
-    @ServiceConnection
-    static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:4.2.2")
-            .withEnv("KAFKA_HEAP_OPTS", "-Xms256m -Xmx256m")
-            .withCreateContainerCmdModifier(cmd -> cmd.getHostConfig().withMemory(640L * 1024 * 1024));
-
-    @Container
-    @ServiceConnection
-    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(
-            DockerImageName.parse("pgvector/pgvector:0.8.7-pg18").asCompatibleSubstituteFor("postgres"))
-            .withCreateContainerCmdModifier(cmd -> cmd.getHostConfig().withMemory(256L * 1024 * 1024));
+class AlertingIT extends CoreTestSupport {
 
     private static final Instant T0 = Instant.parse("2026-10-17T06:00:00Z");
-    private static KafkaProducer<String, String> producer;
-
-    private final HttpClient http = HttpClient.newHttpClient();
-
-    @LocalServerPort
-    private int port;
-
-    @Autowired
-    private JdbcClient jdbc;
-
-    @BeforeAll
-    static void topicsAndProducer() throws Exception {
-        try (Admin admin = Admin.create(Map.of("bootstrap.servers", KAFKA.getBootstrapServers()))) {
-            admin.createTopics(List.of(new NewTopic(Topics.ALERTS, 3, (short) 1),
-                    new NewTopic(Topics.ALERTS + ".dlt", 1, (short) 1))).all().get();
-        }
-        Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers());
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        producer = new KafkaProducer<>(props);
-    }
-
-    @AfterAll
-    static void closeProducer() {
-        producer.close();
-    }
 
     @Test
     void storesARedeliveredAlertOnceAndServesItWithItsEvidence() throws Exception {
@@ -146,7 +83,7 @@ class AlertingIT {
 
     @Test
     void anUnreadableMessageGoesToTheDeadLetterTopicAndTheNextOneIsStored() throws Exception {
-        producer.send(new ProducerRecord<>(Topics.ALERTS, "order-service", "{not an alert")).get();
+        PRODUCER.send(new ProducerRecord<>(Topics.ALERTS, "order-service", "{not an alert")).get();
         Alert after = alert("shop-unhandled-errors", "order-service", Severity.HIGH, T0.plusSeconds(600));
         send(after);
 
@@ -191,29 +128,10 @@ class AlertingIT {
                 List.of(new Alert.Sample(eventId, createdAt, "Database unavailable: refused", "trace-1")));
     }
 
-    private static void send(Alert alert) throws Exception {
-        producer.send(new ProducerRecord<>(Topics.ALERTS, alert.groupKey(), OpsJson.toJson(alert))).get();
-    }
-
-    private void awaitStored(UUID alertId) {
-        Awaitility.await().atMost(Duration.ofSeconds(30)).until(() ->
-                jdbc.sql("SELECT count(*) FROM alerts WHERE id = ?").param(alertId).query(Long.class).single() == 1);
-    }
-
     private static List<UUID> ids(JsonNode page) {
         List<UUID> ids = new ArrayList<>();
         page.path("items").forEach(item -> ids.add(UUID.fromString(item.path("alert_id").asString())));
         return ids;
     }
 
-    private JsonNode getJson(String path) throws Exception {
-        HttpResponse<String> response = get(path);
-        assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
-        return OpsJson.mapper().readTree(response.body());
-    }
-
-    private HttpResponse<String> get(String path) throws Exception {
-        return http.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + path)).build(),
-                HttpResponse.BodyHandlers.ofString());
-    }
 }

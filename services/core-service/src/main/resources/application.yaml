@@ -60,3 +60,17 @@ management:
     health:
       probes:
         enabled: true
+
+ops:
+  catalog:
+    # Load the shop's services and dependencies from catalog/topology.json at startup (local profile only, below).
+    seed: false
+
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+ops:
+  catalog:
+    seed: true
