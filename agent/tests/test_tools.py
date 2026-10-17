@@ -23,6 +23,9 @@ def test_alerts_around_the_incident_are_marked_whether_they_belong_to_it(core, f
     found = run(Toolbox(core, INCIDENT), "search_alerts", minutes_before=10, minutes_after=5, service="order-service")
 
     assert {a["alert_id"]: a["in_this_incident"] for a in found["alerts"]} == {A1: True, A2: True, A3: False}
+    # The incident spans 10:00:00-10:00:20; A3 came at 10:05:00.
+    assert {a["alert_id"]: (a["timing"], a.get("seconds_away")) for a in found["alerts"]} == {
+        A1: ("during", None), A2: ("during", None), A3: ("after", 280)}
     query = fake_core.query("/api/v1/alerts")
     assert query["from"] == "2026-10-17T09:50:00Z" and query["to"] == "2026-10-17T10:05:20Z"
     assert query["service"] == "order-service" and "rule_id" not in query
@@ -34,6 +37,13 @@ def test_nearby_incidents_mark_this_one(core, fake_core):
     assert [(i["incident_id"], i["this"]) for i in nearby] == [(INCIDENT["incident_id"], True),
                                                               (OTHER_INCIDENT_ID, False)]
     assert fake_core.query("/api/v1/incidents")["from"] == "2026-10-17T09:00:00Z"
+    assert [i["timing"] for i in nearby] == ["during", "during"]
+
+
+def test_alerts_are_searched_ten_minutes_around_the_incident_by_default(core, fake_core):
+    run(Toolbox(core, INCIDENT), "search_alerts")
+    query = fake_core.query("/api/v1/alerts")
+    assert (query["from"], query["to"]) == ("2026-10-17T09:50:00Z", "2026-10-17T10:10:20Z")
 
 
 def test_the_timeline_keeps_what_happened_and_when(core):

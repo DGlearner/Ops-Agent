@@ -49,17 +49,19 @@ class Toolbox:
                  _object({}), lambda args: self._topology()),
             Tool("search_alerts",
                  "查本 Incident 前后一段时间内的所有告警（也包括不属于本 Incident 的），用来看同一时间别处有没有问题。"
-                 "in_this_incident 标明是否属于本 Incident。",
+                 "in_this_incident 标明是否属于本 Incident；timing 标明它和本 Incident 的时间关系：during（重叠）、"
+                 "before / after（之前 / 之后，seconds_away 是相隔的秒数）。",
                  _object({
                      "service": {"type": "string", "description": "只看这个服务的告警"},
                      "rule_id": {"type": "string", "description": "只看这条规则的告警"},
                      "minutes_before": {"type": "integer", "minimum": 0, "maximum": 120,
-                                        "description": "Incident 打开前多少分钟，默认 30"},
+                                        "description": "Incident 打开前多少分钟，默认 10"},
                      "minutes_after": {"type": "integer", "minimum": 0, "maximum": 120,
-                                       "description": "Incident 最后一条告警后多少分钟，默认 30"},
+                                       "description": "Incident 最后一条告警后多少分钟，默认 10"},
                  }), self._search_alerts),
             Tool("list_nearby_incidents",
-                 "本 Incident 前后一小时内打开的其他 Incident，用来判断是不是同一时间有几个独立的问题。",
+                 "本 Incident 前后一小时内打开的其他 Incident，用来判断是不是同一时间有几个独立的问题。"
+                 "timing 同 search_alerts：during（时间重叠）、before、after。",
                  _object({}), lambda args: self._nearby_incidents()),
         )}
 
@@ -147,8 +149,8 @@ class Toolbox:
                               "depends_on": depends.get(n["name"], [])} for n in topology["nodes"]]}
 
     def _search_alerts(self, args: dict) -> dict:
-        before = timedelta(minutes=int(args.get("minutes_before", 30)))
-        after = timedelta(minutes=int(args.get("minutes_after", 30)))
+        before = timedelta(minutes=int(args.get("minutes_before", 10)))
+        after = timedelta(minutes=int(args.get("minutes_after", 10)))
         if not timedelta(0) <= before <= timedelta(hours=2) or not timedelta(0) <= after <= timedelta(hours=2):
             raise ValueError("minutes_before 和 minutes_after 在 0 到 120 之间")
         start = parse_time(self.incident["opened_at"]) - before
@@ -158,15 +160,26 @@ class Toolbox:
         return {"from": start.isoformat(), "to": end.isoformat(), "alerts": [{
             "alert_id": a["alert_id"], "rule_id": a["rule_id"], "service": a.get("service"),
             "group_values": a.get("group_values", {}), "summary": a["summary"], "created_at": a["created_at"],
-            "in_this_incident": a["alert_id"] in mine} for a in alerts]}
+            "in_this_incident": a["alert_id"] in mine, **self._timing(a["created_at"], a["created_at"])}
+            for a in alerts]}
 
     def _nearby_incidents(self) -> list[dict]:
         opened = parse_time(self.incident["opened_at"])
         return [{"incident_id": i["incident_id"], "this": i["incident_id"] == self.incident_id,
                  "title": i["title"], "status": i["status"], "subjects": i.get("subjects", []),
                  "shared_dependencies": i.get("shared_dependencies", []), "alert_count": i["alert_count"],
-                 "opened_at": i["opened_at"], "last_alert_at": i["last_alert_at"]}
+                 "opened_at": i["opened_at"], "last_alert_at": i["last_alert_at"],
+                 **self._timing(i["opened_at"], i["last_alert_at"])}
                 for i in self._core.incidents(start=opened - timedelta(hours=1), end=opened + timedelta(hours=1))]
+
+    def _timing(self, start: str, end: str) -> dict:
+        """How [start, end] lies against this incident's span, from its first to its last alert."""
+        opened, last = parse_time(self.incident["opened_at"]), parse_time(self.incident["last_alert_at"])
+        if parse_time(end) < opened:
+            return {"timing": "before", "seconds_away": round((opened - parse_time(end)).total_seconds())}
+        if parse_time(start) > last:
+            return {"timing": "after", "seconds_away": round((parse_time(start) - last).total_seconds())}
+        return {"timing": "during"}
 
 
 def incident_overview(incident: dict) -> dict:
