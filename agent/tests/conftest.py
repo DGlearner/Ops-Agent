@@ -53,8 +53,11 @@ TOPOLOGY = {"nodes": [{"name": "order-service", "kind": "service", "description"
                       {"from": "order-service", "to": "shop-mysql"},
                       {"from": "inventory-service", "to": "shop-mysql"},
                       {"from": "payment-service", "to": "shop-mysql"}]}
-TIMELINE = [{"id": "x", "type": "OPENED", "actor_type": "SYSTEM", "payload": {"subject": "order-service"},
-             "created_at": "2026-10-17T10:00:01Z"}]
+# As core-service returns them (TimelineEntry).
+TIMELINE = [{"event_id": "0199f000-0000-7000-8000-0000000000b1", "type": "OPENED", "actor_type": "SYSTEM",
+             "payload": {"subject": "order-service"}, "at": "2026-10-17T10:00:01Z"},
+            {"event_id": "0199f000-0000-7000-8000-0000000000b2", "type": "STATUS_CHANGED", "actor_type": "USER",
+             "from_status": "open", "to_status": "acknowledged", "payload": {}, "at": "2026-10-17T10:03:00Z"}]
 
 
 class FakeCore:

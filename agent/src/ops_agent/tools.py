@@ -84,6 +84,9 @@ class Toolbox:
             return _json({"error": f"查询失败：{e}"})
         except (ValueError, TypeError) as e:
             return _json({"error": f"参数不对：{e}"})
+        except Exception as e:  # noqa: BLE001 - a broken tool should cost the model one call, not the analysis
+            log.exception("tool %s broke", name)
+            return _json({"error": f"工具出错：{type(e).__name__}"})
         if len(result) > MAX_RESULT_CHARS:
             result = result[:MAX_RESULT_CHARS] + "…（结果过长，已截断）"
         return result
@@ -131,7 +134,7 @@ class Toolbox:
         return result
 
     def _timeline(self) -> list[dict]:
-        return [{"type": e["type"], "at": e["created_at"], **({"payload": e["payload"]} if e.get("payload") else {}),
+        return [{"type": e["type"], "at": e["at"], **({"payload": e["payload"]} if e.get("payload") else {}),
                  **({"to_status": e["to_status"]} if e.get("to_status") else {})}
                 for e in self._core.incident_timeline(self.incident_id)[:50]]
 

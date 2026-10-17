@@ -36,6 +36,12 @@ def test_nearby_incidents_mark_this_one(core, fake_core):
     assert fake_core.query("/api/v1/incidents")["from"] == "2026-10-17T09:00:00Z"
 
 
+def test_the_timeline_keeps_what_happened_and_when(core):
+    assert run(Toolbox(core, INCIDENT), "get_incident_timeline") == [
+        {"type": "OPENED", "at": "2026-10-17T10:00:01Z", "payload": {"subject": "order-service"}},
+        {"type": "STATUS_CHANGED", "at": "2026-10-17T10:03:00Z", "to_status": "acknowledged"}]
+
+
 def test_the_topology_lists_what_each_service_depends_on(core):
     services = {s["name"]: s for s in run(Toolbox(core, INCIDENT), "get_topology")["services"]}
 
@@ -51,6 +57,8 @@ def test_mistakes_and_failures_are_results_the_model_can_read(core, fake_core):
     assert "参数不对" in toolbox.call("search_alerts", json.dumps({"minutes_before": 1000}))
     fake_core.fail.add("/api/v1/topology")
     assert "查询失败" in toolbox.call("get_topology", "")
+    fake_core.incident.pop("opened_at")
+    assert "工具出错" in toolbox.call("list_nearby_incidents", "")
 
 
 def test_evidence_the_incident_does_not_have_is_found(core):
