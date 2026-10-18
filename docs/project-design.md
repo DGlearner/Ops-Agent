@@ -58,7 +58,7 @@
  +--------------------------------------------------------------+
         ^  REST + SSE                     |  agent.tasks.*  ^ agent.results
         |                                 v                 |
- [web console] (later)            [agent-runtime, Python]
+ [web console, Vue 3]             [agent-runtime, Python]
                                   reads core-service's API (read-only)
 ```
 
@@ -85,6 +85,7 @@ Ops-Agent/
   contracts/
     kafka/                  JSON Schema for every Kafka message (shared with Python)
   agent/                    Python agent runtime: incident analysis (§6.5)
+  web/                      Ops-Agent console, Vue 3 + TypeScript (§6.6)
   deploy/compose/           local infrastructure (Kafka, PostgreSQL, Redis)
   datasets/                 sample logs for replay and tests
   tools/                    replay tool and other dev scripts
@@ -111,6 +112,7 @@ Ops-Agent/
 | API 文档 | springdoc-openapi | 3.1.1 |
 | 测试 | JUnit 6、AssertJ、Testcontainers 2、Kafka Streams TopologyTestDriver | 随 Boot 管理 |
 | 可观测 | Spring Boot Actuator、Micrometer + Prometheus | 随 Boot 管理 |
+| 前端（`web/`） | Vue 3 + TypeScript + Vite；Element Plus；ECharts；Vitest | Vue 3.5.43、TS 6.0.3、Vite 8.3.2、Element Plus 2.14.7、ECharts 6.1.0 |
 
 版本选择的考虑：
 
@@ -187,6 +189,21 @@ Agent 运行时（`agent/README.md`）。从 `agent.tasks.high` 取任务，通�
 | `llm` | 任何兼容 OpenAI Chat Completions、支持工具调用的接口（配置见 README）；不支持指定 `tool_choice` 的接口自动退回 `auto` |
 | `baseline` | 不用大模型的对照：直接取 Incident 的共同依赖或告警指向作为答案 |
 | `contracts` | 按 `contracts/kafka/` 的 schema 校验收发的消息，与 Java 端共用 |
+
+### 6.6 `web/`（控制台）
+
+值班人员用的页面（`web/README.md`），Vue 3 + TypeScript + Vite，Element Plus 和 ECharts。只调用 core-service 的 REST 接口；开发服务器把 `/api` 转发给 core-service，浏览器只面对一个源，不需要 CORS。
+
+| 页面 | 作用 |
+|---|---|
+| Incident 列表 | 筛选（状态、严重度、服务）；每行显示 Agent 的结论：最可能的根因、置信度、是否不确定、是否还在分析 |
+| Incident 详情 | Agent 的分析放在最上面：摘要、按可能性排序的原因、每条证据（引用的 id 解析成告警摘要、日志原文或服务说明，点击跳到对应告警）、建议排查、core 剔除的引用、历史分析。下面是告警和日志样本（标出 Agent 引用的）、影响范围图（出现症状的服务、Agent 认为的根因）、时间线（告警、状态变更、Agent 分析）。可以流转状态、手动请求分析 |
+| 服务拓扑 | 服务目录的依赖图；只标出所选时间内（默认 1 小时）有告警的进行中 Incident，因为 Incident 不会自己关闭，全部标出来会一直是红的 |
+
+- **刷新：** 先用轮询（列表、详情 5 秒，拓扑 10 秒；标签页不可见时暂停）。SSE 推送留到 `incident.events`（P5）。
+- **类型：** `src/api/types.ts` 按接口的实际返回手写（snake_case；值为 null 的字段接口不返回，类型里是可选的）。以后 core-service 的 OpenAPI 文档稳定了，可以改成生成。
+- **大模型的输出只当文本显示**（Vue 默认转义，不用 `v-html`），拓扑图提示框里的文字也先转义。
+- **测试：** 不依赖页面的逻辑（证据解析、时间线、分层布局、状态流转、时间格式）用 Vitest 测；CI 另外跑 vue-tsc，模板里的类型错误也会失败。
 
 ---
 
@@ -528,6 +545,7 @@ Redis 配置为 `noeviction`（锁和预算类的键不能被淘汰）。
 | PostgreSQL | 5432 | 库 `opsagent`，用户 `opsagent` |
 | Redis | 6379 | — |
 | Kafka UI | 8089 | `--profile tools` 时启动 |
+| 控制台（`web/`） | 5180 | `npm run dev`；`npm run preview` 用 4180。`/api` 转发到 core-service |
 
 - **Spring profiles：** `local`（默认，连接本机的 Compose 基础设施）、`test`（Testcontainers）、`docker`（以后服务也放进 Compose 时使用）。
 - **敏感配置：** 只通过环境变量或不提交的 `application-local.yaml` 覆盖；仓库里只有开发用默认值。
@@ -559,6 +577,9 @@ docker compose up -d            # Kafka UI: docker compose --profile tools up -d
 
 # 4. 重放样例数据
 java tools/Replay.java datasets/aiops_mixed_incident_small.jsonl
+
+# 5. 控制台（需要 Node.js 22.12+），http://127.0.0.1:5180
+cd web && npm ci && npm run dev
 ```
 
 - **Windows 兼容：** `.gitattributes` 强制 LF（容器内的 shell 脚本不能是 CRLF）；开发脚本使用 Java 单文件程序或 Gradle 任务，不依赖 bash；Gradle 的 foojay 插件会自动下载 JDK 21。
@@ -621,6 +642,7 @@ Agent 在最上层：它只能通过第 3 层的只读工具看到第 1、2 层�
 | R3（关联） | catalog 模块；incident 模块：按依赖路径关联（§8.4）、生命周期、时间线；反例场景 `independent-faults` |
 | P1 第一版 | 演练控制台（shop-design §15）：流量、抢购、9 个故障场景、标准答案、顾客视角的评测 |
 | P4 第一版 | Agent 契约；core 的 agentops 模块（派发、证据校验、查询）；Python Agent（工具调用循环、基线对照）；控制台展示分析并给归因打分 |
+| P5 界面第一版 | Ops-Agent 控制台（§6.6）：Incident 列表、详情（Agent 的结论与证据、告警与日志样本、影响范围、时间线、状态流转、手动请求分析）、服务拓扑 |
 
 ### 14.3 接下来
 
@@ -630,7 +652,7 @@ Agent 在最上层：它只能通过第 3 层的只读工具看到第 1、2 层�
 | **P2 补齐确定性底座** | 日志存储与检索（D4）；Prometheus + Alertmanager（连接池、延迟、积压等指标告警进入 core，带触发和恢复）；变更记录（发布、配置变更）；新故障和攻击的规则；无规则的基线异常检测（日志模板 + 频率基线），与规则检测在同一套演练上对比 | 新故障和攻击都能被检出；基线检测与规则检测的检出率、误报、延迟对比有记录 |
 | **P3 只读工具 API** | 给 Agent 和 Ops-Agent 界面用：检索日志（按服务、时间、trace ID）、Incident 及其证据、指标查询、拓扑、最近的变更 | OpenAPI 文档；每个工具有集成测试；只读 |
 | **P4 Agent** | 第一版已完成（§14.2）。接下来：在同一组演练上对比大模型与基线的归因；工具随 P2、P3 增加（日志检索、指标、变更）；工具调用审计 | 在演练上评估归因：正确、部分正确、错误、不确定各占多少；每条结论都能追溯到证据 |
-| **P5 加固** | identity（JWT，对外部署前必须完成）；规则管理移入 core（版本、经 Outbox 发布到 `rules.changelog`）；`incident.events`；Ops-Agent 界面 | 未认证请求被拒；规则变更不重启生效 |
+| **P5 加固** | identity（JWT，对外部署前必须完成）；规则管理移入 core（版本、经 Outbox 发布到 `rules.changelog`）；`incident.events`；Ops-Agent 界面的其余部分（告警与规则页面、登录，第一版见 §14.2） | 未认证请求被拒；规则变更不重启生效 |
 
 ### 14.4 待定事项
 

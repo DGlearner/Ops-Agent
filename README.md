@@ -42,6 +42,16 @@ java tools/Replay.java datasets/aiops_mixed_incident_small.jsonl
 
 查看结果：`curl localhost:8080/api/v1/alerts` 列出告警（带触发事件作为证据）；或者 `docker compose --profile tools up -d` 后打开 Kafka UI（http://localhost:8089），看 `logs.normalized`、`alerts` 等 topic。样例数据会产生 7 条告警。
 
+## Ops-Agent 控制台（web）
+
+Incident 列表、Incident 详情（Agent 的结论与证据、告警和日志样本、影响范围、时间线）、服务拓扑。需要 Node.js 22.12+，core-service 先启动：
+
+```bash
+cd web && npm ci && npm run dev     # http://127.0.0.1:5180，/api 转发到 core-service
+```
+
+说明见 [web/README.md](web/README.md)。
+
 ## 电商靶场（shop）
 
 给 Ops-Agent 监控用的最小电商系统：订单、库存、支付模拟三个服务。它们产生结构化日志、跨服务 trace 和指标，S5 起可以注入超时与故障。设计见 [docs/shop-design.md](docs/shop-design.md)。
@@ -80,7 +90,8 @@ libs/             共享库（消息契约）
 services/         ingest-service、stream-processor、core-service
 shop/             电商靶场：order、inventory、payment 服务，shop-common，load-generator
 contracts/        Kafka 消息的 JSON Schema
-agent/            Python Agent（待定）
+agent/            Python Agent：Incident 归因（agent/README.md）
+web/              Ops-Agent 控制台：Vue 3 + TypeScript（web/README.md）
 deploy/compose/   本地基础设施
 deploy/shop/      靶场的 MySQL
 datasets/         样例日志
