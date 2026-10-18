@@ -37,8 +37,8 @@
 | Trace | Micrometer Tracing + OpenTelemetry bridge，W3C `traceparent` 头 | 只用于跨服务关联日志，不部署 Zipkin/Jaeger |
 | 指标 | Actuator + Micrometer，`/actuator/prometheus` | 现在只暴露端点。R3 起由 Prometheus 采集并计算指标规则，Alertmanager 把告警推送给 Ops-Agent（§12.3），不在 Java 里重写时序存储和规则引擎 |
 | 日志 | 控制台为人读格式；文件为 JSON（ECS 格式） | 人看控制台，采集器读文件 |
-| Redis | **不用** | 幂等和库存都以 MySQL 的唯一约束和条件更新为准；没有热点缓存、限流或分布式锁的需要。只有实测出瓶颈、业务上也需要时才引入（§11.4） |
-| Kafka | **不用** | 流程是同步编排；确认、释放库存的可靠执行用订单库里的待办表加重试即可（§7.5）；没有需要异步分发的下游。以后加入“支付异步回调”、订单事件的下游（物流、通知），或抢购需要异步受理时再引入（§11.4） |
+| Redis | 只用于秒杀（R4，§16）：资格判断、一人一单和受理队列（Redis Stream） | 普通下单仍以 MySQL 的唯一约束和条件更新为准。R1 实测单个热点商品约 100 单/秒就到顶，而且售罄之后的请求也要排队抢热点行的锁（§11.6），这才按 §11.4 引入 Redis。库存的账本仍在 MySQL；Redis 宕机时秒杀返回 503，普通下单不受影响 |
+| Kafka | **不用** | 流程是同步编排；确认、释放库存的可靠执行用订单库里的待办表加重试即可（§7.5）；没有需要异步分发的下游。秒杀的异步受理用 Redis Stream（§16.3），少一个组件；以后加入“支付异步回调”、订单事件的下游（物流、通知）时再引入 |
 
 ---
 
@@ -331,7 +331,9 @@ payment (payment_id PK, order_id UNIQUE, user_id, amount_cents, currency,
 | `event.action` | 服务 | 主要字段 |
 |---|---|---|
 | `order_created`、`order_paid`、`order_cancelled`、`order_payment_unknown`、`order_replayed` | order | `order_id`、`status`、`failure_reason` |
-| `dependency_call_failed` | order | `dependency`（被调用的服务：inventory-service / payment-service，与服务目录里的名字一致）、`operation`（reserve / charge / void / confirm / release）、`failure`（NOT_SENT / TIMEOUT / ERROR）、`order_id` |
+| `dependency_call_failed` | order | `dependency`（被调用的服务：inventory-service / payment-service，与服务目录里的名字一致）、`operation`（reserve / charge / void / confirm / release）、`failure`（NOT_SENT / TIMEOUT / ERROR）、`order_id`。秒杀调用 Redis 失败也记这个事件，`dependency` 为 `shop-redis`，`operation` 为 try_buy / read_queue / give_back 等，`failures` 为这一秒内失败的次数（每秒最多一条，§16.2） |
+| `flash_sale_created`、`flash_sale_sold_out`（每个实例每场活动一条）、`flash_sale_unit_returned` | order | `flash_sale_id`、`sku`、`order_id` |
+| `flash_sale_order_deferred`（WARN）、`flash_sale_order_failed`、`flash_sale_order_given_up`、`flash_sale_not_loaded`、`flash_sale_duplicate_buyer`、`flash_sale_message_invalid`、`flash_sale_consumer_failed`（ERROR） | order | `flash_sale_id`、`order_id`、`error_type`、`deliveries` |
 | `payment_reconciled`、`order_abandoned` | order | `order_id`、`status` |
 | `inventory_task_failed`（ERROR，需要人工处理） | order | `order_id`、`action`、`code` |
 | `stock_reserved`、`reservation_rejected`、`late_reservation_rejected`、`reservation_confirmed`、`reservation_released`、`reservation_tombstone`、`reservation_replayed` | inventory | `order_id`、`code`、`sku` |
@@ -499,7 +501,7 @@ R0 修复后（§13）用同样的参数重跑了全部 8 个场景（种子 42�
 
 - 复用 `SKU-2001` 作为限量商品。新增单商品抢购模式：每个请求只买这一个 SKU，数量为 1。现有的 `--hot-rate` 只是往普通订单里混入这个 SKU，不算抢购。多商品订单保留为回归场景。
 - 固定初始库存、明确的开抢时间和有限的实验时长。由请求生成工具控制开抢，不做活动管理后台。
-- 幂等键只识别同一次请求的重试，**不等于每人限购**。首期不承诺“一人一单”；以后要做，需要“活动 + 用户”的唯一约束，并用认证得到的身份代替客户端随便填的 `user_id`。
+- 幂等键只识别同一次请求的重试，**不等于每人限购**。首期不承诺“一人一单”；以后要做，需要“活动 + 用户”的唯一约束，并用认证得到的身份代替客户端随便填的 `user_id`。R4 的秒杀（§16）做了一人一单：Redis 判断，`orders` 表上“活动 + 用户”的唯一约束兜底；身份仍然是客户端传来的 `user_id`。
 - 支付继续用模拟渠道，保留成功、被拒、结果未知三种分支。
 - 售罄、支付被拒是正常的业务结果；连接失败、超时、账目不一致是另外几类问题，分别计数。
 
@@ -702,7 +704,7 @@ logs/shop/*.log ──log-shipper──HTTP──▶ ingest-service ──▶ lo
 | R1 | 限量抢购基线：单商品模式、逐订单核对、实验数据准备、实验记录补全（§11）（已完成，结果见 §11.6） | 并发竞争和售罄的结果可重复；订单、库存、支付逐单核对通过 |
 | R2 | 第一个 Ops 闭环：靶场 JSON 日志接入；core-service 先做告警模块（落库与查询）；首个场景 `mysql-down` | 故障产生可查询的告警，带来源、时间和事件证据；重复投递不误报。**已完成**（§12.2、§12.4.1；持久层按 D1 用 MyBatis-Plus） |
 | R3 | 指标与关联：Prometheus + Alertmanager 接入（积压指标已在 R1 实现，§8.3）、支付超时和库存热点锁场景、自动关联 | 正常售罄不误报；有触发和恢复记录；关联测试覆盖同时发生的独立故障。**自动关联已完成**（§12.5）；Prometheus + Alertmanager 与两个指标场景待做 |
-| R4 | 按实测瓶颈选择优化（§11.4） | 正确性不倒退；改善由可复现的实验支撑 |
+| R4 | 按实测瓶颈选择优化（§11.4）。第一项：秒杀走 Redis（§16） | 正确性不倒退；改善由可复现的实验支撑。**秒杀已完成**（§16.6） |
 | R5 | Agent 问答与受控工具排查；少量可疑行为规则 | 回答引用证据，原因不明时转人工；安全规则有正常行为作对照 |
 
 **R0 清单：**
@@ -797,3 +799,107 @@ curl "localhost:8080/api/v1/alerts?service=order-service&limit=20"     # 也可�
 
 同样的抢购，演练 2 过载、演练 3 没有：这套资源下每秒 50 单接近处理能力的边缘，服务是否已经预热就能决定结果。
 
+
+---
+
+## 16. 秒杀（R4，2026-10-18）
+
+R1 的抢购走普通下单接口：每个请求都在库存服务里抢同一行的行锁，售罄之后的请求也要拿到锁才知道“不够”。固定资源下单个热点商品约 100 单/秒就到顶，p95 约 1.5 s（§11.6）。秒杀把“谁能买到”的判断搬到 Redis，数据库只处理真正成交的订单。做法参考常见的 Redis + Lua + 消息队列方案，并补上它通常没有的几件事：被取消订单的名额归还、消费者崩溃后的接管、Redis 与 MySQL 的对账，以及与 R1 在同一资源下的对比实验。
+
+```
+buyer ──POST /api/v1/flash-sales/{id}/orders──▶ order-service ──Lua──▶ Redis: units left, buyers, queue (stream)
+   ◀── 202 QUEUED / 200 same order / 409 SOLD_OUT                         │
+                                                                          ▼ consumer group, 4 threads
+                                       order-service: create order ──▶ inventory (reserve) ──▶ payment ──▶ confirm
+                                                     (Saga of §4, unchanged)
+                                       cancelled ──outbox──▶ unit back to Redis (Lua)
+```
+
+### 16.1 活动
+
+- `flash_sale` 表（订单库）：活动 id、SKU、名额、开始和结束时间。管理端口 `POST /actuator/flashsales {"sku","stock","seconds"}` 立即开一场活动，写入 MySQL 后把名额载入 Redis。库存服务里的可售数量要另外准备好（`/actuator/stockprep`）：Redis 决定谁能买，库存账本仍在库存服务。
+- 请求路径上的活动信息来自本地缓存（5 s）。同一个活动同时未命中只查一次数据库（`ConcurrentHashMap.compute`，防击穿）；不存在的活动 id 也缓存 1 s，并先校验 id 格式（防穿透）；缓存条目有上限。
+
+### 16.2 受理：一次 Lua 调用
+
+`try-buy.lua` 原子地完成：这个买家已经有订单，返回那个订单；名额用完，返回售罄；否则名额减一、记下买家和订单 id、把订单写入队列（`XADD`）。
+
+| Redis 键 | 内容 |
+|---|---|
+| `shop:flash-sale:{id}:left` | 还没给出去的名额 |
+| `shop:flash-sale:{id}:buyers` | 买家 → 订单 id，一人一单 |
+| `shop:flash-sale:{id}:orders` | 订单 id → 买家，订单还没建好时也能查到“排队中” |
+| `shop:flash-sale:queue` | 已受理订单的 Stream，所有活动共用 |
+
+- 脚本保证任何时刻 `left + buyers = 名额`。
+- **应答：** 受理返回 202 和 `QUEUED` 的订单 id（`Location` 指向查询地址）；同一个买家再来返回 200 和原订单（`Idempotent-Replayed`），不需要幂等键；售罄返回 409 `SOLD_OUT`；活动不存在 404，未开始或已结束 409。
+- **Redis 不可用时返回 503，不退回数据库路径。** 秒杀就是为了挡住数据库前面的洪峰，Redis 挂了再把流量放给数据库，等于把 R1 的问题原样请回来。普通下单不依赖 Redis，照常工作；order-service 的健康检查也不计入 Redis。
+- **超时不等于失败。** 命令在客户端 500 ms 超时，但可能已经写进连接，Redis 恢复后照样执行（集成测试里暂停 Redis 时实际发生了）。买家拿到 503 后重试，按一人一单拿到那次其实成功的订单，所以重试是安全的。
+- 售罄的请求只读两个键，不碰数据库、不加锁。是否再加“本地售罄标记”（JVM 里记一个标志，连 Redis 都不访问）：没加，因为实测瓶颈不在 Redis（§16.6），而且它会让“已经买到的人重试”也收到售罄，破坏上面的幂等应答。
+- 一个活动的键用同一个 hash tag，但队列不是，所以要求单实例 Redis；集群时每个活动用自己的队列，放在同一个 tag 下。
+
+### 16.3 下单：消费者组
+
+- order-service 里固定 4 个消费者线程（`shop.flash-sale.consumers`），用消费者组读队列，逐条调用原有的下单流程（§4：建单、预留、扣款、确认）。同时下单的秒杀订单最多 4 个，不论门口来了多少人：**队列削峰**，库存的热点行只承受成交的订单。
+- **先处理、后确认（XACK）**。消息带着订单 id，建单是幂等的（主键冲突说明已经建过，原样返回），所以同一条消息投递两次只有一个订单。建单失败（例如 MySQL 停了）不确认，消息留在待处理列表里。
+- **接管：** 待处理超过 30 s（`claim-after`）的消息，由任意实例的定时任务用 XPENDING + XCLAIM 接管；XCLAIM 带同样的最小空闲时间，只有一个实例能拿到。投递 20 次仍失败的放弃：名额还给活动，记 ERROR。
+- **自己名下的待处理消息：** 读队列的命令在客户端超时、但 Redis 恢复后照样执行时，消息已经投递给这个消费者，回复却丢了。所以读失败之后，下一轮先从 ID 0 读一遍自己名下没确认的消息，不必等 30 s 的接管。集成测试里这把 Redis 恢复后的订单延迟从 30 s 降到 1 s 左右。
+- 空队列时每 200 ms 读一次，不用阻塞读：阻塞读需要单独的连接，而且等待时间必须小于命令超时。
+- **数据库兜底：** `orders` 表加了 `flash_sale_id` 和唯一约束 `(flash_sale_id, user_id)`。Redis 丢了买家记录（例如 AOF 来不及落盘就崩溃）时，同一个买家的第二个订单在这里失败，名额还回去，记 `flash_sale_duplicate_buyer`。
+
+### 16.4 名额归还
+
+订单被取消（支付被拒、库存服务不可用、对账后作废、卡单清理），无论在哪条路径上，都在取消的同一个事务里发布 `OrderCancelled` 事件，秒杀模块在同一事务里写入 `flash_sale_return`（outbox，普通订单什么也不写），提交后立即调用 `give-back.lua`，成功后删除这一行；Redis 不可用时按 2、4、8……最长 30 s 退避重试。脚本只在“买家仍然持有这个订单”时归还，所以重复执行、或者买家归还后又买了一单，都不会多加名额。订单模块不依赖秒杀模块，只发事件。
+
+### 16.5 对账
+
+管理端口 `GET /actuator/flashsales/{id}` 对比 Redis 和 MySQL：
+
+- Redis 内部：`left + 持有名额的买家 = 名额`；
+- 跨两边：持有名额的买家 = 未取消的订单 + 待归还的名额 + 队列里还没建单的订单，由此算出“排队中”的数量，不能为负；
+- 成交的订单不超过名额。
+
+请求生成工具（`--seckill SKU --stock N`）在每次运行结束、所有订单都有结局之后调用它，要求一致、排队为 0、待归还为 0；再加上原有的库存账目和逐单资金、预留核对（§7.6）。
+
+**已知局限：** Redis 用 AOF、每秒刷盘，崩溃最多丢最后一秒：这一秒内被受理的买家拿到了订单 id，但订单不会被建出来，查询返回 404，名额也随之丢失（Redis 自身仍然自洽）。要零丢失需要每次写都刷盘（`appendfsync always`），吞吐会下降。活动结束后 Redis 键的清理没做。`user_id` 由客户端传入，一人一单要真正可靠，需要认证得到的身份。
+
+### 16.6 实验结果（开发服务器，2026-10-18）
+
+条件与 R1 相同（§11.6）：order-service、inventory-service 各 0.75 核，payment-service 0.5 核，MySQL 1 核，每个服务 512 MB（堆 256 MB）；新增的 Redis 0.5 核。先用普通订单每秒 30 单预热 90 s，再用秒杀每秒 200 单预热 20 s。与 R1 对照的三次请求生成工具仍是 0.5 核；它在每秒约 190 个请求时就用满了 0.5 核，所以计划每秒 1000 单的实验给它 1.5 核（整机 CPU 峰值 3.2 核）。原始报告在 `runs/r4-*.json`。
+
+**正确性竞争：** 100 件库存，持续 10 s，5% 重复请求、5% 被拒卡，各 3 次。
+
+| | R1 普通下单（计划 200 单/s） | R4 秒杀，同样参数 | R4 秒杀，计划 1000 单/s，16 个消费者 |
+|---|---|---|---|
+| 实际发出 | 112–138 单/s（同时在途 64 个） | 187–188 单/s（请求生成工具的 CPU 用满） | 764–944 单/s |
+| 成交 / 少卖 | 100 / 0 | 100 / 0 | 100 / 0 |
+| 售罄应答 p50 / p95 | 全部请求 352–458 / 759–1196 ms | 4–6 / 217–279 ms | 4–260 / 279–509 ms |
+| 受理（排队）应答 p50 / p95 | — | 217–393 / 511–690 ms | 285–318 / 418–494 ms |
+| 第一次售罄 | 1.5–2.0 s | 0.9–1.1 s | 0.3–0.5 s |
+| 发送结束后所有订单都有结局 | 同步，应答时已有结局 | 1.2–1.4 s | 1.2–1.3 s |
+| MySQL 行锁等待 | 775–873 次 | 57–75 次 | 69–122 次 |
+| 核对 | 全部通过 | 全部通过；Redis 与 MySQL 对账一致 | 同左 |
+
+被拒卡的订单取消后，名额都回到 Redis，又被后来的买家买走，所以每次都恰好卖出 100 件。受理的请求比售罄的慢，是因为它们都挤在开抢后的第一秒：消费者同时开始建单，和门口争订单服务的 0.75 核。
+
+**持续性能：** 库存充足（100 万件），不加重复请求和被拒卡，持续 20 s，请求生成工具 1.5 核。“建单速度”是全部受理的订单除以从开始到它们全都有结局的时间。
+
+| 消费者 | 计划速率 | 实际受理 | 受理应答 p50 / p95 | 建单速度 | 发送结束后清空队列 | 行锁平均等待 |
+|---|---|---|---|---|---|---|
+| 4 | 200 单/s | 200 单/s | 3 / 50 ms | 42 单/s | 74 s | 2 ms |
+| 4 | 1000 单/s | 981 单/s | 5 / 120 ms | 47 单/s | 400 s | 2 ms |
+| 16 | 200 单/s | 190 单/s | 18 / 64 ms | 66 单/s | 40 s | 26 ms |
+| 16 | 1000 单/s | 973 单/s | 55 / 263 ms | 84 单/s | 211 s | 34 ms |
+
+对照：R1 用普通下单接口持续抢一个热点商品，实际约 94–99 单/s，p95 约 1.5 s，行锁平均等待 40–43 ms。
+
+**结论：**
+
+- **门口：** 同样 0.75 核，受理能力从 R1 的约 120 单/s 提高到约 950 单/s，受理应答 p95 120 ms（4 个消费者）。售罄的请求不碰数据库，抢购时的行锁等待从约 800 次降到约 70 次。这一档的上限是订单服务的 CPU：接近每秒 1000 个请求时 0.75 核用满，Tomcat 线程一度全忙。
+- **正确性没有倒退：** 所有运行零超卖、零少卖，一人一单；库存账目、逐单资金和预留、Redis 与 MySQL 对账全部一致。
+- **建单：** 异步受理之后，真正写库的速度由消费者数量和热点行决定。4 个消费者每秒约 45 单：每单依次预留、扣款、确认，约 8 次事务提交，每个消费者每单约 90 ms。16 个消费者到 66–84 单/s，行锁等待随之升到 26–34 ms，接近 R1 测出的热点行上限。消费者越多，越接近同步下单时的锁竞争。默认 4 个，偏向保护数据库：限量秒杀（几百件）排队一两秒就清空，库存充足的长时间高峰才需要调大。
+- **下一步（未做）：** 受理和消费分开部署、各自扩容；热点行合并扣减（一次更新预留多单）或合并确认，提高建单的上限。
+
+**测量上的一次修正：** 请求生成工具最初在收尾时每秒把所有排队中的订单逐个查一遍。几千单排队时，这就是每秒几千个请求，打在正在建单的订单服务上，16 个消费者的建单速度因此被低估为 62 单/s。现在改为每秒查一次对账接口，等队列清空、订单都有结局，再逐单核对。
+
+**局限：** 持续性能每档只跑了一次；请求生成工具和服务在同一台机器上，高速率实验里它用了 1–1.5 核；只测了这一种资源配置。

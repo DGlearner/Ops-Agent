@@ -31,7 +31,7 @@
 java tools/Demo.java              # 启动容器、构建、启动全部服务、Agent 和控制台；Ctrl+C 停止
 ```
 
-- 它依次启动 Kafka、PostgreSQL、Redis 和靶场的 MySQL（Docker Compose），构建 jar，启动 Ops-Agent 的三个服务、靶场的三个服务和演练控制台，最后是日志采集器、Agent 和 Ops-Agent 控制台。缺少的 npm 包和 Agent 的虚拟环境（`agent/.venv`）会自动安装。
+- 它依次启动 Kafka、PostgreSQL、Redis 和靶场的 MySQL、Redis（Docker Compose），构建 jar，启动 Ops-Agent 的三个服务、靶场的三个服务和演练控制台，最后是日志采集器、Agent 和 Ops-Agent 控制台。缺少的 npm 包和 Agent 的虚拟环境（`agent/.venv`）会自动安装。
 - 第一次运行要下载镜像和依赖，需要几分钟；之后约 2 分钟，加 `--skip-build` 不重新构建时约 1 分钟。
 - **Agent 的模式：** 有大模型配置（`agent/.env` 或 `OPS_AGENT_LLM_*` 环境变量，见 [agent/README.md](agent/README.md)）时用大模型，没有就自动用基线模式；`--baseline` 强制用基线。
 - 每个进程的输出在 `logs/demo/<名字>.log`。Ctrl+C 只停进程，容器继续运行；`java tools/Demo.java stop` 把容器也停掉（数据保留），启动脚本被强制结束时它也会清理留下的进程。
@@ -55,7 +55,7 @@ java tools/Demo.java              # 启动容器、构建、启动全部服务�
 | core-service | 告警落库与查询；按依赖路径把告警关联成 Incident，生命周期与时间线；派发分析任务、校验 Agent 的证据 |
 | Agent（Python） | Incident 归因第一版：工具调用循环、证据自查、不用大模型的基线 |
 | Ops-Agent 控制台（web） | 第一版：Incident 列表与详情、服务拓扑 |
-| 电商靶场与演练控制台 | 订单、库存、支付三个服务；9 个故障场景；标准答案、顾客视角的评测、归因打分 |
+| 电商靶场与演练控制台 | 订单、库存、支付三个服务；秒杀（Redis + Lua 判断资格，Redis Stream 异步下单）；9 个故障场景；标准答案、顾客视角的评测、归因打分 |
 | 接下来 | 关联提示会误导的故障场景（比较大模型和基线）；日志检索与指标（P2）；认证与规则管理（P5） |
 
 各阶段的内容和验收见设计文档 §14，演练结果见 shop-design §15。
@@ -101,7 +101,7 @@ cd web && npm ci && npm run dev     # http://127.0.0.1:5180，/api 转发到 cor
 给 Ops-Agent 监控用的最小电商系统：订单、库存、支付模拟三个服务。它们产生结构化日志、跨服务 trace 和指标，可以注入超时与故障。设计见 [docs/shop-design.md](docs/shop-design.md)；演练控制台 `./gradlew :shop:lab:bootRun`，http://localhost:8090（shop-design §15）。
 
 ```bash
-cd deploy/shop && docker compose up -d                  # MySQL 8.4（与 Ops-Agent 的基础设施分开）
+cd deploy/shop && docker compose up -d                  # MySQL 8.4 和秒杀用的 Redis（与 Ops-Agent 的基础设施分开）
 ./gradlew :shop:inventory-service:bootRun              # 8092
 ./gradlew :shop:payment-service:bootRun                # 8093
 ./gradlew :shop:order-service:bootRun                  # 8091
@@ -112,6 +112,7 @@ cd deploy/shop && docker compose up -d                  # MySQL 8.4（与 Ops-Ag
 - 请求生成工具也可以先用 `./gradlew :shop:load-generator:installDist` 安装，再运行 `shop/load-generator/build/install/load-generator/bin/load-generator`（Windows 上运行同目录下的 `.bat`）。
 - 运行结束时，请求生成工具核对重复请求、库存账目和资金（已付款的订单都扣了款，取消的都没扣），有任何不一致就以非 0 退出。参数见 `--help`。
 - 故障场景：`--scenario payment-timeout` 等 8 个，见设计文档 §10。管理端口上的 `/actuator/faults` 可以手动注入延迟和错误。
+- 秒杀：`--seckill SKU-2001 --stock 100 --rate 200 --duration 10s`。资格判断和一人一单在 Redis 里用一个 Lua 脚本完成，受理的订单进 Redis Stream，由订单服务的消费者组异步下单；结束时核对库存、资金，并对账 Redis 与 MySQL。设计和与普通下单的对比实验见设计文档 §16。
 - 日志：`logs/shop/<服务名>.log`，每行一条 ECS JSON，带 `trace.id`。用 `tools/log-shipper` 送进 Ops-Agent 检测，见 [docs/shop-design.md](docs/shop-design.md) §12.2、§14。
 - 指标：`http://localhost:819x/actuator/prometheus`，管理端口只监听 127.0.0.1。
 
@@ -133,7 +134,7 @@ contracts/        Kafka 消息的 JSON Schema
 agent/            Python Agent：Incident 归因（agent/README.md）
 web/              Ops-Agent 控制台：Vue 3 + TypeScript（web/README.md）
 deploy/compose/   本地基础设施
-deploy/shop/      靶场的 MySQL
+deploy/shop/      靶场的 MySQL 和 Redis
 datasets/         样例日志
 tools/            一键演示（Demo.java）、重放工具、日志采集器（log-shipper）
 docs/             设计文档

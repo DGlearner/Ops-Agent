@@ -646,6 +646,7 @@ Agent 在最上层：它只能通过第 3 层的只读工具看到第 1、2 层�
 | P4 第一版 | Agent 契约；core 的 agentops 模块（派发、证据校验、查询）；Python Agent（工具调用循环、基线对照）；控制台展示分析并给归因打分 |
 | P5 界面第一版 | Ops-Agent 控制台（§6.6）：Incident 列表、详情（Agent 的结论与证据、告警与日志样本、影响范围、时间线、状态流转、手动请求分析）、服务拓扑 |
 | 演示收尾 | 一键启动全部组件（`tools/Demo.java`，§12）；ingest-service、stream-processor 也只监听 127.0.0.1（§11）；靶场服务启动时重试首次数据库连接 |
+| 靶场 R4 秒杀 | Redis + Lua 判断资格和一人一单，Redis Stream 消费者组异步下单，取消订单经 outbox 归还名额，Redis 与 MySQL 对账；与 R1 同资源对比（shop-design §16）；服务目录加入 shop-redis |
 
 ### 14.3 接下来
 
