@@ -112,10 +112,10 @@ public class Demo {
         }
         System.out.println("  JDK " + Runtime.version().feature() + ", Node.js " + node + ", Docker");
 
-        step("Starting the containers: Kafka, PostgreSQL, Redis, and the shop's MySQL");
+        step("Starting the containers: Kafka, PostgreSQL, Redis, and the shop's MySQL and Redis");
         exec(compose(OPS, "up", "-d", "--wait", "--wait-timeout", "180", "kafka", "postgres", "redis"), ROOT,
                 "containers.log");
-        exec(compose(SHOP, "up", "-d", "--wait", "--wait-timeout", "180", "mysql"), ROOT, "containers.log");
+        exec(compose(SHOP, "up", "-d", "--wait", "--wait-timeout", "180", "mysql", "redis"), ROOT, "containers.log");
         exec(compose(OPS, "up", "-d", "kafka-init"), ROOT, "containers.log");
         awaitTopics();
 
