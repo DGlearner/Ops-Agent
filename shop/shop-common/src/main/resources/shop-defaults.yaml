@@ -10,6 +10,10 @@ spring:
       connection-timeout: 2000 # ms
       # A transaction waiting on a row lock gives up after 5 s instead of MySQL's default 50 s.
       connection-init-sql: SET SESSION innodb_lock_wait_timeout = 5
+  flyway:
+    # Flyway opens the first connection, with the same 2 s timeout, which a busy machine (several services starting at
+    # once) can miss; retry for about 30 s (1, 2, 4, 8, 16 s apart) instead of exiting.
+    connect-retries: 5
 
 server:
   # The shop has no authentication, so its business ports, like the management ports, are reachable from this machine
