@@ -549,7 +549,7 @@ Redis 配置为 `noeviction`（锁和预算类的键不能被淘汰）。
 
 - **Spring profiles：** `local`（默认，连接本机的 Compose 基础设施）、`test`（Testcontainers）、`docker`（以后服务也放进 Compose 时使用）。
 - **敏感配置：** 只通过环境变量或不提交的 `application-local.yaml` 覆盖；仓库里只有开发用默认值。
-- 所有端口在 Compose 中只绑定 127.0.0.1。
+- 所有端口只绑定 127.0.0.1：Compose 发布的端口，以及每个服务默认的 `server.address`（2026-10-18 起 ingest-service、stream-processor 也是）。ingest-service 要接收别的机器发来的日志时，部署时设置 `SERVER_ADDRESS`，并配置自己的 `ops.ingest.sources`（local profile 接受公开的开发密钥）。
 
 ---
 
@@ -562,7 +562,9 @@ Redis 配置为 `noeviction`（锁和预算类的键不能被淘汰）。
 | Linux 服务器（开发机） | 写代码、编译、单元测试、单个服务的集成测试 |
 | Windows + IntelliJ IDEA + Docker Desktop（WSL2） | 运行完整系统、调试、演示 |
 
-**步骤（两边相同）：**
+**一键演示：** 仓库根目录运行 `java tools/Demo.java`（JDK 21 单文件程序，不依赖 bash）：启动 Compose 的基础设施和靶场 MySQL，构建 jar，分两批启动 Ops-Agent 的三个服务和靶场的四个进程（在小机器上同时启动七个 JVM 时，靶场首次连接 MySQL 可能超过 2 秒的超时），再启动日志采集器、Agent 和控制台，等每个进程就绪（Actuator health）后打印各页面地址。没有大模型配置时 Agent 用基线模式；演示用的关联间隔是 3 分钟。Ctrl+C 停止它启动的进程；`java tools/Demo.java stop` 清理残留进程并停止容器。用法见根目录 README。
+
+**分别启动（两边相同）：**
 
 ```bash
 # 1. 启动基础设施
@@ -643,6 +645,7 @@ Agent 在最上层：它只能通过第 3 层的只读工具看到第 1、2 层�
 | P1 第一版 | 演练控制台（shop-design §15）：流量、抢购、9 个故障场景、标准答案、顾客视角的评测 |
 | P4 第一版 | Agent 契约；core 的 agentops 模块（派发、证据校验、查询）；Python Agent（工具调用循环、基线对照）；控制台展示分析并给归因打分 |
 | P5 界面第一版 | Ops-Agent 控制台（§6.6）：Incident 列表、详情（Agent 的结论与证据、告警与日志样本、影响范围、时间线、状态流转、手动请求分析）、服务拓扑 |
+| 演示收尾 | 一键启动全部组件（`tools/Demo.java`，§12）；ingest-service、stream-processor 也只监听 127.0.0.1（§11）；靶场服务启动时重试首次数据库连接 |
 
 ### 14.3 接下来
 
