@@ -76,6 +76,22 @@ public final class ShopClient {
         return send(get(options.orderUrl() + "/api/v1/orders/" + orderId));
     }
 
+    /** Buys one unit in a flash sale through Redis (§16); the buyer is the idempotency key. */
+    public Response buy(String saleId, OrderMix.OrderRequest order) {
+        ObjectNode body = json.createObjectNode();
+        body.put("user_id", order.userId());
+        body.put("payment_token", order.paymentToken());
+        return send(HttpRequest.newBuilder(URI.create(options.orderUrl() + "/api/v1/flash-sales/" + saleId + "/orders"))
+                .timeout(Duration.ofSeconds(15))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body)))
+                .build());
+    }
+
+    public Response flashSaleOrder(String saleId, String orderId) {
+        return send(get(options.orderUrl() + "/api/v1/flash-sales/" + saleId + "/orders/" + orderId));
+    }
+
     public Response payment(String orderId) {
         return send(get(options.paymentUrl() + "/api/v1/payments/" + orderId));
     }

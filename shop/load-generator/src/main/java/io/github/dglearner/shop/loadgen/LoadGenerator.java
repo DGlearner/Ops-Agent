@@ -22,6 +22,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
 import java.util.stream.Collectors;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -67,6 +68,10 @@ public final class LoadGenerator {
     private volatile long sendingStartedAt;
     /** When the first order was answered out of stock, in {@link System#nanoTime()} terms. */
     private final AtomicLong firstOutOfStockAt = new AtomicLong(Long.MAX_VALUE);
+    /** The flash sale opened for a --seckill run. */
+    private volatile String saleId;
+    /** How long after sending stopped every order had its outcome, for a --seckill run: the queue's backlog. */
+    private volatile long drainedAfterMillis = -1;
 
     private LoadGenerator(Options options) {
         this.options = options;
@@ -98,10 +103,14 @@ public final class LoadGenerator {
         if (options.stock().isPresent() && !prepareStock(options.flashSale(), options.stock().getAsInt())) {
             return false;
         }
+        if (options.isSeckill() && !openSale(options.seckill(), options.stock().getAsInt())) {
+            return false;
+        }
         Map<String, ShopClient.StockRow> before = options.verify() || options.isFlashSale() ? client.stock() : Map.of();
         System.out.printf("run %s: %.1f orders/s for %ds, seed %d%s%s%n", runId, options.rate(),
                 options.duration().toSeconds(), seed, options.hasScenario() ? ", scenario " + options.scenario() : "",
-                options.isFlashSale() ? ", flash sale of " + options.flashSale() : "");
+                options.isSeckill() ? ", flash sale " + saleId + " of " + options.seckill() + " through Redis"
+                        : options.isFlashSale() ? ", flash sale of " + options.flashSale() : "");
 
         Map<String, Object> report = new LinkedHashMap<>();
         report.put("run_id", runId);
@@ -143,7 +152,11 @@ public final class LoadGenerator {
         }
 
         long deadline = System.nanoTime() + options.settleTimeout().toNanos();
+        long settleFrom = System.nanoTime();
         settle(deadline);
+        if (orders.values().stream().allMatch(Tracked::isFinal) && unanswered.isEmpty()) {
+            drainedAfterMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - settleFrom);
+        }
         boolean ok = summarize(before, report, deadline) && (scenario == null || scenario.ok());
         printResources(resources);
         report.put("mysql_row_locks", rowLocksDuring(locksBefore));
@@ -188,12 +201,15 @@ public final class LoadGenerator {
     }
 
     private void placeOne(OrderMix mix, String key) {
-        OrderMix.OrderRequest request = mix.next();
+        OrderMix.OrderRequest next = mix.next();
+        // Through Redis every request is a new buyer (one order each); a duplicate repeats the same buyer.
+        OrderMix.OrderRequest request = options.isSeckill()
+                ? new OrderMix.OrderRequest("b-" + key, next.lines(), next.paymentToken()) : next;
         boolean duplicate = mix.duplicate();
         Future<ShopClient.Response> alongside = duplicate && mix.concurrentDuplicate()
-                ? duplicateSender.submit(() -> client.placeOrder(key, request)) : null;
+                ? duplicateSender.submit(() -> send(key, request)) : null;
 
-        ShopClient.Response original = client.placeOrder(key, request);
+        ShopClient.Response original = send(key, request);
         stats.orders.increment();
         stats.response(original, true);
         track(original, request, key);
@@ -202,7 +218,7 @@ public final class LoadGenerator {
         }
         ShopClient.Response repeat;
         try {
-            repeat = alongside != null ? alongside.get() : client.placeOrder(key, request);
+            repeat = alongside != null ? alongside.get() : send(key, request);
         } catch (Exception e) {
             stats.failure(key + ": duplicate request failed: " + e);
             return;
@@ -213,9 +229,20 @@ public final class LoadGenerator {
         checkDuplicate(key, original, repeat);
     }
 
+    private ShopClient.Response send(String key, OrderMix.OrderRequest request) {
+        return options.isSeckill() ? client.buy(saleId, request) : client.placeOrder(key, request);
+    }
+
     private void track(ShopClient.Response response, OrderMix.OrderRequest request, String key) {
         int status = response.status();
         String orderId = response.orderId();
+        if (options.isSeckill() && status == 409 && "SOLD_OUT".equals(response.body().path("code").asString())) {
+            // A business outcome, not a failure: the sale turned the buyer away without creating an order.
+            unanswered.remove(key);
+            stats.soldOut.increment();
+            firstOutOfStockAt.accumulateAndGet(System.nanoTime(), Math::min);
+            return;
+        }
         if (orderId.isEmpty()) {
             if (status >= 500) {
                 // E.g. the database is down: no order may exist, or one may have been created before the failure.
@@ -252,6 +279,9 @@ public final class LoadGenerator {
         if (a.isEmpty() && b.isEmpty() && original.status() >= 500 && repeat.status() >= 500) {
             return; // Both failed without an order (e.g. database down); the retry in settle() finds out.
         }
+        if (a.isEmpty() && b.isEmpty() && original.status() == 409 && repeat.status() == 409) {
+            return; // Both turned away: sold out.
+        }
         if (a.isEmpty() || b.isEmpty() || !a.equals(b)) {
             if (a.isEmpty() || b.isEmpty()) {
                 return; // One of them failed with a 5xx and is retried with the same key later.
@@ -270,9 +300,12 @@ public final class LoadGenerator {
      * waits for unfinished orders, e.g. those awaiting payment reconciliation.
      */
     private void settle(long deadline) {
+        if (options.isSeckill()) {
+            awaitQueueDrained(deadline);
+        }
         while (System.nanoTime() < deadline) {
             for (Unanswered u : List.copyOf(unanswered.values())) {
-                ShopClient.Response response = client.placeOrder(u.key(), u.request());
+                ShopClient.Response response = send(u.key(), u.request());
                 stats.retries.increment();
                 if (!response.orderId().isEmpty()) {
                     track(response, u.request(), u.key());
@@ -284,7 +317,8 @@ public final class LoadGenerator {
                 return;
             }
             for (Map.Entry<String, Tracked> entry : open) {
-                ShopClient.Response response = client.order(entry.getKey());
+                ShopClient.Response response = options.isSeckill()
+                        ? client.flashSaleOrder(saleId, entry.getKey()) : client.order(entry.getKey());
                 if (response.status() == 200) {
                     entry.getValue().status = response.body().path("status").asString();
                     entry.getValue().reason = response.body().path("failure_reason").asString();
@@ -329,6 +363,9 @@ public final class LoadGenerator {
         if (options.verify()) {
             ok &= checkLedger(before, report, deadline);
             ok &= checkOrders(report);
+        }
+        if (options.isSeckill()) {
+            ok &= reconcileSale(report, deadline);
         }
         if (stats.failureCount() > 0) {
             System.out.printf("failures (%d, first %d shown; look the trace ids up in logs/shop):%n",
@@ -450,7 +487,9 @@ public final class LoadGenerator {
         int atStart = before.containsKey(sku) ? before.get(sku).available() : -1;
         ShopClient.StockRow after = client.stock().get(sku);
         long paid = outcomes.getOrDefault("PAID", 0L);
-        long outOfStock = outcomes.getOrDefault("CANCELLED/OUT_OF_STOCK", 0L);
+        // Through Redis a sold-out buyer gets a 409 and no order; otherwise an order cancelled out of stock.
+        long outOfStock = options.isSeckill() ? stats.soldOut.sum()
+                : outcomes.getOrDefault("CANCELLED/OUT_OF_STOCK", 0L);
         long first = firstOutOfStockAt.get();
         Long soldOutAfter = first == Long.MAX_VALUE ? null : TimeUnit.NANOSECONDS.toMillis(first - sendingStartedAt);
         System.out.printf("flash sale: %s, %d available at the start, %d paid orders, %d answered out of stock%s, "
@@ -463,7 +502,75 @@ public final class LoadGenerator {
         sale.put("out_of_stock", outOfStock);
         sale.put("first_out_of_stock_after_ms", soldOutAfter);
         sale.put("available_at_end", after.available());
+        if (options.isSeckill()) {
+            System.out.printf("  through Redis: sale %s, %d buyers accepted, %d units unsold, all orders final %s%n",
+                    saleId, orders.size(), atStart - paid,
+                    drainedAfterMillis < 0 ? "not reached" : drainedAfterMillis + " ms after sending stopped");
+            sale.put("sale_id", saleId);
+            sale.put("accepted", orders.size());
+            sale.put("unsold", atStart - paid);
+            sale.put("drained_after_ms", drainedAfterMillis < 0 ? null : drainedAfterMillis);
+        }
         return sale;
+    }
+
+    /**
+     * Waits until the sale's queue is empty and none of its orders is still being placed, asking order-service's
+     * reconciliation once a second. Polling every queued order instead would send thousands of requests a second to
+     * the service that is placing them, and slow it down.
+     */
+    private void awaitQueueDrained(long deadline) {
+        while (System.nanoTime() < deadline) {
+            JsonNode report = client.admin("order", "GET", "/actuator/flashsales/" + saleId, null).body();
+            JsonNode byStatus = report.path("orders");
+            boolean placing = byStatus.has("CREATED") || byStatus.has("STOCK_RESERVED")
+                    || byStatus.has("PAYMENT_UNKNOWN");
+            if (report.path("queued").asLong(-1) == 0 && !placing) {
+                return;
+            }
+            LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(1));
+        }
+    }
+
+    /** Opens the flash sale through order-service's management port; its stock is already set in inventory. */
+    private boolean openSale(String sku, int units) {
+        long seconds = options.duration().toSeconds() + options.settleTimeout().toSeconds() + 60;
+        ShopClient.Response response = client.admin("order", "POST", "/actuator/flashsales",
+                "{\"sku\":\"" + sku + "\",\"stock\":" + units + ",\"seconds\":" + seconds + "}");
+        if (response.status() != 201) {
+            System.out.println("cannot open the flash sale of " + sku + ": "
+                    + (response.error() != null ? response.error() : "HTTP " + response.status() + " "
+                    + response.body().path("error").asString()));
+            return false;
+        }
+        saleId = response.body().path("sale_id").asString();
+        return true;
+    }
+
+    /**
+     * Redis against MySQL after the run (order-service's {@code /actuator/flashsales/{id}}): consistent, nothing left
+     * in the queue, no unit still to be given back. Re-read until then or the deadline, like the ledger.
+     */
+    private boolean reconcileSale(Map<String, Object> report, long deadline) {
+        JsonNode body;
+        boolean ok;
+        while (true) {
+            ShopClient.Response response = client.admin("order", "GET", "/actuator/flashsales/" + saleId, null);
+            body = response.body();
+            ok = response.status() == 200 && body.path("consistent").asBoolean()
+                    && body.path("queued").asLong(-1) == 0 && body.path("returns_pending").asLong(-1) == 0;
+            if (ok || System.nanoTime() > deadline) {
+                break;
+            }
+            LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(1));
+        }
+        System.out.printf("redis vs mysql: %s (units left %s, holders %s, queued %s, returns pending %s)%n",
+                ok ? "OK" : "MISMATCH", body.path("redis").path("units_left").asString(),
+                body.path("redis").path("holders").asString(), body.path("queued").asString(),
+                body.path("returns_pending").asString());
+        body.path("problems").forEach(p -> System.out.println("  " + p.asString()));
+        report.put("sale_reconciliation", json.convertValue(body, Map.class));
+        return ok;
     }
 
     /** Order by order: payment and reservation agree with how the order ended (see {@link OrderCheck}). */
@@ -520,7 +627,9 @@ public final class LoadGenerator {
     private Map<String, Integer> units(boolean paid) {
         Map<String, Integer> units = new HashMap<>();
         for (Tracked t : orders.values()) {
-            boolean counts = paid ? "PAID".equals(t.status) : !t.isFinal() && !"CREATED".equals(t.status);
+            // CREATED and QUEUED orders hold no reservation yet.
+            boolean counts = paid ? "PAID".equals(t.status)
+                    : !t.isFinal() && !"CREATED".equals(t.status) && !"QUEUED".equals(t.status);
             if (counts) {
                 t.lines.forEach(l -> units.merge(l.sku(), l.quantity(), Integer::sum));
             }

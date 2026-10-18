@@ -13,7 +13,8 @@ import java.util.Set;
 public record Options(String orderUrl, String inventoryUrl, String paymentUrl, double rate, Duration duration,
         int concurrency, int users, double duplicateRate, double declineRate, double hotRate, OptionalLong seed,
         Duration settleTimeout, boolean verify, Path report, String scenario, Duration baseline, Duration fault,
-        Duration recovery, Map<String, String> adminUrls, String mysqlContainer, String flashSale, OptionalInt stock) {
+        Duration recovery, Map<String, String> adminUrls, String mysqlContainer, String flashSale, OptionalInt stock,
+        String seckill) {
 
     static final String USAGE = """
             Usage: load-generator [options]
@@ -42,7 +43,9 @@ public record Options(String orderUrl, String inventoryUrl, String paymentUrl, d
               --payment-admin URL
               --mysql-container N    container stopped by mysql-down (default ops-shop-mysql-1)
             Flash sale (every order buys one unit of one SKU; --hot-rate does not apply):
-              --flash-sale SKU       the SKU on sale, e.g. SKU-2001
+              --flash-sale SKU       the SKU on sale, e.g. SKU-2001, ordered like any other product
+              --seckill SKU          the SKU on sale through Redis (docs/shop-design.md §16): every request is a
+                                     new buyer, accepted orders are queued; duplicates repeat the same buyer
               --stock N              units available when the sale starts, set through the inventory
                                      management port; refused while orders for the SKU are still in flight
             The checks assume nothing else orders or restocks while the run is going on.""".formatted(
@@ -51,7 +54,8 @@ public record Options(String orderUrl, String inventoryUrl, String paymentUrl, d
     private static final Set<String> VALUE_OPTIONS = Set.of("--order-url", "--inventory-url", "--payment-url",
             "--rate", "--duration", "--concurrency", "--users", "--duplicate-rate", "--decline-rate", "--hot-rate",
             "--seed", "--settle-timeout", "--report", "--scenario", "--baseline", "--fault", "--recovery",
-            "--order-admin", "--inventory-admin", "--payment-admin", "--mysql-container", "--flash-sale", "--stock");
+            "--order-admin", "--inventory-admin", "--payment-admin", "--mysql-container", "--flash-sale", "--stock",
+            "--seckill");
 
     /** Whether this run injects a fault. */
     public boolean hasScenario() {
@@ -69,15 +73,21 @@ public record Options(String orderUrl, String inventoryUrl, String paymentUrl, d
         config.put("decline_rate", declineRate);
         config.put("hot_rate", isFlashSale() ? null : hotRate);
         config.put("flash_sale", flashSale);
+        config.put("seckill", seckill);
         config.put("stock", stock.isPresent() ? stock.getAsInt() : null);
         config.put("scenario", scenario);
         config.put("settle_timeout_s", settleTimeout.toSeconds());
         return config;
     }
 
-    /** Whether every order buys one unit of {@link #flashSale()}. */
+    /** Whether every order buys one unit of {@link #flashSale()}, regular or through Redis ({@link #isSeckill()}). */
     public boolean isFlashSale() {
         return flashSale != null;
+    }
+
+    /** Whether the flash sale goes through Redis and its queue (§16) rather than the regular order API. */
+    public boolean isSeckill() {
+        return seckill != null;
     }
 
     public static Options parse(String... args) {
@@ -104,6 +114,7 @@ public record Options(String orderUrl, String inventoryUrl, String paymentUrl, d
         String mysqlContainer = "ops-shop-mysql-1";
         String flashSale = null;
         OptionalInt stock = OptionalInt.empty();
+        String seckill = null;
 
         for (int i = 0; i < args.length; i++) {
             String name = args[i];
@@ -144,12 +155,23 @@ public record Options(String orderUrl, String inventoryUrl, String paymentUrl, d
                 case "--payment-admin" -> adminUrls.put("payment", stripSlash(value));
                 case "--mysql-container" -> mysqlContainer = value;
                 case "--flash-sale" -> flashSale = value;
+                case "--seckill" -> seckill = value;
                 case "--stock" -> stock = OptionalInt.of((int) nonNegative(name, Integer.parseInt(value)));
                 default -> throw new IllegalStateException("Unhandled option " + name);
             }
         }
+        if (seckill != null) {
+            if (flashSale != null || scenario != null) {
+                throw new IllegalArgumentException("--seckill cannot be combined with --flash-sale or --scenario");
+            }
+            if (stock.isEmpty()) {
+                throw new IllegalArgumentException("--seckill needs --stock");
+            }
+            // The sale is a flash sale of that SKU; only the way orders are placed differs.
+            flashSale = seckill;
+        }
         if (stock.isPresent() && flashSale == null) {
-            throw new IllegalArgumentException("--stock needs --flash-sale");
+            throw new IllegalArgumentException("--stock needs --flash-sale or --seckill");
         }
         if (scenario != null) {
             duration = baseline.plus(fault).plus(recovery);
@@ -159,7 +181,7 @@ public record Options(String orderUrl, String inventoryUrl, String paymentUrl, d
         }
         return new Options(orderUrl, inventoryUrl, paymentUrl, rate, duration, concurrency, users, duplicateRate,
                 declineRate, hotRate, seed, settleTimeout, verify, report, scenario, baseline, fault, recovery,
-                Map.copyOf(adminUrls), mysqlContainer, flashSale, stock);
+                Map.copyOf(adminUrls), mysqlContainer, flashSale, stock, seckill);
     }
 
     /** {@code 500ms}, {@code 30s}, {@code 5m} or {@code 1h}. */
