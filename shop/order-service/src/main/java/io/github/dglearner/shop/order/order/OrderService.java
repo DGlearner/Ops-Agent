@@ -100,14 +100,49 @@ public class OrderService {
         return orders.find(orderId);
     }
 
+    /**
+     * Places an order that a flash sale accepted (§16.3): one unit of {@code sku}, with the order id the sale gave the
+     * buyer. Delivering the same order again changes nothing and returns it as it is; an unfinished one is completed by
+     * background recovery. Empty if the buyer already has a different order of this sale, which only happens if Redis
+     * lost track of them; the caller then gives the unit back.
+     */
+    public Optional<Order> placeFlashSaleOrder(String saleId, String sku, String orderId, String userId,
+            String paymentToken) {
+        List<OrderLine> lines = List.of(new OrderLine(sku, 1));
+        List<OrderItem> items = price(lines);
+        long amount = items.getFirst().unitPriceCents();
+        try {
+            // The order id doubles as the idempotency key; one order per buyer comes from the sale's own constraint.
+            tx.executeWithoutResult(status -> orders.insert(orderId, userId, orderId,
+                    RequestHash.of(userId, lines, paymentToken), amount, currency, items, saleId));
+        } catch (DuplicateKeyException e) {
+            Optional<Order> delivered = orders.find(orderId);
+            if (delivered.isEmpty()) {
+                log.atWarn().addKeyValue(LogEvents.ACTION, "flash_sale_duplicate_buyer")
+                        .addKeyValue("order_id", orderId).addKeyValue("user_id", userId)
+                        .addKeyValue("flash_sale_id", saleId)
+                        .log("Buyer already has an order of this flash sale; the accepted order is dropped");
+            }
+            return delivered;
+        }
+        log.atInfo().addKeyValue(LogEvents.ACTION, "order_created")
+                .addKeyValue("order_id", orderId).addKeyValue("user_id", userId)
+                .addKeyValue("amount_cents", amount).addKeyValue("items", describe(lines))
+                .addKeyValue("flash_sale_id", saleId).log("Flash sale order created");
+
+        Order order = place(orderId, userId, lines, amount, paymentToken);
+        metrics.placed(order);
+        logOutcome(order);
+        return Optional.of(order);
+    }
+
     private Order place(String orderId, String userId, List<OrderLine> lines, long amount, String token) {
         switch (inventory.reserve(orderId, lines)) {
             case ReserveResult.Reserved reserved -> {
             }
             case ReserveResult.OutOfStock outOfStock -> {
                 // Inventory rolled back the whole reservation: nothing to release.
-                orders.transition(orderId, CREATED, CANCELLED, FailureReason.OUT_OF_STOCK);
-                return current(orderId);
+                return settlement.cancel(orderId, CREATED, FailureReason.OUT_OF_STOCK);
             }
             case ReserveResult.Failed failed -> {
                 log.atWarn().addKeyValue(LogEvents.ACTION, "dependency_call_failed")

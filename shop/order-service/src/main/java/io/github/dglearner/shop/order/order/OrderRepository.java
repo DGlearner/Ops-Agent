@@ -26,12 +26,21 @@ public class OrderRepository {
     /** Throws {@code DuplicateKeyException} if this user already used the idempotency key. */
     public void insert(String orderId, String userId, String idempotencyKey, String requestHash, long amountCents,
             String currency, List<OrderItem> items) {
+        insert(orderId, userId, idempotencyKey, requestHash, amountCents, currency, items, null);
+    }
+
+    /**
+     * An order placed through a flash sale ({@code flashSaleId}, or null for a regular order). Throws
+     * {@code DuplicateKeyException} if the order exists, or if this user already has an order of the sale.
+     */
+    public void insert(String orderId, String userId, String idempotencyKey, String requestHash, long amountCents,
+            String currency, List<OrderItem> items, String flashSaleId) {
         jdbc.sql("""
                         INSERT INTO orders (order_id, user_id, idempotency_key, request_hash, status, amount_cents,
-                                            currency, created_at, updated_at)
-                        VALUES (:id, :user, :key, :hash, 'CREATED', :amount, :currency, NOW(3), NOW(3))""")
+                                            currency, flash_sale_id, created_at, updated_at)
+                        VALUES (:id, :user, :key, :hash, 'CREATED', :amount, :currency, :sale, NOW(3), NOW(3))""")
                 .param("id", orderId).param("user", userId).param("key", idempotencyKey).param("hash", requestHash)
-                .param("amount", amountCents).param("currency", currency)
+                .param("amount", amountCents).param("currency", currency).param("sale", flashSaleId)
                 .update();
         for (OrderItem item : items) {
             jdbc.sql("""
@@ -99,12 +108,13 @@ public class OrderRepository {
         return new Order(rs.getString("order_id"), rs.getString("user_id"),
                 OrderStatus.valueOf(rs.getString("status")), reason == null ? null : FailureReason.valueOf(reason),
                 rs.getLong("amount_cents"), rs.getString("currency"), List.of(),
-                rs.getTimestamp("created_at").toInstant(), rs.getTimestamp("updated_at").toInstant());
+                rs.getTimestamp("created_at").toInstant(), rs.getTimestamp("updated_at").toInstant(),
+                rs.getString("flash_sale_id"));
     }
 
     private Order withItems(Order order) {
         return new Order(order.orderId(), order.userId(), order.status(), order.failureReason(), order.amountCents(),
-                order.currency(), items(order.orderId()), order.createdAt(), order.updatedAt());
+                order.currency(), items(order.orderId()), order.createdAt(), order.updatedAt(), order.flashSaleId());
     }
 
     private List<OrderItem> items(String orderId) {

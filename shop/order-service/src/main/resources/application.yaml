@@ -10,6 +10,14 @@ spring:
         # Sessions run in UTC whatever the JVM time zone is, so NOW(3) and DATETIME values are always UTC.
         connectionTimeZone: UTC
         forceConnectionTimeZoneToSession: true
+  data:
+    redis:
+      # The shop's own Redis (deploy/shop), apart from Ops-Agent's on 6379.
+      host: localhost
+      port: 6380
+      # A flash sale request fails fast with 503 when Redis does not answer, instead of piling up threads.
+      timeout: 500ms
+      connect-timeout: 500ms
 
 server:
   port: 8091
@@ -17,6 +25,14 @@ server:
 management:
   server:
     port: 8191
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,faults,flashsales
+  health:
+    redis:
+      # Only flash sales need Redis; regular orders keep working without it, so it does not make the service DOWN.
+      enabled: false
 
 shop:
   order:
@@ -37,3 +53,10 @@ shop:
       # Far longer than any request can take with the timeouts above.
       abandon-after: 60s
       max-backoff: 30s
+  flash-sale:
+    # Threads taking accepted orders from the queue: at most this many flash sale orders are placed at once, whatever
+    # the burst at the door.
+    consumers: 4
+    batch: 10
+    # A message delivered to a consumer that has not acknowledged it for this long (e.g. it crashed) is taken over.
+    claim-after: 30s
