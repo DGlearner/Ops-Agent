@@ -16,6 +16,8 @@ spring:
       data-source-properties:
         # A query on a database that stopped answering fails after 30 s instead of hanging for good.
         socketTimeout: 30
+        # A batch of log lines goes as multi-row inserts, several times faster than row by row.
+        reWriteBatchedInserts: true
   flyway:
     schemas: core
     default-schema: core
@@ -81,6 +83,10 @@ ops:
     scan-interval: 15s
     timeout: 3m
     language: zh
+  logs:
+    # Stored log lines are kept this long, as long as Kafka keeps logs.normalized (docs/project-design.md §8.7).
+    retention: 3d
+    max-range: 24h
 
 ---
 spring:

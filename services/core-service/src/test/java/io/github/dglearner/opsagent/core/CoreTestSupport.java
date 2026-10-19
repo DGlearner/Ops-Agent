@@ -62,6 +62,7 @@ abstract class CoreTestSupport {
         POSTGRES.start();
         try (Admin admin = Admin.create(Map.of("bootstrap.servers", KAFKA.getBootstrapServers()))) {
             admin.createTopics(List.of(new NewTopic(Topics.ALERTS, 3, (short) 1),
+                    new NewTopic(Topics.LOGS_NORMALIZED, 3, (short) 1),
                     new NewTopic(Topics.ALERTS + ".dlt", 1, (short) 1),
                     new NewTopic(Topics.AGENT_TASKS_HIGH, 3, (short) 1),
                     new NewTopic(Topics.AGENT_RESULTS, 3, (short) 1),

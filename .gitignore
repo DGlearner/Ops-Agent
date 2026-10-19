@@ -19,9 +19,10 @@ application-local.yaml
 .DS_Store
 Thumbs.db
 
-# Logs
+# Logs: the demo's and the shop's under logs/, and log files wherever a service was started from
 *.log
-logs/
+*.log.*.gz
+/logs/
 
 # Load generator reports
 runs/
