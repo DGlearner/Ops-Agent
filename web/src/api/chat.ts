@@ -61,6 +61,8 @@ export interface Metrics {
   tool_calls: number
   degraded: boolean
   model?: string | null
+  /** The user asked for 深度思考; null: the server's default. */
+  thinking?: boolean | null
 }
 
 export interface Trace {
@@ -166,10 +168,14 @@ export const chatApi = {
   deleteSession(id: string): Promise<void> {
     return request(`/sessions/${id}`, { method: 'DELETE' })
   },
-  /** Asks, and hands each event to onEvent as it arrives; resolves when the stream ends. Abort to stop. */
+  /**
+   * Asks, and hands each event to onEvent as it arrives; resolves when the stream ends. Abort to stop. thinking:
+   * the model reasons at length before it answers, and its reasoning streams (slower).
+   */
   async ask(
     sessionId: string,
     content: string,
+    thinking: boolean,
     onEvent: (event: string, data: unknown) => void,
     signal: AbortSignal,
   ): Promise<void> {
@@ -179,7 +185,7 @@ export const chatApi = {
       response = await fetch(`/api/v1/chat/sessions/${sessionId}/messages`, {
         method: 'POST',
         headers: { Accept: 'text/event-stream', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, tz }),
+        body: JSON.stringify({ content, tz, thinking }),
         signal,
       })
     } catch {

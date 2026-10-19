@@ -168,7 +168,7 @@ export function metricsLine(m: Metrics | undefined, route: RouteInfo | null | un
     m.first_answer_ms !== null && m.first_answer_ms !== undefined && `首字 ${seconds(m.first_answer_ms)}`,
     `用时 ${seconds(m.duration_ms)}`,
     m.tool_calls ? `模型补查 ${m.tool_calls} 次` : '',
-    m.model ? `模型 ${m.model}` : '没有使用大模型',
+    m.model ? `模型 ${m.model}${m.thinking ? '（深度思考）' : ''}` : '没有使用大模型',
     m.degraded ? '模型失败，已降级' : '',
   ]
     .filter(Boolean)

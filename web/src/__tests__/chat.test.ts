@@ -118,5 +118,8 @@ describe('metricsLine', () => {
     )
 
     expect(line).toBe('故障诊断（模型判断，950 ms） · 首字 1.2 秒 · 用时 8.4 秒 · 模型补查 1 次 · 模型 deepseek-v4-pro')
+    expect(metricsLine({ duration_ms: 1, tool_calls: 0, degraded: false, model: 'm', thinking: true }, null)).toBe(
+      '用时 1 ms · 模型 m（深度思考）',
+    )
   })
 })

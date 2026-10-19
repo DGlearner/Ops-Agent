@@ -20,6 +20,24 @@ const error = ref('')
 const asking = ref(false)
 const list = ref<HTMLElement>()
 let controller: AbortController | undefined
+// 深度思考: remembered in this browser; storage may be unavailable (private window), then it starts off.
+const thinking = ref(readThinking())
+
+function readThinking(): boolean {
+  try {
+    return localStorage.getItem('ops-chat-thinking') === 'on'
+  } catch {
+    return false
+  }
+}
+
+watch(thinking, (on) => {
+  try {
+    localStorage.setItem('ops-chat-thinking', on ? 'on' : 'off')
+  } catch {
+    // Not remembered, that is all.
+  }
+})
 // The session this page created for the question it is answering: not to be reloaded when the URL catches up.
 let created: string | undefined
 
@@ -79,6 +97,7 @@ async function ask(text = input.value) {
     await chatApi.ask(
       sessionId,
       content,
+      thinking.value,
       (event, data) => {
         applyEvent(answer, event, data as Record<string, unknown>)
         void scrollDown(true)
@@ -205,6 +224,14 @@ onBeforeUnmount(stop)
           placeholder="问问系统的情况，例如：刚才下单为什么失败？（Enter 发送，Shift+Enter 换行）"
           @keydown="onKey"
         />
+        <el-check-tag
+          :checked="thinking"
+          class="thinking-toggle"
+          title="模型先充分推理再回答，推理过程实时显示；首字要多等几秒"
+          @change="thinking = !thinking"
+        >
+          深度思考
+        </el-check-tag>
         <el-button v-if="asking" :icon="VideoPause" @click="stop">停止</el-button>
         <el-button v-else type="primary" :icon="Promotion" :disabled="!input.trim()" @click="ask()">发送</el-button>
       </div>
@@ -338,6 +365,11 @@ onBeforeUnmount(stop)
 
 .message.assistant {
   max-width: 900px;
+}
+
+.thinking-toggle {
+  flex: none;
+  margin-bottom: 4px;
 }
 
 .composer {
