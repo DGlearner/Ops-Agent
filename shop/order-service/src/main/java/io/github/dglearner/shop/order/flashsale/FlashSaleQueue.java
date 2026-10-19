@@ -3,6 +3,7 @@ package io.github.dglearner.shop.order.flashsale;
 import io.github.dglearner.shop.common.LogEvents;
 import io.github.dglearner.shop.order.order.Order;
 import io.github.dglearner.shop.order.order.OrderService;
+import io.github.dglearner.shop.order.redis.RedisFailureLog;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.lang.management.ManagementFactory;

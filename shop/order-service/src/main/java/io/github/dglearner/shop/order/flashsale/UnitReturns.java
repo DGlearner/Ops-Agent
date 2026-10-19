@@ -2,6 +2,7 @@ package io.github.dglearner.shop.order.flashsale;
 
 import io.github.dglearner.shop.common.LogEvents;
 import io.github.dglearner.shop.order.order.OrderCancelled;
+import io.github.dglearner.shop.order.redis.RedisFailureLog;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

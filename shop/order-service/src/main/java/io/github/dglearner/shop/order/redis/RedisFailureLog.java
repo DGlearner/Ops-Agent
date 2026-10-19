@@ -1,4 +1,4 @@
-package io.github.dglearner.shop.order.flashsale;
+package io.github.dglearner.shop.order.redis;
 
 import io.github.dglearner.shop.common.LogEvents;
 import java.time.Duration;
@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
  * Logs failed Redis calls as {@code dependency_call_failed} on {@code shop-redis}, at most once a second with the
  * number of failures since the last line. A flash sale can send thousands of requests a second; one line each would
  * flood the log while Redis is down, and a line a second is still enough for detection rules counting per minute.
+ * Shared by everything in order-service that uses Redis: flash sales and the product cache.
  */
 @Component
 public class RedisFailureLog {
@@ -23,7 +24,7 @@ public class RedisFailureLog {
     private final LongAdder failures = new LongAdder();
     private final AtomicLong nextLineAt = new AtomicLong(System.nanoTime());
 
-    void failed(String operation, DataAccessException e) {
+    public void failed(String operation, DataAccessException e) {
         failures.increment();
         long now = System.nanoTime();
         long next = nextLineAt.get();

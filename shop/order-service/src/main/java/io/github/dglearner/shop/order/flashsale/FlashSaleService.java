@@ -4,6 +4,7 @@ import io.github.dglearner.shop.common.ApiException;
 import io.github.dglearner.shop.common.Ids;
 import io.github.dglearner.shop.common.LogEvents;
 import io.github.dglearner.shop.order.order.OrderService;
+import io.github.dglearner.shop.order.redis.RedisFailureLog;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
