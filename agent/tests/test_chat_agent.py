@@ -151,9 +151,11 @@ async def test_a_status_question_lists_incidents_and_alerts(core, store):
     events = await collect(agent(core, store).ask(session, "最近一小时有哪些告警"))
 
     assert of(events, "route")[0]["route"] == "ops_query"
-    assert [s[1] for s in steps(events)] == ["定位相关的 Incident", "查询最近的告警", "核对引用"]
+    titles = [s[1] for s in steps(events)]
+    assert titles[0] == "定位相关的 Incident" and titles[-1] == "核对引用"
+    assert sorted(titles[1:-1]) == ["查询最近的告警", "读取 I1 的告警、规则归因和后台分析"], "fetched in parallel"
     text = answer(events)
-    assert "有 1 个 Incident" in text and "仍在告警" in text and "规则指向 shop-mysql" in text
+    assert "有 1 个 Incident" in text and "（2 分钟前）" in text and "规则指向 shop-mysql" in text
 
 
 async def test_knowledge_and_small_talk_skip_the_orchestration(core, store):
@@ -261,3 +263,14 @@ async def test_the_user_chooses_whether_the_model_thinks(core, store):
 
     assert [c["thinking"] for c in model.calls] == [True, None]
     assert done["thinking"] is None and store.messages(session)[1]["trace"]["metrics"]["thinking"] is True
+
+
+async def test_the_model_is_told_how_the_incidents_lie_in_time(core, store):
+    model = ScriptedStreamingModel(Script(content="两个问题 [I1] [I2]"))
+    session = store.create_session()["session_id"]
+
+    await collect(agent(core, store, model).ask(session, "今天有几个故障，是同一个原因吗？"))
+
+    data = model.calls[0]["messages"][-1]["content"]
+    timing = data[data.index("incident_timing"):]
+    assert "I1：" in timing and "在 I2 最后一条告警之后 2 小时 54 分才开始" in timing

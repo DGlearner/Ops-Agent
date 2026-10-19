@@ -23,8 +23,6 @@ ALL_ALERTS = 30
 MAX_SAMPLES = 2
 MAX_MESSAGE_CHARS = 300
 MAX_RESULT_CHARS = 12_000
-# An incident whose last alert is this recent is still going on.
-ONGOING = timedelta(minutes=5)
 SEVERITY_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0}
 
 
@@ -55,15 +53,15 @@ class ChatTools:
 
     async def recent_incidents(self, minutes: int, services: tuple[str, ...] = (), status: str | None = None,
                                limit: int = 10) -> list[dict]:
-        """Incidents with an alert in the last minutes, most pressing first: still going on, more severe, newer.
-        Incidents stay open until someone closes them, so it is the last alert that counts, not the opening."""
+        """Incidents with an alert in the last minutes, the latest alert first, then the more severe. Incidents
+        stay open until someone closes them, so it is the last alert that counts, not the opening."""
         since = self.now - timedelta(minutes=minutes)
         rows = await asyncio.to_thread(self._core.incidents, start=since - timedelta(days=1),
                                        end=self.now + timedelta(minutes=1), status=status, limit=100)
         rows = [i for i in rows if parse_time(i["last_alert_at"]) >= since]
         if services:
             rows = [i for i in rows if set(services) & _involved(i)]
-        rows.sort(key=lambda i: (self._ongoing(i), SEVERITY_RANK.get(i["severity"], 0), i["last_alert_at"]),
+        rows.sort(key=lambda i: (i["last_alert_at"][:16], SEVERITY_RANK.get(i["severity"], 0), i["last_alert_at"]),
                   reverse=True)
         return rows[:limit]
 
@@ -108,7 +106,7 @@ class ChatTools:
                 "services": incident.get("services", []), "subjects": incident.get("subjects", []),
                 "shared_dependencies": incident.get("shared_dependencies", []), "alert_count": incident["alert_count"],
                 "opened_at": self.local(incident["opened_at"]), "last_alert_at": self.local(incident["last_alert_at"]),
-                "still_alerting": self._ongoing(incident)}
+                "minutes_since_last_alert": self.minutes_since(incident["last_alert_at"])}
 
     def local(self, timestamp: str) -> str:
         t = parse_time(timestamp).astimezone(self._tz)
@@ -196,8 +194,10 @@ class ChatTools:
                 for s in alert.get("samples", [])[:samples]]
         return shown
 
-    def _ongoing(self, incident: dict) -> bool:
-        return self.now - parse_time(incident["last_alert_at"]) <= ONGOING
+    def minutes_since(self, timestamp: str) -> int:
+        """Whole minutes from then to now. Not "still going on": alerts come per window and repeats are suppressed,
+        so a few quiet minutes do not mean the problem is over, and the model is told so."""
+        return max(0, int((self.now - parse_time(timestamp)).total_seconds() // 60))
 
 
 def _involved(incident: dict) -> set[str]:

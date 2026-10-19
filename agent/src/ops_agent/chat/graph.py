@@ -29,7 +29,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
 from ..baseline import rule_attribution
-from ..core_api import CoreApiError
+from ..core_api import CoreApiError, parse_time
 from . import prompts
 from .evidence import citations
 from .llm import StreamingModel
@@ -191,8 +191,8 @@ async def gather(state: ChatState, runtime: Runtime[Run]) -> dict:
         pack["incidents"] = [{"ref": run.tools.brief(i)["ref"], "title": i["title"]} for i in incidents]
         pack["note"] = "只列出了找到的 Incident，详情、告警和规则归因需要用工具查"
         return {"pack": pack}
-    # A status question about many incidents only needs the list; one about given incidents needs them in full.
-    detailed = state["decision"].route == "ops_diagnosis" or scope["kind"] != "window"
+    # The first few in full either way: a status question ("是同一个原因吗") needs the samples as much as a
+    # diagnosis; without them the model guesses or spends tool calls on fetching them.
 
     async def detail(incident: dict) -> dict:
         ref = run.tools.brief(incident)["ref"]
@@ -209,20 +209,21 @@ async def gather(state: ChatState, runtime: Runtime[Run]) -> dict:
             s.result = f"{len(result)} 条"
             return result
 
-    if detailed:
-        pack["incidents"] = list(await asyncio.gather(*(detail(i) for i in incidents[:DETAILED])))
-        if len(incidents) > DETAILED:
-            pack["other_incidents"] = [run.tools.brief(i) for i in incidents[DETAILED:DETAILED + 5]]
-        if not incidents:
-            pack["recent_alerts"] = await alerts()
-    else:
-        briefs = []
-        for incident in incidents:
+    status = state["decision"].route == "ops_query" and scope["kind"] == "window"
+    fetched = await asyncio.gather(*(detail(i) for i in incidents[:DETAILED]),
+                                   *([alerts()] if status or not incidents else []))
+    pack["incidents"] = list(fetched[:len(incidents[:DETAILED])])
+    if len(incidents) > DETAILED:
+        others = []
+        for incident in incidents[DETAILED:DETAILED + 7]:
             brief = run.tools.brief(incident)
             brief["rule_attribution"] = _pointed_at(incident)
-            briefs.append(brief)
-        pack["incidents"] = briefs
-        pack["recent_alerts"] = await alerts()
+            others.append(brief)
+        pack["other_incidents"] = others
+    if status or not incidents:
+        pack["recent_alerts"] = fetched[-1]
+    if len(incidents) > 1:
+        pack["incident_timing"] = _timing(run.tools, incidents[:DETAILED + 7])
     return {"pack": pack}
 
 
@@ -313,10 +314,10 @@ def written_answer(pack: dict, diagnosis: bool, degraded: bool) -> str:
         # Nothing but the list was fetched (prefetch off).
         lines.append(f"{where}有这些 Incident：")
         lines += [f"- [{i['ref']}] {i['title']}" for i in incidents]
-    elif diagnosis or "alerts" in incidents[0]:
+    elif diagnosis:
         for i in incidents:
             lines.append(f"**[{i['ref']}] {i['title']}**（{_status(i)}，严重度{_severity(i)}，{i['opened_at']} 起"
-                         + ("，仍在告警" if i["still_alerting"] else f"，最后一条告警 {i['last_alert_at']}") + "）")
+                         + f"，最后一条告警 {i['last_alert_at']}（{_ago(i)}）" + "）")
             attribution = i.get("rule_attribution") or []
             lines.append("- 规则归因：" + ("；".join(f"{h['basis']}，可能在 {h['component']}" for h in attribution)
                                           if attribution else "告警没有明确的指向"))
@@ -336,7 +337,7 @@ def written_answer(pack: dict, diagnosis: bool, degraded: bool) -> str:
         for i in incidents:
             pointed = "、".join(h["component"] for h in i.get("rule_attribution") or [])
             lines.append(f"- [{i['ref']}] {i['title']}：{_status(i)}，"
-                         + ("仍在告警" if i["still_alerting"] else f"最后一条告警 {i['last_alert_at']}")
+                         + f"最后一条告警 {i['last_alert_at']}（{_ago(i)}）"
                          + (f"，规则指向 {pointed}" if pointed else ""))
     alerts = pack.get("recent_alerts")
     if alerts:
@@ -363,6 +364,31 @@ async def _fetch(tools: ChatTools, ids: tuple[str, ...]) -> list[dict]:
     return incidents
 
 
+def _timing(tools: ChatTools, incidents: list[dict]) -> list[str]:
+    """How the incidents lie in time, oldest first, worked out here rather than left to the model: one that
+    started after another had gone quiet cannot be explained by it without evidence."""
+    rows = sorted(incidents, key=lambda i: i["opened_at"])
+    lines = []
+    for n, i in enumerate(rows):
+        ref = tools.brief(i)["ref"]
+        line = f"{ref}：{tools.local(i['opened_at'])} 至 {tools.local(i['last_alert_at'])}"
+        if n:
+            before = rows[n - 1]
+            gap = (parse_time(i["opened_at"]) - parse_time(before["last_alert_at"])).total_seconds()
+            prev = tools.brief(before)["ref"]
+            line += (f"，在 {prev} 最后一条告警之后 {_seconds(gap)}才开始" if gap > 0
+                     else f"，和 {prev} 时间重叠")
+        lines.append(line)
+    return lines
+
+
+def _seconds(seconds: float) -> str:
+    minutes, rest = divmod(int(seconds), 60)
+    if minutes >= 60:
+        return f"{minutes // 60} 小时 {minutes % 60} 分"
+    return f"{minutes} 分 {rest} 秒" if minutes else f"{rest} 秒"
+
+
 def _pointed_at(incident: dict) -> list[dict]:
     return [{"component": h.component, "basis": h.cause} for h in rule_attribution(incident, [])]
 
@@ -386,6 +412,11 @@ def _focus(run: Run, state: ChatState, cites: list[dict]) -> dict:
         incidents.append({"incident_id": incident_id, "ref": ref, "title": refs.resolve(ref).label})
     services = list(state["decision"].entities.services) or run.memory["focus"].get("services", [])
     return {"incidents": incidents, "services": services}
+
+
+def _ago(incident: dict) -> str:
+    minutes = incident["minutes_since_last_alert"]
+    return "1 分钟内" if minutes == 0 else f"{minutes} 分钟前"
 
 
 def _status(incident: dict) -> str:
