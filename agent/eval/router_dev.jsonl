@@ -1,0 +1,63 @@
+{"question": "刚才下单为什么一直失败？", "accept": ["ops_diagnosis"]}
+{"question": "数据库是不是挂了？", "accept": ["ops_diagnosis"]}
+{"question": "支付服务最近半小时一直超时，怎么回事", "accept": ["ops_diagnosis"]}
+{"question": "为什么库存服务返回 503", "accept": ["ops_diagnosis"]}
+{"question": "订单服务报 DATABASE_UNAVAILABLE 是什么原因", "accept": ["ops_diagnosis"]}
+{"question": "现在下单很慢，帮我看看原因", "accept": ["ops_diagnosis"]}
+{"question": "秒杀接口报错了，什么问题", "accept": ["ops_diagnosis"]}
+{"question": "order-service 为什么一直告警", "accept": ["ops_diagnosis"]}
+{"question": "刚刚的故障影响了哪些服务", "accept": ["ops_diagnosis"]}
+{"question": "这次故障的根因是什么", "accept": ["ops_diagnosis"]}
+{"question": "用户反馈付款失败，帮我排查一下", "accept": ["ops_diagnosis"]}
+{"question": "过去一小时 payment-service 出了什么问题", "accept": ["ops_diagnosis"]}
+{"question": "inventory-service 怎么了", "accept": ["ops_diagnosis"]}
+{"question": "为什么最近告警这么多", "accept": ["ops_diagnosis"]}
+{"question": "最近一小时有哪些告警", "accept": ["ops_query"]}
+{"question": "现在有几个 Incident？", "accept": ["ops_query"]}
+{"question": "payment-service 现在状态怎么样", "accept": ["ops_query"]}
+{"question": "最近有哪些报错", "accept": ["ops_query"]}
+{"question": "列一下今天的 Incident", "accept": ["ops_query"]}
+{"question": "现在系统正常吗", "accept": ["ops_query"]}
+{"question": "有没有正在告警的服务", "accept": ["ops_query"]}
+{"question": "最近 10 分钟有新的告警吗", "accept": ["ops_query"]}
+{"question": "看一下订单服务的告警", "accept": ["ops_query"]}
+{"question": "统计一下今天每个服务的告警数量", "accept": ["ops_query"]}
+{"question": "服务之间的依赖关系是什么样的", "accept": ["ops_query"]}
+{"question": "还有未处理的 Incident 吗", "accept": ["ops_query"]}
+{"question": "昨天晚上有故障吗", "accept": ["ops_query"]}
+{"question": "MySQL 现在健康吗", "accept": ["ops_query"]}
+{"question": "最新的一条告警是什么", "accept": ["ops_query"]}
+{"question": "订单量正常吗", "accept": ["ops_query"]}
+{"question": "最近系统稳定吗", "accept": ["ops_query"]}
+{"question": "什么是缓存击穿", "accept": ["ops_knowledge"]}
+{"question": "缓存雪崩和缓存击穿有什么区别", "accept": ["ops_knowledge"]}
+{"question": "连接池满了一般怎么排查", "accept": ["ops_knowledge"]}
+{"question": "Redis 分布式锁的原理是什么", "accept": ["ops_knowledge"]}
+{"question": "怎么避免超卖", "accept": ["ops_knowledge"]}
+{"question": "什么是 Saga 模式", "accept": ["ops_knowledge"]}
+{"question": "熔断和降级的区别", "accept": ["ops_knowledge"]}
+{"question": "告警风暴怎么预防", "accept": ["ops_knowledge"]}
+{"question": "MySQL 行锁冲突一般怎么处理", "accept": ["ops_knowledge"]}
+{"question": "什么是 P99 延迟", "accept": ["ops_knowledge"]}
+{"question": "你好", "accept": ["chitchat"]}
+{"question": "谢谢", "accept": ["chitchat"]}
+{"question": "你能做什么？", "accept": ["chitchat"]}
+{"question": "你是谁", "accept": ["chitchat"]}
+{"question": "早上好", "accept": ["chitchat"]}
+{"question": "辛苦了", "accept": ["chitchat"]}
+{"question": "帮我写一首诗", "accept": ["out_of_scope"]}
+{"question": "今天天气怎么样", "accept": ["out_of_scope"]}
+{"question": "推荐几只股票", "accept": ["out_of_scope"]}
+{"question": "给我讲个笑话", "accept": ["out_of_scope"]}
+{"question": "帮我翻译一下 hello world", "accept": ["out_of_scope"]}
+{"question": "1+1 等于几", "accept": ["out_of_scope"]}
+{"question": "它影响了哪些服务？", "accept": ["ops_diagnosis", "ops_query"], "focus": true, "history": [{"role": "user", "content": "刚才下单为什么失败？"}, {"role": "assistant", "content": "**结论**：shop-mysql 不可用，order-service 和 payment-service 同时报数据库连接失败 [I1]。"}]}
+{"question": "接下来怎么处理？", "accept": ["ops_diagnosis"], "focus": true, "history": [{"role": "user", "content": "刚才下单为什么失败？"}, {"role": "assistant", "content": "**结论**：shop-mysql 不可用，order-service 和 payment-service 同时报数据库连接失败 [I1]。"}]}
+{"question": "那支付服务呢？", "accept": ["ops_query", "ops_diagnosis"], "focus": true, "history": [{"role": "user", "content": "刚才下单为什么失败？"}, {"role": "assistant", "content": "**结论**：shop-mysql 不可用，order-service 和 payment-service 同时报数据库连接失败 [I1]。"}]}
+{"question": "这个故障现在恢复了吗", "accept": ["ops_query"], "focus": true, "history": [{"role": "user", "content": "刚才下单为什么失败？"}, {"role": "assistant", "content": "**结论**：shop-mysql 不可用，order-service 和 payment-service 同时报数据库连接失败 [I1]。"}]}
+{"question": "为什么会这样？", "accept": ["ops_diagnosis"], "focus": true, "history": [{"role": "user", "content": "刚才下单为什么失败？"}, {"role": "assistant", "content": "**结论**：shop-mysql 不可用，order-service 和 payment-service 同时报数据库连接失败 [I1]。"}]}
+{"question": "证据是什么", "accept": ["ops_diagnosis"], "focus": true, "history": [{"role": "user", "content": "刚才下单为什么失败？"}, {"role": "assistant", "content": "**结论**：shop-mysql 不可用，order-service 和 payment-service 同时报数据库连接失败 [I1]。"}]}
+{"question": "和上次那个是同一个原因吗", "accept": ["ops_diagnosis"], "focus": true, "history": [{"role": "user", "content": "刚才下单为什么失败？"}, {"role": "assistant", "content": "**结论**：shop-mysql 不可用，order-service 和 payment-service 同时报数据库连接失败 [I1]。"}]}
+{"question": "好的，谢谢", "accept": ["chitchat"], "focus": true, "history": [{"role": "user", "content": "刚才下单为什么失败？"}, {"role": "assistant", "content": "**结论**：shop-mysql 不可用，order-service 和 payment-service 同时报数据库连接失败 [I1]。"}]}
+{"question": "它是几点开始的", "accept": ["ops_query"], "focus": true, "history": [{"role": "user", "content": "刚才下单为什么失败？"}, {"role": "assistant", "content": "**结论**：shop-mysql 不可用，order-service 和 payment-service 同时报数据库连接失败 [I1]。"}]}
+{"question": "详细说说", "accept": ["ops_diagnosis", "ops_query"], "focus": true, "history": [{"role": "user", "content": "刚才下单为什么失败？"}, {"role": "assistant", "content": "**结论**：shop-mysql 不可用，order-service 和 payment-service 同时报数据库连接失败 [I1]。"}]}

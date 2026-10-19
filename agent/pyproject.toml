@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ops-agent"
 version = "0.1.0"
-description = "Ops-Agent's agent runtime: explains incidents using core-service's read-only API"
+description = "Ops-Agent's agent runtime: explains incidents and answers questions using core-service's read-only API"
 requires-python = ">=3.11"
 dependencies = [
     "openai>=1.40",
@@ -14,10 +14,16 @@ dependencies = [
     "pydantic-settings>=2.3",
     "jsonschema>=4.21",
     "confluent-kafka>=2.4",
+    "fastapi>=0.140",
+    "uvicorn>=0.40",
+    "sse-starlette>=3.0",
+    "langgraph>=1.2",
+    # zoneinfo has no time zone database of its own on Windows
+    "tzdata; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "pytest-asyncio>=1.0"]
 
 [project.scripts]
 ops-agent = "ops_agent.__main__:main"
@@ -27,3 +33,4 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"

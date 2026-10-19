@@ -1,13 +1,15 @@
 """Settings, from environment variables prefixed OPS_AGENT_ or a .env file in the working directory."""
 
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # src/ops_agent/config.py -> the repository's contracts/kafka
 _CONTRACTS = Path(__file__).resolve().parents[3] / "contracts" / "kafka"
+# src/ops_agent/config.py -> agent/data, ignored by git
+_DATA = Path(__file__).resolve().parents[2] / "data"
 
 
 class Settings(BaseSettings):
@@ -33,6 +35,28 @@ class Settings(BaseSettings):
     # Read-only tool calls per analysis; then the model must conclude with what it has.
     max_tool_calls: int = 8
     contracts_dir: Path = _CONTRACTS
+
+    # The chat server (ops-agent chat): docs/project-design.md §6.7.
+    chat_host: str = "127.0.0.1"
+    chat_port: int = 8083
+    chat_db: Path = _DATA / "chat.sqlite3"
+    # Tool calls the model may add to what the orchestration already fetched, per answer.
+    chat_max_tool_calls: int = 4
+    # Earlier turns the model sees word for word; older ones only through the session summary.
+    chat_history_turns: int = 3
+    # For the quick calls (routing, summaries): another model, and fields for the request body, e.g.
+    # {"thinking": {"type": "disabled"}} to turn a reasoning model's thinking off. Defaults: the model above, nothing.
+    chat_fast_model: str | None = None
+    chat_fast_extra_body: dict[str, Any] = {}
+    chat_router_timeout_s: float = 8
+    # Experiment switches (§6.7): the model reasoning with its thinking on or off (off sends chat_fast_extra_body),
+    # and the evidence fetched before the model is asked, or left for the model to fetch with its tools.
+    chat_thinking: bool = True
+    chat_prefetch: bool = True
+
+    @property
+    def llm_configured(self) -> bool:
+        return bool(self.llm_base_url and self.llm_model and self.llm_api_key)
 
     def require_llm(self) -> None:
         missing = [name for name, value in (("OPS_AGENT_LLM_BASE_URL", self.llm_base_url),
