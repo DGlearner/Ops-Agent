@@ -1,10 +1,11 @@
 # Ops-Agent
 
-面向微服务系统值班运维的平台：日志接入 → 实时检测 → 按服务依赖把告警合并为 Incident → Agent 带证据地分析根因。仓库里还有一个电商靶场和演练控制台，用来制造流量和故障、记下标准答案、给 Ops-Agent 打分。
+面向微服务系统值班运维的平台：日志接入 → 实时检测 → 按服务依赖把告警合并为 Incident → Agent 带证据地分析根因，值班人员可以直接用对话问系统的情况。仓库里还有一个电商靶场和演练控制台，用来制造流量和故障、记下标准答案、给 Ops-Agent 打分。
 
 - **Java（Spring Boot 4、Kafka Streams、PostgreSQL、Redis）：** 接入、解析与脱敏、规则检测、告警关联成 Incident、派发分析任务、校验 Agent 的证据，以及系统数据的唯一入口。
 - **Python Agent：** 从 Kafka 取分析任务，让大模型通过 core-service 的只读接口查看 Incident，提交带证据引用的归因；另有不用大模型的基线作对照。
-- **控制台（Vue 3 + TypeScript）：** Incident 列表和详情（Agent 的结论与证据、告警和日志样本、影响范围、时间线）、服务拓扑。
+- **值班助手（FastAPI + LangGraph）：** 对话 Agent。问题先经两级路由（规则有把握时直接决定，否则问模型），运维问题由编排先取齐告警、Incident 和规则归因，再让模型推理、补查、核对引用；路由、每一步和模型的思考都通过 SSE 实时推到页面。
+- **控制台（Vue 3 + TypeScript）：** Incident 列表和详情（Agent 的结论与证据、告警和日志样本、影响范围、时间线）、服务拓扑、值班助手的对话页。
 
 ```
  shop (order, inventory, payment) --JSON logs--> log-shipper --HTTP--> ingest-service
@@ -14,9 +15,9 @@
                                                                             | Kafka alerts
                                                                             v
  web console (Vue 3) <--REST-- core-service: store alerts, correlate into incidents, dispatch analyses,
-                                     ^        check the agent's evidence
-                     read-only HTTP  |        | Kafka agent.tasks / agent.results
-                                     +-- agent (Python): language model, or the baseline
+        ^                            ^        check the agent's evidence
+        | chat (SSE)  read-only HTTP |        | Kafka agent.tasks / agent.results
+        +----------------------------+-- agent (Python): incident analysis (model or baseline), chat assistant
 
  lab: traffic and faults on the shop, ground truth, scoring against what core-service saw (Ops-Agent never sees it)
 ```
@@ -28,10 +29,10 @@
 需要 JDK 21+、Docker（Windows 上是 Docker Desktop，先启动它）、Node.js 22.12+、Python 3.11+。在仓库根目录运行：
 
 ```bash
-java tools/Demo.java              # 启动容器、构建、启动全部服务、Agent 和控制台；Ctrl+C 停止
+java tools/Demo.java              # 启动容器、构建、启动全部服务、Agent、值班助手和控制台；Ctrl+C 停止
 ```
 
-- 它依次启动 Kafka、PostgreSQL、Redis 和靶场的 MySQL、Redis（Docker Compose），构建 jar，启动 Ops-Agent 的三个服务、靶场的三个服务和演练控制台，最后是日志采集器、Agent 和 Ops-Agent 控制台。缺少的 npm 包和 Agent 的虚拟环境（`agent/.venv`）会自动安装。
+- 它依次启动 Kafka、PostgreSQL、Redis 和靶场的 MySQL、Redis（Docker Compose），构建 jar，启动 Ops-Agent 的三个服务、靶场的三个服务和演练控制台，最后是日志采集器、Agent、值班助手和 Ops-Agent 控制台。缺少的 npm 包和 Agent 的虚拟环境（`agent/.venv`）会自动安装。
 - 第一次运行要下载镜像和依赖，需要几分钟；之后约 2 分钟，加 `--skip-build` 不重新构建时约 1 分钟。
 - **Agent 的模式：** 有大模型配置（`agent/.env` 或 `OPS_AGENT_LLM_*` 环境变量，见 [agent/README.md](agent/README.md)）时用大模型，没有就自动用基线模式；`--baseline` 强制用基线。
 - 每个进程的输出在 `logs/demo/<名字>.log`。Ctrl+C 只停进程，容器继续运行；`java tools/Demo.java stop` 把容器也停掉（数据保留），启动脚本被强制结束时它也会清理留下的进程。
@@ -44,8 +45,9 @@ java tools/Demo.java              # 启动容器、构建、启动全部服务�
 3. 打开 Ops-Agent 控制台 http://127.0.0.1:5180：几秒内出现 Incident（实测 1.3 秒），详情页有告警、日志样本、影响范围和时间线。
 4. 最后一条告警之后约 1 分钟，Agent 的分析出现：最可能的根因和置信度、引用的证据（点击跳到对应的告警和日志样本）、排查建议。core 校验不过的引用单独列出。
 5. 回到演练控制台看评测：是否检出、首条告警的延迟、Incident 划分是否正确、归因是否正确。
+6. 打开值班助手 http://127.0.0.1:5180/chat，问“刚才下单为什么失败？”，再追问“它影响了哪些服务？”“接下来怎么处理？”。展开“思考过程”可以看到路由结果、每一步查了什么、模型的推理；回答里的引用可以点开核对。
 
-在开发服务器上运行时，本机用 `ssh -L 5180:127.0.0.1:5180 -L 8090:127.0.0.1:8090 <服务器>` 转发后打开这两个页面。
+在开发服务器上运行时，本机用 `ssh -L 5180:127.0.0.1:5180 -L 8090:127.0.0.1:8090 <服务器>` 转发后打开这两个页面（值班助手经 5180 访问，不用另外转发）。
 
 ## 当前进度
 
@@ -56,7 +58,8 @@ java tools/Demo.java              # 启动容器、构建、启动全部服务�
 | Agent（Python） | Incident 归因第一版：工具调用循环、证据自查、不用大模型的基线 |
 | Ops-Agent 控制台（web） | 第一版：Incident 列表与详情、服务拓扑 |
 | 电商靶场与演练控制台 | 订单、库存、支付三个服务；秒杀（Redis + Lua 判断资格，Redis Stream 异步下单）；商品详情两级缓存（穿透、击穿、雪崩，三种失效策略的一致性对比）；9 个故障场景；标准答案、顾客视角的评测、归因打分 |
-| 接下来 | 关联提示会误导的故障场景（比较大模型和基线）；日志检索与指标（P2）；认证与规则管理（P5） |
+| 值班助手 | 对话 Agent：两级路由、先取证据再推理的 LangGraph 编排、引用核对、三层记忆；SSE 实时显示路由、步骤、思考和回答；路由与延迟评测（设计文档 §6.7） |
+| 接下来 | 优惠券秒杀与下单用券（靶场）；日志检索与指标（P2）；认证与规则管理（P5） |
 
 各阶段的内容和验收见设计文档 §14，演练结果见 shop-design §15。
 

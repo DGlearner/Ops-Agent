@@ -1003,3 +1003,5 @@ PATCH ──▶ MySQL: update + version + 1, outbox row (one transaction) ──
 - **怎么选：** 价格这类改得少、读得多、又不能长时间出错的数据，用 VERSIONED（默认）；能接受秒级旧值的展示数据，DOUBLE_DELETE 已经够用、而且实现最简单；单纯的 DELETE 最后可能永久停在旧值，不适合单独使用。无论哪种，**失效失败时都靠 outbox 重试兜底**（情况 2）。
 
 **测量上的两次修正：** 第一次跑一致性对比时，每种策略的第一次运行都没有充分预热，结果混进了冷启动的影响，于是拆成了上面的情况 1 和情况 2。冷启动那组还暴露了一个真问题：Pub/Sub 的监听容器在启动时同步订阅，连接 Redis 超时（CPU 被饿住，500 ms 的连接超时不够）就让整个 order-service 启动失败，普通下单也跟着不可用。现在监听在后台订阅、失败每 2 s 重试，Redis 不可用时 order-service 照常启动（`RedisDownAtStartupIT`）。
+
+**之后发现的问题（2026-10-19）：** 布隆过滤器每次装载都报 Redis 调用失败。`BF.MADD` 在 RESP3 下回复一组布尔值，Spring Data 的原始命令 `connection.execute` 按字节解析，解析失败时 SKU 其实已经加进去了，所以过滤器一直是好的，压测也没发现；但每次 order-service 启动都写一条 `dependency_call_failed`（`operation=bloom_load`），触发 Ops-Agent 的“调用 shop-redis 失败”告警。这是值班助手在一次 `mysql-down` 演练里指出来的：这条告警进了同一个 Incident，把规则归因带偏了（project-design §6.7）。现在用 Lua 脚本调用 `BF.MADD`（脚本里的布尔值是 1 和 0），每批 500 个 SKU，哨兵在最后一批之后单独加入；`ProductCacheIT` 检查装载成功。
