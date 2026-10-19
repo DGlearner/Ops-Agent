@@ -62,6 +62,8 @@ class Run:
     max_tool_calls: int
     # Off: the model starts from the scope alone and fetches everything with its tools (the experiment's baseline).
     prefetch: bool = True
+    # The user's choice for this question ("深度思考"); None: the configured default.
+    thinking: bool | None = None
     steps: int = 0
     answered: list[str] = field(default_factory=list)
 
@@ -149,7 +151,7 @@ async def knowledge(state: ChatState, runtime: Runtime[Run]) -> dict:
     turn = await run.model.stream([{"role": "system", "content": system}, *run.memory["history"],
                                    {"role": "user", "content": run.question}],
                                   on_reasoning=lambda d: emit(runtime, "thinking", {"delta": d}),
-                                  on_content=lambda d: say(runtime, d))
+                                  on_content=lambda d: say(runtime, d), thinking=run.thinking)
     return {"answer": turn.content}
 
 
@@ -239,7 +241,7 @@ async def reason(state: ChatState, runtime: Runtime[Run]) -> dict:
             exhausted = calls >= run.max_tool_calls
             turn = await run.model.stream(messages, None if exhausted else run.tools.specs(),
                                           on_reasoning=lambda d: emit(runtime, "thinking", {"delta": d}),
-                                          on_content=lambda d: say(runtime, d))
+                                          on_content=lambda d: say(runtime, d), thinking=run.thinking)
             if not turn.tool_calls:
                 return {"answer": turn.content, "tool_calls": calls, "degraded": False}
             if run.answered:

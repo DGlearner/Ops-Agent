@@ -186,7 +186,7 @@ async def test_a_cancelled_answer_is_kept_as_far_as_it_got(core, store):
     release = asyncio.Event()
 
     class Slow(ScriptedStreamingModel):
-        async def stream(self, messages, tools=None, *, on_reasoning=None, on_content=None):
+        async def stream(self, messages, tools=None, *, on_reasoning=None, on_content=None, thinking=None):
             on_content("MySQL 好像")
             await release.wait()
             raise AssertionError("not reached")
@@ -249,3 +249,15 @@ async def test_without_prefetch_the_model_starts_from_the_list_and_fetches_the_r
 
     fallback = await collect(chat.ask(session, "刚才下单为什么失败？"))
     assert "有这些 Incident" in answer(fallback) and "[I1]" in answer(fallback)
+
+
+async def test_the_user_chooses_whether_the_model_thinks(core, store):
+    model = ScriptedStreamingModel(Script(content="结论 [I1]"), Script(content="结论 [I1]"))
+    chat = agent(core, store, model)
+    session = store.create_session()["session_id"]
+
+    await collect(chat.ask(session, "刚才下单为什么失败？", thinking=True))
+    done = of(await collect(chat.ask(session, "刚才下单为什么失败？")), "done")[0]
+
+    assert [c["thinking"] for c in model.calls] == [True, None]
+    assert done["thinking"] is None and store.messages(session)[1]["trace"]["metrics"]["thinking"] is True

@@ -40,8 +40,10 @@ class StreamingModel(Protocol):
     name: str
 
     async def stream(self, messages: list[dict], tools: list[dict] | None = None, *,
-                     on_reasoning: Delta | None = None, on_content: Delta | None = None) -> Turn:
-        """One turn of the main model, streamed to the callbacks as it arrives."""
+                     on_reasoning: Delta | None = None, on_content: Delta | None = None,
+                     thinking: bool | None = None) -> Turn:
+        """One turn of the main model, streamed to the callbacks as it arrives. thinking: on or off for this turn,
+        None for the configured default."""
         ...
 
     async def quick(self, messages: list[dict], *, json_output: bool = False, timeout_s: float | None = None,
@@ -63,11 +65,13 @@ class OpenAIStreamingChat:
         self._client = openai.AsyncOpenAI(base_url=base_url, api_key=api_key, timeout=timeout_s, max_retries=1)
 
     async def stream(self, messages: list[dict], tools: list[dict] | None = None, *,
-                     on_reasoning: Delta | None = None, on_content: Delta | None = None) -> Turn:
+                     on_reasoning: Delta | None = None, on_content: Delta | None = None,
+                     thinking: bool | None = None) -> Turn:
         kwargs: dict[str, Any] = {"tools": tools, "tool_choice": "auto"} if tools else {}
+        extra = self._main_extra if thinking is None else None if thinking else self._fast_extra
         response = await self._client.chat.completions.create(
             model=self.name, messages=messages, temperature=self._temperature, stream=True,
-            stream_options={"include_usage": True}, extra_body=self._main_extra, **kwargs)
+            stream_options={"include_usage": True}, extra_body=extra, **kwargs)
         turn = Turn()
         calls: dict[int, dict[str, str]] = {}
         async with response:

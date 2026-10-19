@@ -35,6 +35,8 @@ class Question(BaseModel):
     content: str = Field(min_length=1, max_length=2000)
     # The browser's time zone (Intl.DateTimeFormat().resolvedOptions().timeZone): times are told in it.
     tz: str | None = Field(default=None, max_length=64)
+    # "深度思考": the model reasons at length first and its reasoning streams; leave out for the server's default.
+    thinking: bool | None = None
 
 
 class ProblemError(Exception):
@@ -102,7 +104,8 @@ def create_app(agent: ChatAgent, store: ChatStore) -> FastAPI:
 
         async def events() -> AsyncIterator[dict]:
             try:
-                async for event, data in agent.ask(session_id, question.content.strip(), question.tz):
+                async for event, data in agent.ask(session_id, question.content.strip(), question.tz,
+                                                   question.thinking):
                     yield {"event": event, "data": json.dumps(data, ensure_ascii=False)}
             except UnknownSession:
                 yield {"event": "error", "data": json.dumps({"message": "会话不存在"}, ensure_ascii=False)}

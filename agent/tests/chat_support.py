@@ -121,8 +121,8 @@ class ScriptedStreamingModel:
         self.calls: list[dict] = []
         self.quick_calls: list[list[dict]] = []
 
-    async def stream(self, messages, tools=None, *, on_reasoning=None, on_content=None) -> Turn:
-        self.calls.append({"messages": copy.deepcopy(messages),
+    async def stream(self, messages, tools=None, *, on_reasoning=None, on_content=None, thinking=None) -> Turn:
+        self.calls.append({"messages": copy.deepcopy(messages), "thinking": thinking,
                            "tools": [t["function"]["name"] for t in tools or []]})
         if not self.turns:
             raise AssertionError("the model was asked more often than scripted")

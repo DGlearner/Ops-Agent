@@ -96,8 +96,10 @@ class ChatAgent:
         self._catalog: tuple[float, set[str]] | None = None
         self._background: set[asyncio.Task] = set()
 
-    async def ask(self, session_id: str, question: str, tz_name: str | None = None) -> AsyncIterator[tuple[str, dict]]:
-        """The events of one answer, ending with done."""
+    async def ask(self, session_id: str, question: str, tz_name: str | None = None,
+                  thinking: bool | None = None) -> AsyncIterator[tuple[str, dict]]:
+        """The events of one answer, ending with done. thinking: the model reasons at length before it answers
+        (slower, and its reasoning streams), None for the configured default."""
         session = self._store.session(session_id)
         if session is None:
             raise UnknownSession(session_id)
@@ -111,19 +113,18 @@ class ChatAgent:
         tools = ChatTools(self._core, refs, now, tz)
         run = Run(question=question, now=now, tz=tz, memory=memory, tools=tools,
                   catalog=await self._catalog_names(tools), router=self._router, model=self.model,
-                  max_tool_calls=self._max_tool_calls, prefetch=self._prefetch or self.model is None)
+                  max_tool_calls=self._max_tool_calls, prefetch=self._prefetch or self.model is None,
+                  thinking=thinking)
         message_id = str(uuid.uuid4())
         recorder = Recorder()
         state: dict = {}
+        # Until the graph ends, a way out is the browser going away.
         status = "cancelled"
-        saved = False
 
         def save() -> dict:
-            nonlocal saved
-            saved = True
             decision = state.get("decision")
             trace = recorder.trace({"tool_calls": state.get("tool_calls", 0), "degraded": state.get("degraded", False),
-                                    "model": self.model.name if self.model else None})
+                                    "model": self.model.name if self.model else None, "thinking": thinking})
             self._store.add_message(session_id, "assistant", recorder.answer, status, trace, message_id)
             updates: dict = {"refs": refs.as_json()}
             if status == "completed" and state.get("focus") is not None:
@@ -155,10 +156,8 @@ class ChatAgent:
             recorder.record("error", {"message": message})
             yield "error", {"message": message}
         finally:
-            if not saved and status == "cancelled":
-                # The browser went away: keep what was said so far. No awaiting here, the task is being cancelled.
-                save()
-        done = save()
+            # Every way out keeps the answer, a cancelled one as far as it got; no awaiting, the task may be ending.
+            done = save()
         self._maybe_summarize(session_id)
         yield "done", done
 
