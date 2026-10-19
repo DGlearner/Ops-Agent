@@ -647,6 +647,7 @@ Agent 在最上层：它只能通过第 3 层的只读工具看到第 1、2 层�
 | P5 界面第一版 | Ops-Agent 控制台（§6.6）：Incident 列表、详情（Agent 的结论与证据、告警与日志样本、影响范围、时间线、状态流转、手动请求分析）、服务拓扑 |
 | 演示收尾 | 一键启动全部组件（`tools/Demo.java`，§12）；ingest-service、stream-processor 也只监听 127.0.0.1（§11）；靶场服务启动时重试首次数据库连接 |
 | 靶场 R4 秒杀 | Redis + Lua 判断资格和一人一单，Redis Stream 消费者组异步下单，取消订单经 outbox 归还名额，Redis 与 MySQL 对账；与 R1 同资源对比（shop-design §16）；服务目录加入 shop-redis |
+| 靶场商品缓存 | 商品详情两级缓存（Caffeine + Redis）：布隆过滤器防穿透、重建锁防击穿、随机过期与限流回源防雪崩；先改库后失效，失效经 outbox 重试；DELETE、延迟双删、版本号三种策略的一致性实测（shop-design §17） |
 
 ### 14.3 接下来
 

@@ -55,7 +55,7 @@ java tools/Demo.java              # 启动容器、构建、启动全部服务�
 | core-service | 告警落库与查询；按依赖路径把告警关联成 Incident，生命周期与时间线；派发分析任务、校验 Agent 的证据 |
 | Agent（Python） | Incident 归因第一版：工具调用循环、证据自查、不用大模型的基线 |
 | Ops-Agent 控制台（web） | 第一版：Incident 列表与详情、服务拓扑 |
-| 电商靶场与演练控制台 | 订单、库存、支付三个服务；秒杀（Redis + Lua 判断资格，Redis Stream 异步下单）；9 个故障场景；标准答案、顾客视角的评测、归因打分 |
+| 电商靶场与演练控制台 | 订单、库存、支付三个服务；秒杀（Redis + Lua 判断资格，Redis Stream 异步下单）；商品详情两级缓存（穿透、击穿、雪崩，三种失效策略的一致性对比）；9 个故障场景；标准答案、顾客视角的评测、归因打分 |
 | 接下来 | 关联提示会误导的故障场景（比较大模型和基线）；日志检索与指标（P2）；认证与规则管理（P5） |
 
 各阶段的内容和验收见设计文档 §14，演练结果见 shop-design §15。
@@ -113,6 +113,7 @@ cd deploy/shop && docker compose up -d                  # MySQL 8.4 和秒杀用
 - 运行结束时，请求生成工具核对重复请求、库存账目和资金（已付款的订单都扣了款，取消的都没扣），有任何不一致就以非 0 退出。参数见 `--help`。
 - 故障场景：`--scenario payment-timeout` 等 8 个，见设计文档 §10。管理端口上的 `/actuator/faults` 可以手动注入延迟和错误。
 - 秒杀：`--seckill SKU-2001 --stock 100 --rate 200 --duration 10s`。资格判断和一人一单在 Redis 里用一个 Lua 脚本完成，受理的订单进 Redis Stream，由订单服务的消费者组异步下单；结束时核对库存、资金，并对账 Redis 与 MySQL。设计和与普通下单的对比实验见设计文档 §16。
+- 商品缓存：`--product SKU-1001 --rate 500 --duration 20s --update-every 50ms` 读商品详情、同时改价，统计读到旧版本的次数和滞后，结束时检查缓存是否与 MySQL 一致；`--unknown-rate 0.9` 混入不存在的商品。缓存的设计（本地 + Redis、布隆过滤器、重建锁、带版本号的失效）和实验见设计文档 §17。
 - 日志：`logs/shop/<服务名>.log`，每行一条 ECS JSON，带 `trace.id`。用 `tools/log-shipper` 送进 Ops-Agent 检测，见 [docs/shop-design.md](docs/shop-design.md) §12.2、§14。
 - 指标：`http://localhost:819x/actuator/prometheus`，管理端口只监听 127.0.0.1。
 
