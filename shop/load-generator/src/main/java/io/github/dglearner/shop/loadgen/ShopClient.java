@@ -88,6 +88,19 @@ public final class ShopClient {
                 .build());
     }
 
+    /** A product page, served through the cache (§17). */
+    public Response product(String sku) {
+        return send(get(options.orderUrl() + "/api/v1/products/" + sku));
+    }
+
+    public Response updatePrice(String sku, long priceCents) {
+        return send(HttpRequest.newBuilder(URI.create(options.orderUrl() + "/api/v1/products/" + sku))
+                .timeout(Duration.ofSeconds(15))
+                .header("Content-Type", "application/json")
+                .method("PATCH", HttpRequest.BodyPublishers.ofString("{\"price_cents\":" + priceCents + "}"))
+                .build());
+    }
+
     public Response flashSaleOrder(String saleId, String orderId) {
         return send(get(options.orderUrl() + "/api/v1/flash-sales/" + saleId + "/orders/" + orderId));
     }

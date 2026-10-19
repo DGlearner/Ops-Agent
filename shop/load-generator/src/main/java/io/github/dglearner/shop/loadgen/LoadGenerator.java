@@ -93,7 +93,8 @@ public final class LoadGenerator {
             System.exit(help ? 0 : 2);
             return;
         }
-        System.exit(new LoadGenerator(options).run() ? 0 : 1);
+        System.exit((options.product() != null ? new ProductCheck(options).run() : new LoadGenerator(options).run())
+                ? 0 : 1);
     }
 
     private boolean run() throws Exception {
@@ -413,7 +414,7 @@ public final class LoadGenerator {
     }
 
     @SuppressWarnings("unchecked")
-    private static void printResources(Map<String, Object> resources) {
+    static void printResources(Map<String, Object> resources) {
         System.out.println("resources while sending (mean / max; cpu in cores):");
         resources.forEach((source, gauges) -> {
             Map<String, Map<String, Object>> g = (Map<String, Map<String, Object>>) gauges;

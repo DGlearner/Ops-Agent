@@ -14,7 +14,7 @@ public record Options(String orderUrl, String inventoryUrl, String paymentUrl, d
         int concurrency, int users, double duplicateRate, double declineRate, double hotRate, OptionalLong seed,
         Duration settleTimeout, boolean verify, Path report, String scenario, Duration baseline, Duration fault,
         Duration recovery, Map<String, String> adminUrls, String mysqlContainer, String flashSale, OptionalInt stock,
-        String seckill) {
+        String seckill, String product, Duration updateEvery, double unknownRate) {
 
     static final String USAGE = """
             Usage: load-generator [options]
@@ -48,6 +48,10 @@ public record Options(String orderUrl, String inventoryUrl, String paymentUrl, d
                                      new buyer, accepted orders are queued; duplicates repeat the same buyer
               --stock N              units available when the sale starts, set through the inventory
                                      management port; refused while orders for the SKU are still in flight
+            Product pages through the cache (docs/shop-design.md §17), instead of orders:
+              --product SKU          read this product's page at --rate
+              --update-every D       meanwhile change its price this often, and count reads of an older version
+              --unknown-rate F       share of reads for products that do not exist (default 0)
             The checks assume nothing else orders or restocks while the run is going on.""".formatted(
             String.join(", ", Scenarios.names()));
 
@@ -55,7 +59,7 @@ public record Options(String orderUrl, String inventoryUrl, String paymentUrl, d
             "--rate", "--duration", "--concurrency", "--users", "--duplicate-rate", "--decline-rate", "--hot-rate",
             "--seed", "--settle-timeout", "--report", "--scenario", "--baseline", "--fault", "--recovery",
             "--order-admin", "--inventory-admin", "--payment-admin", "--mysql-container", "--flash-sale", "--stock",
-            "--seckill");
+            "--seckill", "--product", "--update-every", "--unknown-rate");
 
     /** Whether this run injects a fault. */
     public boolean hasScenario() {
@@ -115,6 +119,9 @@ public record Options(String orderUrl, String inventoryUrl, String paymentUrl, d
         String flashSale = null;
         OptionalInt stock = OptionalInt.empty();
         String seckill = null;
+        String product = null;
+        Duration updateEvery = null;
+        double unknownRate = 0;
 
         for (int i = 0; i < args.length; i++) {
             String name = args[i];
@@ -156,6 +163,9 @@ public record Options(String orderUrl, String inventoryUrl, String paymentUrl, d
                 case "--mysql-container" -> mysqlContainer = value;
                 case "--flash-sale" -> flashSale = value;
                 case "--seckill" -> seckill = value;
+                case "--product" -> product = value;
+                case "--update-every" -> updateEvery = duration(value);
+                case "--unknown-rate" -> unknownRate = share(name, value);
                 case "--stock" -> stock = OptionalInt.of((int) nonNegative(name, Integer.parseInt(value)));
                 default -> throw new IllegalStateException("Unhandled option " + name);
             }
@@ -181,7 +191,7 @@ public record Options(String orderUrl, String inventoryUrl, String paymentUrl, d
         }
         return new Options(orderUrl, inventoryUrl, paymentUrl, rate, duration, concurrency, users, duplicateRate,
                 declineRate, hotRate, seed, settleTimeout, verify, report, scenario, baseline, fault, recovery,
-                Map.copyOf(adminUrls), mysqlContainer, flashSale, stock, seckill);
+                Map.copyOf(adminUrls), mysqlContainer, flashSale, stock, seckill, product, updateEvery, unknownRate);
     }
 
     /** {@code 500ms}, {@code 30s}, {@code 5m} or {@code 1h}. */
