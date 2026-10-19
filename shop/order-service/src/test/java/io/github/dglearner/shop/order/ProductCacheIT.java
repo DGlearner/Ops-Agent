@@ -12,6 +12,7 @@ import java.util.concurrent.Future;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.redis.core.script.RedisScript;
 
 /**
  * The product cache with its default, versioned invalidation (docs/shop-design.md §17), at the Redis level (the local
@@ -63,6 +64,15 @@ class ProductCacheIT extends ProductCacheTestSupport {
             assertThat(read.get()).isEqualTo(price);
         }
         assertThat(counter("shop.product.database.reads", "reason", "rebuild") - before).isEqualTo(1);
+    }
+
+    @Test
+    void theBloomFilterLoadsWithoutAFailure() {
+        // BF.MADD answers with booleans under RESP3; decoding them as bytes failed after the SKUs were added, so the
+        // filter worked while every start logged a failed Redis call and raised an alert in Ops-Agent.
+        assertThat(cache.loadBloom()).isTrue();
+        assertThat(redis.execute(RedisScript.of("return redis.call('BF.EXISTS', KEYS[1], ARGV[1])", Long.class),
+                List.of("shop:product:bloom"), "__loaded__")).isEqualTo(1L);
     }
 
     @Test

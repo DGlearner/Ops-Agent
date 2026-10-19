@@ -9,7 +9,6 @@ import io.github.dglearner.shop.order.redis.RedisLock;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -57,6 +56,10 @@ public class ProductCache {
     private static final long POLL_MILLIS = 20;
     private static final RedisScript<Long> SET_IF_NEWER = RedisScript.of(
             new ClassPathResource("catalog/set-if-newer.lua"), Long.class);
+    private static final RedisScript<Long> BLOOM_ADD = RedisScript.of(
+            new ClassPathResource("catalog/bloom-add.lua"), Long.class);
+    /** SKUs per BF.MADD: Lua unpacks the arguments onto its stack, which holds a few thousand. */
+    private static final int BLOOM_BATCH = 500;
     @SuppressWarnings("rawtypes")
     private static final RedisScript<List> BLOOM_CHECK = RedisScript.of(
             "return redis.call('BF.MEXISTS', KEYS[1], ARGV[1], ARGV[2])", List.class);
@@ -171,14 +174,16 @@ public class ProductCache {
         }
     }
 
-    /** Puts every SKU into the Bloom filter (idempotent), then the marker that says it is complete. */
-    public void loadBloom() {
+    /**
+     * Puts every SKU into the Bloom filter (idempotent), then the marker that says it is complete. False when Redis
+     * failed, or a load is already running.
+     */
+    public boolean loadBloom() {
         if (!properties.bloom() || !bloomLoading.compareAndSet(false, true)) {
-            return;
+            return false;
         }
         try {
-            List<String> skus = new ArrayList<>(products.allSkus());
-            skus.add(BLOOM_LOADED);
+            List<String> skus = products.allSkus();
             redis.execute((RedisCallback<Object>) connection -> {
                 try {
                     // 0.1% false positives at up to 100 000 SKUs; an existing filter is kept.
@@ -189,14 +194,20 @@ public class ProductCache {
                         throw e;
                     }
                 }
-                List<byte[]> args = new ArrayList<>(List.of(bytes(BLOOM)));
-                skus.forEach(s -> args.add(bytes(s)));
-                return connection.execute("BF.MADD", args.toArray(byte[][]::new));
+                return null;
             });
-            log.atInfo().addKeyValue(LogEvents.ACTION, "product_bloom_loaded").addKeyValue("skus", skus.size() - 1)
+            for (int i = 0; i < skus.size(); i += BLOOM_BATCH) {
+                redis.execute(BLOOM_ADD, List.of(BLOOM),
+                        skus.subList(i, Math.min(skus.size(), i + BLOOM_BATCH)).toArray());
+            }
+            // Last, so that the marker never says complete while SKUs are missing.
+            redis.execute(BLOOM_ADD, List.of(BLOOM), BLOOM_LOADED);
+            log.atInfo().addKeyValue(LogEvents.ACTION, "product_bloom_loaded").addKeyValue("skus", skus.size())
                     .log("Product Bloom filter loaded");
+            return true;
         } catch (DataAccessException e) {
             redisFailures.failed("bloom_load", e);
+            return false;
         } finally {
             bloomLoading.set(false);
         }

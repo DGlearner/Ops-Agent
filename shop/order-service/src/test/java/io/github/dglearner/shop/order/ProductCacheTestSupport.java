@@ -38,6 +38,9 @@ abstract class ProductCacheTestSupport extends OrderTestSupport {
     @Autowired
     JdbcClient jdbc;
 
+    @Autowired
+    ProductCache cache;
+
     /** Holds the next rebuild of {@link #sku} after it read MySQL, until {@link #release} counts down. */
     @TestConfiguration
     static class Race {
