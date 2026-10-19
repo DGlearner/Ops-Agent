@@ -39,6 +39,21 @@ class CoreApi:
         params = {"from": _iso(start), "to": _iso(end), "limit": limit, "service": service, "status": status}
         return self._get("/api/v1/incidents", params)["items"]
 
+    def logs(self, *, start: datetime, end: datetime, service: str | None = None, min_severity: str | None = None,
+             event_type: str | None = None, trace_id: str | None = None, text: str | None = None,
+             limit: int = 20) -> list[dict]:
+        """Stored log lines whose own time is in [start, end), newest first (docs/project-design.md §8.7)."""
+        params = {"from": _iso(start), "to": _iso(end), "service": service, "min_severity": min_severity,
+                  "event_type": event_type, "trace_id": trace_id, "q": text, "limit": limit}
+        return self._get("/api/v1/logs", params)["items"]
+
+    def log_counts(self, *, start: datetime, end: datetime, service: str | None = None, by: str = "event_type",
+                   min_severity: str | None = None, text: str | None = None, limit: int = 20) -> list[dict]:
+        """How many lines share each event type (or severity, service, host) in [start, end), the most first."""
+        params = {"from": _iso(start), "to": _iso(end), "service": service, "by": by, "min_severity": min_severity,
+                  "q": text, "limit": limit}
+        return self._get("/api/v1/logs/counts", params)
+
     def analyses(self, incident_id: UUID | str) -> list[dict]:
         """The incident's analyses by the agent, newest first."""
         return self._get(f"/api/v1/incidents/{incident_id}/analyses")

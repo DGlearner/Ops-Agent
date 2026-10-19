@@ -60,6 +60,14 @@ TIMELINE = [{"event_id": "0199f000-0000-7000-8000-0000000000b1", "type": "OPENED
              "from_status": "open", "to_status": "acknowledged", "payload": {}, "at": "2026-10-17T10:03:00Z"}]
 
 
+LOG_EVENT = "0199f000-0000-7000-8000-0000000000f1"
+LOG_LINE = {"event_id": LOG_EVENT, "timestamp": "2026-10-17T10:00:10Z", "received_at": "2026-10-17T10:00:11Z",
+            "service": "payment-service", "host": "vps", "source_type": "app_service",
+            "event_type": "payment_succeeded", "severity": "info", "message": "Payment succeeded", "fields": {}}
+LOG_COUNT = {"key": "payment_succeeded", "count": 42, "severity": "info", "first_at": "2026-10-17T09:55:00Z",
+             "last_at": "2026-10-17T10:05:00Z", "example": "Payment succeeded"}
+
+
 class FakeCore:
     def __init__(self, incident=None, alerts=None):
         self.incident = copy.deepcopy(incident or INCIDENT)
@@ -78,6 +86,8 @@ class FakeCore:
             incident + "/alerts": self.alerts,
             incident + "/timeline": TIMELINE,
             "/api/v1/topology": TOPOLOGY,
+            "/api/v1/logs": {"items": [LOG_LINE]},
+            "/api/v1/logs/counts": [LOG_COUNT],
             "/api/v1/alerts": {"items": [*self.alerts, OTHER_ALERT]},
             "/api/v1/incidents": {"items": [self.incident, {**INCIDENT, "incident_id": OTHER_INCIDENT_ID,
                                                             "subjects": ["payment-service"]}]},

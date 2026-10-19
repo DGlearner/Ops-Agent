@@ -98,7 +98,8 @@ async def test_the_model_reasons_over_the_fetched_evidence_and_may_look_further(
     data = first["messages"][-1]["content"]
     assert "rule_attribution" in data and "background_analysis" in data and "[I1]" not in data
     assert MYSQL_INCIDENT not in data, "the model sees refs, not ids"
-    assert first["tools"] == ["list_incidents", "get_incident", "search_alerts", "get_topology"]
+    assert first["tools"] == ["list_incidents", "get_incident", "search_alerts", "search_logs", "count_logs",
+                              "get_topology"]
     assert model.calls[1]["messages"][-1]["role"] == "tool"
     assert model.calls[1]["messages"][-2]["reasoning_content"].startswith("规则指向")
 
@@ -153,7 +154,7 @@ async def test_a_status_question_lists_incidents_and_alerts(core, store):
     assert of(events, "route")[0]["route"] == "ops_query"
     titles = [s[1] for s in steps(events)]
     assert titles[0] == "定位相关的 Incident" and titles[-1] == "核对引用"
-    assert sorted(titles[1:-1]) == ["查询最近的告警", "读取 I1 的告警、规则归因和后台分析"], "fetched in parallel"
+    assert sorted(titles[1:-1]) == ["查询最近的告警", "读取 I1 的告警、相关服务的日志、规则归因和后台分析"], "in parallel"
     text = answer(events)
     assert "有 1 个 Incident" in text and "（2 分钟前）" in text and "规则指向 shop-mysql" in text
 
@@ -274,3 +275,34 @@ async def test_the_model_is_told_how_the_incidents_lie_in_time(core, store):
     data = model.calls[0]["messages"][-1]["content"]
     timing = data[data.index("incident_timing"):]
     assert "I1：" in timing and "在 I2 最后一条告警之后 2 小时 54 分才开始" in timing
+
+
+
+def pack(call: dict) -> dict:
+    """The data the orchestration handed the model, from its last message."""
+    content = call["messages"][-1]["content"]
+    return json.loads(content[content.index("```json") + 7:content.rindex("```")])
+
+
+async def test_the_services_own_logs_come_with_the_incident_and_can_be_searched(core, store):
+    model = ScriptedStreamingModel(
+        Script(tool_calls=[("search_logs", '{"service": "payment-service", "incident": "I1"}')]),
+        Script(content="payment-service 仍在正常扣款 [E3]，问题在数据库 [I1]"))
+    session = store.create_session()["session_id"]
+
+    events = await collect(agent(core, store, model).ask(session, "刚才下单为什么失败？"))
+
+    logged = pack(model.calls[0])["incidents"][0]["service_logs"]
+    assert list(logged) == ["order-service", "payment-service"], "subjects first, databases left out"
+    assert logged["payment-service"]["events"] == [{"event_type": "payment_succeeded", "count": 40,
+                                                    "severity": "info", "example": "Payment succeeded"}]
+    errors = [r for r in core.requests if r.url.path == "/api/v1/logs" and r.url.params.get("min_severity")]
+    assert {r.url.params["min_severity"] for r in errors} == {"medium"}
+    counts = [r for r in core.requests if r.url.path == "/api/v1/logs/counts"]
+    assert {r.url.params["service"] for r in counts} == {"order-service", "payment-service"}
+
+    found = json.loads(model.calls[1]["messages"][-1]["content"])
+    assert found["lines"][0]["ref"] == "E3" and found["lines"][0]["message"] == "Payment succeeded"
+    cites = {c["ref"]: c for c in of(events, "citations")[0]["items"]}
+    assert cites["E3"]["verified"] and cites["E3"]["incident_id"] == MYSQL_INCIDENT
+    assert ("tool", "查询日志", "done") in steps(events)

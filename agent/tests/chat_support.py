@@ -18,6 +18,8 @@ RECOVERY_ALERT = "0199f000-0000-7000-8000-0000000000c2"
 STRAY_ALERT = "0199f000-0000-7000-8000-0000000000c3"
 DB_EVENT = "0199f000-0000-7000-8000-0000000000d1"
 RECOVERY_EVENT = "0199f000-0000-7000-8000-0000000000d2"
+LOG_EVENT = "0199f000-0000-7000-8000-0000000000d3"
+RANK = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
 
 TOPOLOGY = {"nodes": [{"name": "order-service", "kind": "service", "description": "orders"},
                       {"name": "inventory-service", "kind": "service", "description": "stock"},
@@ -75,6 +77,17 @@ class ChatCore:
                                            "model": "deepseek-v4-pro", "summary": "MySQL 不可用", "uncertain": False,
                                            "hypotheses": [{"component": "shop-mysql", "cause": "down",
                                                            "confidence": "high", "evidence": []}]}]}
+        # payment-service still taking charges, order-service failing to reach its database.
+        self.log_lines = [
+            {"event_id": LOG_EVENT, "timestamp": iso(now - timedelta(minutes=3)), "service": "payment-service",
+             "host": "vps", "event_type": "payment_succeeded", "severity": "info", "message": "Payment succeeded"}]
+        self.log_counts = {
+            "payment-service": [{"key": "payment_succeeded", "count": 40, "severity": "info",
+                                 "first_at": iso(now - timedelta(minutes=8)), "last_at": iso(now - timedelta(minutes=1)),
+                                 "example": "Payment succeeded"}],
+            "order-service": [{"key": "database_unavailable", "count": 5, "severity": "medium",
+                               "first_at": iso(now - timedelta(minutes=6)), "last_at": iso(now - timedelta(minutes=2)),
+                               "example": "Database unavailable: Communications link failure"}]}
         self.requests: list[httpx.Request] = []
         self.down = False
 
@@ -90,6 +103,14 @@ class ChatCore:
                                                              key=lambda i: i["opened_at"], reverse=True)})
         if path == "/api/v1/alerts":
             return httpx.Response(200, json={"items": [a for rows in self.alerts.values() for a in rows]})
+        if path == "/api/v1/logs":
+            service = request.url.params.get("service")
+            floor = RANK[request.url.params.get("min_severity", "info")]
+            return httpx.Response(200, json={"items": [line for line in self.log_lines
+                                                       if service in (None, line["service"])
+                                                       and RANK[line["severity"]] >= floor]})
+        if path == "/api/v1/logs/counts":
+            return httpx.Response(200, json=self.log_counts.get(request.url.params.get("service"), []))
         for incident_id, incident in self.incidents.items():
             base = f"/api/v1/incidents/{incident_id}"
             routes = {base: incident, base + "/alerts": self.alerts.get(incident_id, []),

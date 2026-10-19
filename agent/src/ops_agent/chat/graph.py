@@ -45,7 +45,7 @@ STATUS_LABEL = {"open": "未处理", "acknowledged": "已确认", "investigating
                 "resolved": "已解决", "closed": "已关闭"}
 SEVERITY_LABEL = {"critical": "严重", "high": "高", "medium": "中", "low": "低", "info": "提示"}
 TOOL_TITLE = {"list_incidents": "查询 Incident", "get_incident": "查看 Incident 详情", "search_alerts": "查询告警",
-              "get_topology": "查看服务依赖"}
+              "search_logs": "查询日志", "count_logs": "统计日志", "get_topology": "查看服务依赖"}
 
 
 @dataclass
@@ -196,10 +196,15 @@ async def gather(state: ChatState, runtime: Runtime[Run]) -> dict:
 
     async def detail(incident: dict) -> dict:
         ref = run.tools.brief(incident)["ref"]
-        async with step(runtime, "fetch", f"读取 {ref} 的告警、规则归因和后台分析", incident["title"]) as s:
+        async with step(runtime, "fetch", f"读取 {ref} 的告警、相关服务的日志、规则归因和后台分析",
+                        incident["title"]) as s:
             result = await run.tools.detail(incident)
+            logged = result.get("service_logs", {})
             s.result = f"{len(result['alerts'])} 条告警，规则指向 " + (
-                "、".join(h["component"] for h in result["rule_attribution"]) or "不明确")
+                "、".join(h["component"] for h in result["rule_attribution"]) or "不明确") + (
+                "；日志：" + "、".join(f"{svc} {sum(c['count'] for c in got['events'])} 行"
+                                      f"（警告和错误 {len(got['warnings_and_errors'])} 条）" for svc, got in logged.items())
+                if logged else "")
             return result
 
     async def alerts() -> list[dict]:

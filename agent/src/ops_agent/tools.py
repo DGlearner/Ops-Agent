@@ -36,6 +36,8 @@ class Toolbox:
         self.incident_id = incident["incident_id"]
         self._alerts: list[dict] | None = None
         self._components: set[str] | None = None
+        # Log lines the model was shown by search_logs: citable as events, as the samples are.
+        self._seen_events: set[str] = set()
         self._tools = {t.name: t for t in (
             Tool("get_incident_alerts",
                  "本 Incident 的全部告警，按时间排序：规则、产生告警的服务、分组字段（fields.dependency 是调用失败时的"
@@ -59,6 +61,32 @@ class Toolbox:
                      "minutes_after": {"type": "integer", "minimum": 0, "maximum": 120,
                                        "description": "Incident 最后一条告警后多少分钟，默认 10"},
                  }), self._search_alerts),
+            Tool("search_logs",
+                 "查某个服务自己的日志（存储的全部日志，不只是告警里的样本），新的在前，默认是本 Incident 前后 2 分钟。"
+                 "用来看被调用方自己出了什么错、有没有数据库错误、当时是否还在正常处理请求。"
+                 "返回的 event_id 可以作为证据（kind=event）；timing 同 search_alerts。",
+                 _object({
+                     "service": {"type": "string", "description": "只看这个服务的日志"},
+                     "min_severity": {"enum": ["info", "low", "medium", "high", "critical"],
+                                      "description": "至少这么严重，例如 medium 只看警告和错误"},
+                     "event_type": {"type": "string", "description": "只看这类事件，如 database_unavailable"},
+                     "text": {"type": "string", "description": "消息里包含的文字（至少 3 个字符，不分大小写）"},
+                     "minutes_before": {"type": "integer", "minimum": 0, "maximum": 10,
+                                        "description": "Incident 打开前多少分钟，默认 2"},
+                     "minutes_after": {"type": "integer", "minimum": 0, "maximum": 10,
+                                       "description": "Incident 最后一条告警后多少分钟，默认 2"},
+                     "limit": {"type": "integer", "minimum": 1, "maximum": 30, "description": "最多几条，默认 20"},
+                 }), self._search_logs),
+            Tool("count_logs",
+                 "某个服务在本 Incident 前后（默认 2 分钟）的日志按事件类型统计：每类多少条、最严重的级别、最早和最晚时间、"
+                 "一条示例。先用它看一个服务都记了什么，再用 search_logs 看具体的行。",
+                 _object({
+                     "service": {"type": "string", "description": "只看这个服务"},
+                     "by": {"enum": ["event_type", "severity", "service"], "description": "按什么统计，默认 event_type"},
+                     "min_severity": {"enum": ["info", "low", "medium", "high", "critical"]},
+                     "minutes_before": {"type": "integer", "minimum": 0, "maximum": 10},
+                     "minutes_after": {"type": "integer", "minimum": 0, "maximum": 10},
+                 }), self._count_logs),
             Tool("list_nearby_incidents",
                  "本 Incident 前后一小时内打开的其他 Incident，用来判断是不是同一时间有几个独立的问题。"
                  "timing 同 search_alerts：during（时间重叠）、before、after。",
@@ -99,6 +127,7 @@ class Toolbox:
         alert_ids = {a["alert_id"].lower() for a in alerts}
         event_ids = {e.lower() for a in alerts for e in a.get("sample_event_ids", [])}
         event_ids |= {s["event_id"].lower() for a in alerts for s in a.get("samples", [])}
+        event_ids |= self._seen_events
         unknown = []
         for e in evidence:
             known = {"alert": lambda: e.id.strip().lower() in alert_ids,
@@ -162,6 +191,38 @@ class Toolbox:
             "group_values": a.get("group_values", {}), "summary": a["summary"], "created_at": a["created_at"],
             "in_this_incident": a["alert_id"] in mine, **self._timing(a["created_at"], a["created_at"])}
             for a in alerts]}
+
+    def _window(self, args: dict) -> tuple:
+        """Around the incident, 2 minutes by default: logs are dense, and a wider window pulls in what an earlier
+        problem left behind (an outage that ended before this incident began)."""
+        before = timedelta(minutes=int(args.get("minutes_before", 2)))
+        after = timedelta(minutes=int(args.get("minutes_after", 2)))
+        if not timedelta(0) <= before <= timedelta(minutes=10) or not timedelta(0) <= after <= timedelta(minutes=10):
+            raise ValueError("minutes_before 和 minutes_after 在 0 到 10 之间")
+        return parse_time(self.incident["opened_at"]) - before, parse_time(self.incident["last_alert_at"]) + after
+
+    def _search_logs(self, args: dict) -> dict:
+        start, end = self._window(args)
+        limit = int(args.get("limit", 20))
+        if not 1 <= limit <= 30:
+            raise ValueError("limit 在 1 到 30 之间")
+        lines = self._core.logs(start=start, end=end, service=args.get("service"),
+                                min_severity=args.get("min_severity"), event_type=args.get("event_type"),
+                                text=args.get("text") or None, limit=limit)
+        self._seen_events |= {line["event_id"].lower() for line in lines}
+        return {"from": start.isoformat(), "to": end.isoformat(), "lines": [{
+            "event_id": line["event_id"], "timestamp": line["timestamp"], "service": line.get("service"),
+            "severity": line["severity"], "event_type": line["event_type"],
+            "message": (line.get("message") or "")[:MAX_MESSAGE_CHARS], "trace_id": line.get("trace_id"),
+            **self._timing(line["timestamp"], line["timestamp"])} for line in lines]}
+
+    def _count_logs(self, args: dict) -> dict:
+        start, end = self._window(args)
+        counts = self._core.log_counts(start=start, end=end, service=args.get("service"),
+                                       by=args.get("by", "event_type"), min_severity=args.get("min_severity"))
+        return {"from": start.isoformat(), "to": end.isoformat(), "counts": [{
+            "key": c["key"], "count": c["count"], "severity": c["severity"], "first_at": c["first_at"],
+            "last_at": c["last_at"], "example": (c.get("example") or "")[:200]} for c in counts]}
 
     def _nearby_incidents(self) -> list[dict]:
         opened = parse_time(self.incident["opened_at"])

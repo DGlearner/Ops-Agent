@@ -32,7 +32,7 @@ def test_looks_at_the_incident_through_tools_and_submits_an_evidence_backed_answ
     assert "简体中文" in first["messages"][0]["content"]
     assert INCIDENT_ID in first["messages"][1]["content"] and "shop-mysql" in first["messages"][1]["content"]
     assert first["tools"] == ["get_incident_alerts", "get_incident_timeline", "get_topology", "search_alerts",
-                              "list_nearby_incidents", "submit_analysis"]
+                              "search_logs", "count_logs", "list_nearby_incidents", "submit_analysis"]
     alerts_result = model.calls[1]["messages"][-1]
     assert alerts_result["role"] == "tool" and A1 in alerts_result["content"]
     schemas.result(result)

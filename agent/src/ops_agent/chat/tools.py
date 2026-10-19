@@ -7,7 +7,7 @@ import json
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -22,6 +22,11 @@ MAX_ALERTS = 8
 ALL_ALERTS = 30
 MAX_SAMPLES = 2
 MAX_MESSAGE_CHARS = 300
+# The services whose own logs come with an incident, and how far around it.
+LOG_SERVICES = 3
+LOG_MARGIN = timedelta(minutes=2)
+MAX_LOG_KINDS = 8
+MAX_LOG_ERRORS = 5
 MAX_RESULT_CHARS = 12_000
 SEVERITY_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0}
 
@@ -76,10 +81,14 @@ class ChatTools:
         """An incident with its alerts and samples, what the correlation rules point at, and the background
         analysis if the agent has made one."""
         incident_id = incident["incident_id"]
-        alerts, timeline, analyses = await asyncio.gather(
+        services = await self._logging_services(incident)
+        start = parse_time(incident["opened_at"]) - LOG_MARGIN
+        end = parse_time(incident["last_alert_at"]) + LOG_MARGIN
+        alerts, timeline, analyses, *logs = await asyncio.gather(
             asyncio.to_thread(self._core.incident_alerts, incident_id),
             asyncio.to_thread(self._core.incident_timeline, incident_id),
-            asyncio.to_thread(self._core.analyses, incident_id))
+            asyncio.to_thread(self._core.analyses, incident_id),
+            *(self._service_logs(s, start, end, incident_id) for s in services))
         alerts = sorted(alerts, key=lambda a: a["created_at"])
         result = self.brief(incident)
         result["rule_attribution"] = [{"component": h.component, "basis": h.cause}
@@ -91,6 +100,8 @@ class ChatTools:
                 "uncertain": completed.get("uncertain", False),
                 "causes": [{"component": h["component"], "confidence": h["confidence"]}
                            for h in completed.get("hypotheses") or []]}
+        if services:
+            result["service_logs"] = dict(zip(services, logs))
         result["status_changes"] = [{"to": e["to_status"], "at": self.local(e["at"])}
                                     for e in timeline if e["type"] == "STATUS_CHANGED" and e.get("to_status")]
         # The first ones in full; past MAX_ALERTS one sample each, to keep the answer short.
@@ -99,6 +110,30 @@ class ChatTools:
         if len(alerts) > max_alerts:
             result["omitted_alerts"] = len(alerts) - max_alerts
         return result
+
+    async def _logging_services(self, incident: dict) -> list[str]:
+        """The incident's services that write logs: the callees first (their own logs tell why they failed), then
+        the callers; databases and caches log nothing here."""
+        kinds = {n["name"]: n["kind"] for n in (await self.topology())["nodes"]}
+        names = list(dict.fromkeys([*incident.get("subjects", []), *incident.get("services", [])]))
+        return [n for n in names if kinds.get(n, "service") == "service"][:LOG_SERVICES]
+
+    async def _service_logs(self, service: str, start: datetime, end: datetime, incident_id: str) -> dict:
+        """What a service logged around an incident: each kind of event with its count, and its latest warnings and
+        errors in full, citable. An empty list of errors is a finding too: the service itself reported nothing."""
+        counts, errors = await asyncio.gather(
+            asyncio.to_thread(self._core.log_counts, start=start, end=end, service=service, limit=MAX_LOG_KINDS),
+            asyncio.to_thread(self._core.logs, start=start, end=end, service=service, min_severity="medium",
+                              limit=MAX_LOG_ERRORS))
+        return {"events": [{"event_type": c["key"], "count": c["count"], "severity": c["severity"],
+                            "example": (c.get("example") or "")[:150]} for c in counts],
+                "warnings_and_errors": [self._line(line, incident_id) for line in errors]}
+
+    def _line(self, line: dict, incident_id: str | None) -> dict:
+        return {"ref": self.refs.ref("event", line["event_id"], line.get("message") or "", incident_id),
+                "at": self.local(line["timestamp"]), "service": line.get("service"), "severity": line["severity"],
+                "event_type": line["event_type"], "message": (line.get("message") or "")[:MAX_MESSAGE_CHARS],
+                **({"trace_id": line["trace_id"]} if line.get("trace_id") else {})}
 
     def brief(self, incident: dict) -> dict:
         ref = self.refs.ref("incident", incident["incident_id"], incident["title"])
@@ -153,6 +188,24 @@ class ChatTools:
                               {"minutes": minutes, "service": {"type": "string", "description": "只看这个服务的告警"},
                                "rule_id": {"type": "string", "description": "只看这条规则的告警"}},
                               [], self._search_alerts),
+            "search_logs": ("某个服务自己的日志（全部存储的日志，不只是告警里的样本），新的在前。用来看它自己报了什么错、"
+                            "有没有数据库错误、当时是否还在正常处理请求。给 incident 时查那个 Incident 前后 2 分钟。",
+                            {"service": {"type": "string", "description": "服务名，如 payment-service"},
+                             "incident": {"type": "string", "description": "查这个 Incident 前后的日志，如 I1"},
+                             "minutes": minutes,
+                             "min_severity": {"enum": ["info", "low", "medium", "high", "critical"],
+                                              "description": "至少这么严重；medium 只看警告和错误"},
+                             "event_type": {"type": "string", "description": "只看这类事件"},
+                             "text": {"type": "string", "description": "消息里包含的文字，至少 3 个字符"},
+                             "limit": {"type": "integer", "minimum": 1, "maximum": 20}},
+                            [], self._search_logs),
+            "count_logs": ("某个服务的日志按事件类型（或级别）统计：每类多少条、最严重的级别、一条示例。",
+                           {"service": {"type": "string"},
+                            "incident": {"type": "string", "description": "统计这个 Incident 前后 2 分钟，如 I1"},
+                            "minutes": minutes,
+                            "by": {"enum": ["event_type", "severity", "service"]},
+                            "min_severity": {"enum": ["info", "low", "medium", "high", "critical"]}},
+                           [], self._count_logs),
             "get_topology": ("服务目录：每个组件是什么、依赖谁。", {}, [], self._get_topology),
         }
 
@@ -169,6 +222,34 @@ class ChatTools:
     async def _search_alerts(self, args: dict) -> tuple[Any, str]:
         alerts = await self.recent_alerts(_minutes(args), args.get("service"), args.get("rule_id"))
         return alerts, f"找到 {len(alerts)} 条告警"
+
+    async def _log_window(self, args: dict) -> tuple[datetime, datetime, str | None]:
+        if args.get("incident"):
+            incident = await self.incident(self.refs.id_of(str(args["incident"]), "incident"))
+            return (parse_time(incident["opened_at"]) - LOG_MARGIN, parse_time(incident["last_alert_at"]) + LOG_MARGIN,
+                    incident["incident_id"])
+        return self.now - timedelta(minutes=_minutes(args, default=30)), self.now + timedelta(minutes=1), None
+
+    async def _search_logs(self, args: dict) -> tuple[Any, str]:
+        start, end, incident_id = await self._log_window(args)
+        limit = int(args.get("limit") or 20)
+        if not 1 <= limit <= 20:
+            raise ValueError("limit 在 1 到 20 之间")
+        lines = await asyncio.to_thread(self._core.logs, start=start, end=end, service=args.get("service"),
+                                        min_severity=args.get("min_severity"), event_type=args.get("event_type"),
+                                        text=args.get("text") or None, limit=limit)
+        shown = [self._line(line, incident_id) for line in lines]
+        return {"from": self.local(_iso(start)), "to": self.local(_iso(end)), "lines": shown}, f"{len(shown)} 行"
+
+    async def _count_logs(self, args: dict) -> tuple[Any, str]:
+        start, end, _ = await self._log_window(args)
+        counts = await asyncio.to_thread(self._core.log_counts, start=start, end=end, service=args.get("service"),
+                                         by=args.get("by") or "event_type", min_severity=args.get("min_severity"))
+        shown = [{"key": c["key"], "count": c["count"], "severity": c["severity"],
+                  "first": self.local(c["first_at"]), "last": self.local(c["last_at"]),
+                  "example": (c.get("example") or "")[:150]} for c in counts]
+        return ({"from": self.local(_iso(start)), "to": self.local(_iso(end)), "counts": shown},
+                f"{len(shown)} 类，共 {sum(c['count'] for c in shown)} 行")
 
     async def _get_topology(self, args: dict) -> tuple[Any, str]:
         topology = await self.topology()
@@ -204,11 +285,15 @@ def _involved(incident: dict) -> set[str]:
     return {*incident.get("services", []), *incident.get("subjects", []), *incident.get("shared_dependencies", [])}
 
 
-def _minutes(args: dict) -> int:
-    minutes = int(args.get("minutes") or 60)
+def _minutes(args: dict, default: int = 60) -> int:
+    minutes = int(args.get("minutes") or default)
     if not 1 <= minutes <= 10080:
         raise ValueError("minutes 在 1 到 10080 之间")
     return minutes
+
+
+def _iso(t: datetime) -> str:
+    return t.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _spec(name: str, description: str, properties: dict, required: list[str]) -> dict:
