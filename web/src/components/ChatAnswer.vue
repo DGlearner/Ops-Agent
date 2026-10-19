@@ -24,6 +24,13 @@ watch(
 )
 
 const html = computed(() => renderAnswer(props.message.content, trace.value.citations))
+// The refs under the answer: the unverified ones first (they matter most), a few in all unless asked for more.
+const CHIPS = 6
+const allCitations = ref(false)
+const citations = computed(() => {
+  const sorted = [...trace.value.citations].sort((a, b) => Number(a.verified) - Number(b.verified))
+  return allCitations.value ? sorted : sorted.slice(0, CHIPS)
+})
 const summary = computed(() => {
   if (streaming.value) {
     const running = [...steps.value].reverse().find((s) => s.status === 'running')
@@ -94,7 +101,7 @@ function follow(event: MouseEvent) {
 
     <div v-if="trace.citations.length" class="citations">
       <span class="muted">引用</span>
-      <template v-for="c in trace.citations" :key="c.ref">
+      <template v-for="c in citations" :key="c.ref">
         <router-link v-if="citationLink(c)" :to="citationLink(c)!" class="chip" :title="citationTitle(c)">
           <el-icon><CircleCheck /></el-icon>{{ c.ref }} {{ c.label }}
         </router-link>
@@ -103,6 +110,9 @@ function follow(event: MouseEvent) {
           {{ c.ref }} {{ c.verified ? c.label : '不在查到的数据里' }}
         </span>
       </template>
+      <el-button v-if="trace.citations.length > CHIPS" link type="primary" size="small" @click="allCitations = !allCitations">
+        {{ allCitations ? '收起' : `还有 ${trace.citations.length - CHIPS} 处` }}
+      </el-button>
     </div>
 
     <div v-if="!streaming" class="meta muted">
