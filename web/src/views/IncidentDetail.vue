@@ -2,6 +2,7 @@
 import { ArrowLeft } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, nextTick, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { api, ApiError } from '@/api/client'
 import type { Alert, Analysis, Incident, IncidentStatus, TimelineEntry, Topology } from '@/api/types'
 import AlertList from '@/components/AlertList.vue'
@@ -16,6 +17,7 @@ import { between, formatTime, NEXT_STATUSES, TRANSITION_LABEL } from '@/format'
 import { buildTimeline } from '@/timeline'
 
 const props = defineProps<{ id: string }>()
+const route = useRoute()
 
 const incident = ref<Incident>()
 const alerts = ref<Alert[]>([])
@@ -40,7 +42,8 @@ async function load() {
       api.timeline(props.id),
       api.analyses(props.id),
     ])
-    if (!incident.value) {
+    const first = !incident.value
+    if (first) {
       // First load: open the first few alerts; later the user decides.
       expanded.value = a.slice(0, 3).map((x) => x.alert_id)
     }
@@ -51,6 +54,11 @@ async function load() {
     error.value = ''
     if (!topology.value) {
       topology.value = await api.topology()
+    }
+    // Arrived from a link to one of the alerts (?alert=, e.g. a citation in the chat): show it.
+    const target = route.query.alert
+    if (first && typeof target === 'string' && a.some((x) => x.alert_id === target)) {
+      void locate(target)
     }
   } catch (e) {
     notFound.value = e instanceof ApiError && e.status === 404
