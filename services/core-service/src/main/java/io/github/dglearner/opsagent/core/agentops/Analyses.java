@@ -8,11 +8,14 @@ import io.github.dglearner.opsagent.contracts.OpsJson;
 import io.github.dglearner.opsagent.core.alerting.AlertView;
 import io.github.dglearner.opsagent.core.catalog.Catalog;
 import io.github.dglearner.opsagent.core.incident.Incidents;
+import io.github.dglearner.opsagent.core.logs.Logs;
 import io.github.dglearner.opsagent.core.shared.ApiProblem;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -44,17 +47,22 @@ public class Analyses {
     private static final TypeReference<List<String>> STRINGS = new TypeReference<>() {
     };
 
+    /** How far around an incident the agent may cite log lines it found by searching (its tools look this far). */
+    static final Duration LOG_EVIDENCE_MARGIN = Duration.ofMinutes(10);
+
     private final AnalysisMapper mapper;
     private final Incidents incidents;
     private final Catalog catalog;
+    private final Logs logs;
     private final AgentProperties properties;
     private final ApplicationEventPublisher events;
 
-    Analyses(AnalysisMapper mapper, Incidents incidents, Catalog catalog, AgentProperties properties,
+    Analyses(AnalysisMapper mapper, Incidents incidents, Catalog catalog, Logs logs, AgentProperties properties,
             ApplicationEventPublisher events) {
         this.mapper = mapper;
         this.incidents = incidents;
         this.catalog = catalog;
+        this.logs = logs;
         this.properties = properties;
         this.events = events;
     }
@@ -128,7 +136,7 @@ public class Analyses {
         if (analysis == null || !analysis.getIncidentId().equals(result.incidentId())) {
             return false;
         }
-        EvidenceCheck.Checked checked = EvidenceCheck.check(result.hypotheses(), known(result.incidentId()));
+        EvidenceCheck.Checked checked = EvidenceCheck.check(result.hypotheses(), known(result));
         AnalysisRecord row = new AnalysisRecord();
         row.setId(result.taskId());
         row.setIncidentId(result.incidentId());
@@ -147,7 +155,12 @@ public class Analyses {
         return mapper.complete(row) == 1;
     }
 
-    private EvidenceCheck.Known known(UUID incidentId) {
+    /**
+     * What the incident has: its alerts and their samples, the catalog, and the stored log lines around it that the
+     * result cites (the agent finds those by searching the logs).
+     */
+    private EvidenceCheck.Known known(AgentResult result) {
+        UUID incidentId = result.incidentId();
         Set<String> alertIds = new HashSet<>();
         Set<String> eventIds = new HashSet<>();
         for (AlertView alert : incidents.alerts(incidentId)) {
@@ -155,7 +168,29 @@ public class Analyses {
             alert.sampleEventIds().forEach(e -> eventIds.add(lower(e)));
             alert.samples().forEach(s -> eventIds.add(lower(s.eventId())));
         }
+        List<UUID> cited = new ArrayList<>();
+        for (AgentResult.Hypothesis h : result.hypotheses()) {
+            for (AgentResult.Evidence e : h.evidence()) {
+                if ("event".equals(e.kind()) && e.id() != null && !eventIds.contains(e.id().strip().toLowerCase(
+                        Locale.ROOT))) {
+                    uuid(e.id()).ifPresent(cited::add);
+                }
+            }
+        }
+        if (!cited.isEmpty()) {
+            incidents.find(incidentId).ifPresent(i -> logs.existing(cited,
+                    i.openedAt().minus(LOG_EVIDENCE_MARGIN), i.lastAlertAt().plus(LOG_EVIDENCE_MARGIN))
+                    .forEach(id -> eventIds.add(lower(id))));
+        }
         return new EvidenceCheck.Known(incidentId, alertIds, eventIds, catalog.topology().kinds().keySet());
+    }
+
+    private static Optional<UUID> uuid(String id) {
+        try {
+            return Optional.of(UUID.fromString(id.strip()));
+        } catch (IllegalArgumentException e) {
+            return Optional.empty();
+        }
     }
 
     private List<AnalysisRecord> rows(UUID incidentId) {

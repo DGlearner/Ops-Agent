@@ -7,12 +7,15 @@ import io.github.dglearner.opsagent.contracts.AgentResult.Evidence;
 import io.github.dglearner.opsagent.contracts.AgentResult.Hypothesis;
 import io.github.dglearner.opsagent.contracts.AgentTask;
 import io.github.dglearner.opsagent.contracts.Alert;
+import io.github.dglearner.opsagent.contracts.NormalizedEvent;
 import io.github.dglearner.opsagent.contracts.OpsJson;
 import io.github.dglearner.opsagent.contracts.Severity;
+import io.github.dglearner.opsagent.contracts.SourceType;
 import io.github.dglearner.opsagent.contracts.Topics;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -83,6 +86,44 @@ class AgentOpsIT extends CoreTestSupport {
         assertThat(getJson("/api/v1/analyses/" + taskId).path("status").asString()).isEqualTo("completed");
         assertThat(get("/api/v1/analyses/" + UUID.randomUUID()).statusCode()).isEqualTo(404);
         assertThat(post("/api/v1/incidents/" + UUID.randomUUID() + "/analyses", "").statusCode()).isEqualTo(404);
+    }
+
+    @Test
+    void aLogLineFoundAroundTheIncidentIsEvidenceAndOneFromHoursLaterIsNot() throws Exception {
+        // Recent: log lines are kept for the days within the retention only.
+        Instant t = Instant.now().truncatedTo(ChronoUnit.SECONDS).minus(Duration.ofMinutes(20));
+        String service = "pay-" + UUID.randomUUID().toString().substring(0, 8);
+        Alert calls = alert("shop-dependency-call-failures", "order-" + service, service, Severity.MEDIUM, t);
+        send(calls);
+        String incidentId = awaitIncidents(t, 1, 1).stream()
+                .filter(i -> i.path("subjects").toString().contains(service)).findFirst().orElseThrow()
+                .path("incident_id").asString();
+        NormalizedEvent near = logLine(service, t.plusSeconds(30), "Payment succeeded");
+        NormalizedEvent far = logLine(service, t.minus(Duration.ofHours(2)), "Payment succeeded long before");
+        PRODUCER.send(new ProducerRecord<>(Topics.LOGS_NORMALIZED, service, OpsJson.toJson(near))).get();
+        PRODUCER.send(new ProducerRecord<>(Topics.LOGS_NORMALIZED, service, OpsJson.toJson(far))).get();
+        Awaitility.await().atMost(Duration.ofSeconds(30)).until(() -> jdbc.sql(
+                "SELECT count(*) FROM log_events WHERE service = ?").param(service).query(Long.class).single() == 2);
+
+        String taskId = OpsJson.mapper().readTree(post("/api/v1/incidents/" + incidentId + "/analyses", "").body())
+                .path("analysis_id").asString();
+        AgentTask task = awaitTask(UUID.fromString(taskId));
+        answer(new AgentResult(task.taskId(), task.incidentId(), AgentResult.COMPLETED, "支付服务自己没有报错。", true,
+                List.of(new Hypothesis(service, "请求没有进入业务代码", "low",
+                        List.of(new Evidence("event", near.eventId().toString(), "同一时间仍在正常扣款"),
+                                new Evidence("event", far.eventId().toString(), "两小时前的日志")))),
+                null, "test-model", 3, 900, null, Instant.now()));
+
+        JsonNode analysis = awaitAnalysis(taskId, "completed");
+        assertThat(analysis.path("hypotheses").get(0).path("evidence").findValuesAsString("id"))
+                .containsExactly(near.eventId().toString());
+        assertThat(analysis.path("rejected_evidence").findValuesAsString("id"))
+                .containsExactly(far.eventId().toString());
+    }
+
+    private static NormalizedEvent logLine(String service, Instant at, String message) {
+        return new NormalizedEvent(UUID.randomUUID(), "src", SourceType.APP_SERVICE, null, "vps", service, null,
+                "payment_succeeded", Severity.INFO, at, Instant.now(), message, Map.of(), List.of());
     }
 
     @Test
