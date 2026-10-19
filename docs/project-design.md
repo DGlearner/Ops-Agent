@@ -1,10 +1,50 @@
-# Ops-Agent 项目设计文档（Java 底座）
+# Ops-Agent 设计文档
 
-> **状态：** v0.1 草案
-> **日期：** 2026-10-15
-> **范围：** 模块划分、接口（HTTP、Kafka 消息）、数据模型、核心处理逻辑、配置、测试与开发计划。
-> **不在本文范围：** Agent 部分（Python）的具体功能与实现方式尚未确定，本文只定义 Java 侧需要为它预留的边界（§7.6）。
-> **背景：** 本项目是 AIOps v1（Python MVP）的重写。v1 的问题清单和总体技术选型来自前期分析文档，本文只记录与实现直接相关的决定；与分析文档不一致的地方列在 §15。
+> **状态：** 持续更新。已实现的部分以本文为准；每节注明“已实现”“计划”，计划中的设计以后可能调整。
+> **更新：** 2026-10-19（初版 2026-10-15）
+> **范围：** Ops-Agent 平台本身：日志接入、解析与检测（Java）、告警关联与 Incident（Java）、Agent（Python：Incident 分析与值班助手）、控制台（Vue）。被监控的电商靶场与演练控制台见 `shop-design.md`。
+> **先读：** §0 是现状总览，列出已实现的能力、关键设计和实测数字，以及还没做的部分；后面各节是细节。
+> **背景：** 本项目是 AIOps v1（Python MVP）的重写；与前期分析文档不一致的地方列在 §15。
+
+---
+
+## 0. 现状总览（2026-10-19）
+
+一句话：日志从被监控的服务进来，经过解析、脱敏和规则检测变成告警，按服务依赖关联成 Incident；Agent 带证据地分析每个 Incident 的根因，值班人员可以在控制台里用对话问系统的情况。检测、关联、归因由确定性的规则完成，大模型负责理解问题、整合证据和解释，不参与逐条日志的检测。
+
+```
+电商靶场（订单、库存、支付） ──JSON 日志──▶ 采集器 ──HTTP──▶ ingest-service ──Kafka──▶ stream-processor
+                                                                                   │ 解析、脱敏、规则检测
+                                                                                   ▼ Kafka alerts
+控制台（Vue 3） ◀──REST── core-service：告警落库、关联成 Incident、派发分析、校验证据
+      │                        ▲ 只读 HTTP              │ Kafka agent.tasks / agent.results
+      └──对话（SSE）──▶ Agent（Python）：Incident 分析、值班助手
+演练控制台：给靶场制造流量和故障，记下标准答案，按 core-service 看到的结果打分（Ops-Agent 看不到标准答案）
+```
+
+### 0.1 已实现的能力
+
+| 部分 | 做了什么 | 关键设计 | 实测与验证 |
+|---|---|---|---|
+| **日志接入**（ingest-service，§6.2、§7.2） | HTTP 批量接收日志，API Key 鉴权，按日志源限流，写入 Kafka | 所有记录被 Kafka 确认（`acks=all`、幂等生产者）后才返回 202，Kafka 不可用返回 503 让客户端重试；`Idempotency-Key` 推导出确定的 `event_id`，重试不产生新事件；Redis 令牌桶（Lua）按**日志条数**限流，Redis 故障时放行（丢日志比短暂不限流更糟）；虚拟线程，阻塞调用外用 `ReentrantLock` 而不是 `synchronized` | JDK 21 上 `synchronized` 内阻塞会钉住载体线程：实测 16 s 对 1 s（§5） |
+| **解析与脱敏**（stream-processor，§8.1、§8.2） | 6 种来源（nginx、syslog、MySQL、logfmt、ECS JSON、docker）解析成统一事件；所有字段脱敏 | 密码、token、JWT、Authorization 头、URL 中的凭据都遮蔽；JSON 日志逐字段处理，结果仍是合法 JSON；值的边界逐字符扫描，不用正则（带转义引号的 16 KB 长行能让正则递归栈溢出）；解析失败的进 `logs.unparsed`，不静默丢弃 | 靶场演练：采集 7264 行，没有重复、没有解析失败的靶场日志（shop-design §12.4.1） |
+| **规则检测**（stream-processor，§8.3） | Kafka Streams 按规则在滑动窗口内计数，越过阈值产生告警，告警带触发它的样本日志作为证据 | `exactly_once_v2`；同一条日志重复投递只计一次（按 fingerprint + event_id 去重）；**告警抑制 + 安静期**：同一问题持续时只告警一次，安静 2 分钟后再出现算新问题（演练里发现抢购的告警压住了之后的独立库存故障才加的）；规则经 compacted topic 热更新；窗口分 1、5、15 分钟三档以支持热更新；无法反序列化的进死信队列 | 首条告警在注入故障后 1.1–2.3 s（shop-design §12.4.1）；演练 5–7 的 12 次故障全部检出、Incident 划分正确，演练 5、7 的正常流量误报 0（shop-design §15） |
+| **告警关联与 Incident**（core-service，§8.4、§8.5） | 告警落库，按服务依赖关联成 Incident；生命周期状态机、时间线、人工流转 | 每条告警先确定“主体”（调用失败指向被调用方）；只有主体之间有依赖路径、且时间接近才合并，**只有共同依赖不算相关**（支付和库存都依赖 MySQL，但两者同时独立出错不能合并）；给出共同依赖作为提示，不断定根因；Spring Modulith 事件发布登记做 outbox，事务级 advisory lock 串行关联；数据库不可用时暂停分区、退避重试，告警不丢 | 一次 MySQL 停机的 5 条告警（2 个服务、2 条规则）合成 1 个 Incident；同时发生的支付、库存独立故障分成 2 个（shop-design §12.5） |
+| **Incident 分析 Agent**（Python + core-service agentops，§6.5、§7.6） | Incident 安静 1 分钟后自动派发分析；大模型通过 5 个只读工具查看 Incident，提交根因、置信度、证据和建议 | 工具调用有预算（8 次），用完只能提交；提交前自查证据，编造的 id 退回一次；core-service 落库前再校验，不属于本 Incident 的证据单独存放、不作为支持；同一 Incident 只有一个分析在等待（部分唯一索引）；超时 3 分钟；工具结果标明与本 Incident 的时间关系（重叠、之前、之后） | 演练 6 → 7：给工具结果加上时间关系后，全新的 6 个 Incident 归因 6/6（之前 3/4）；常见故障上大模型与不用大模型的基线一样准，多出的是可核对的解释和对证据不足的如实标注（shop-design §15） |
+| **值班助手**（Python，§6.7） | 控制台里的对话 Agent：问告警、Incident、原因、影响、怎么处理，以及一般运维知识 | **两级路由**：规则只在明确指向当前系统时直接决定（0 ms），其余交给快速模型，结合上文理解“它”“这个故障”；**LangGraph 编排**：定位 Incident → 并行预取告警、样本日志、规则归因和后台分析 → 模型推理、最多补查 4 次 → 核对每个引用；以规则归因为起点，证据矛盾时明确指出；Incident 之间的时间关系由编排算好交给模型；**SSE** 推送 9 类事件（路由、步骤、推理、正文、中间说明、引用等），可停止，刷新后与直播一致；证据用短编号（I1、A3、E2），会话内不变；三层记忆（当前话题、最近 3 轮、摘要） | 路由：107 条标注问题上准确率 95.2% / 97.7%（只用模型 92.1% / 95.5%），规则直接决定的部分准确率 100%，平均耗时 0.47 / 1.04 s（只用模型约 1.5 s）。回答：先取证据首字 1.4 s，让模型自己调工具 3.1 s，深度思考 9.7 s；`mysql-down` 演练 24 个回答里 23 个结论第一句就指向 shop-mysql，并纠正了被一条无关告警带偏的规则归因。并发独立故障演练暴露的问题和修正见 §6.7 |
+| **控制台**（web，§6.6） | Incident 列表与详情、服务拓扑、值班助手 | 详情页把 Agent 的每条证据解析成告警摘要、日志原文或服务说明，点击定位；影响范围图；时间线合并告警、状态变化和分析；对话页的思考过程、深度思考开关、引用跳转 | 22 个单元测试（SSE 解析、事件合并、Markdown 与引用渲染、证据解析等）+ vue-tsc 类型检查 |
+| **演练与评测**（lab，shop-design §15） | 一键制造流量和 9 种故障，记下标准答案，按 core-service 的数据打分 | 标准答案不进入 Ops-Agent 的任何输入；误报按“顾客视角”判断（告警前后有没有订单真的失败）；评分看是否检出、首条告警延迟、Incident 划分、归因 | 见上面各行引用的演练结果 |
+| **工程** | CI、测试、一键演示 | GitHub Actions 三个任务：Gradle 构建与全部测试、Agent 的 pytest、控制台的测试与类型检查；Testcontainers 集成测试；`java tools/Demo.java` 一条命令启动全部组件；小内存（5.8 GB）下的构建与测试预算（§12） | Java 257 个测试、Python 84 个、前端 22 个（2026-10-19） |
+
+### 0.2 还没做的
+
+按计划顺序（§14.3）：
+
+1. **日志存储与检索**，并给值班助手和 Incident 分析加日志查询工具。现在 Agent 只能看到告警里带的样本日志，看不到被调用服务自己的日志，所以有些问题只能回答“需要查 payment-service 的日志”（§6.7 演练场景二）。
+2. **统计基线异常检测**：日志模板提取（Drain）+ 每类日志的频率基线，和规则检测在同一批演练上比较检出率、误报和延迟。
+3. **指标**（Prometheus）：连接池、延迟、错误率的指标告警，以及给 Agent 的指标查询工具。
+
+之后再做：认证与权限（JWT，对外部署前必须完成）、规则管理移入 core-service（版本、热发布）、静默规则、变更记录、工具调用审计、Incident 的人工合并与拆分。§7.3 和 §9 里这些部分的接口和表是设计，尚未实现。
 
 ---
 
@@ -12,19 +52,13 @@
 
 一个面向**微服务系统值班运维**的平台：采集日志 → 实时检测异常 → 按服务依赖把告警合并为事件（Incident）→ 由 Agent 解释根因、回答运维问题、定时巡检。
 
-- **Java 负责：** 所有确定性、高吞吐的部分，以及系统数据的唯一入口（接入、解析、检测、聚合、Incident、权限、调度、知识库存储）。
-- **Python 负责（待定）：** LLM 推理。Agent 不直接访问数据库，只能调用 Java 提供的只读工具接口。
-- **被监控对象（待定）：** 计划为一个小型电商微服务靶场（网关、订单、库存、支付 + MySQL + Redis + Kafka），可注入故障，用来产生带标准答案的评测数据。
+- **Java 负责：** 所有确定性、高吞吐的部分，以及系统数据的唯一入口（接入、解析、检测、关联、Incident；以后还有权限、规则管理）。
+- **Python 负责：** 大模型相关的部分：Incident 分析和值班助手（2026-10-17 确定，§14.4 D5）。Agent 不直接访问数据库，只能调用 core-service 的只读接口。
+- **被监控对象：** 电商靶场（订单、库存、支付三个服务 + MySQL + Redis），可注入故障，用来产生带标准答案的评测数据（`shop-design.md`）。
 
-## 2. 本阶段范围
+## 2. 范围
 
-| 做 | 暂不做 |
-|---|---|
-| Gradle 多项目工程、版本锁定、CI、本地基础设施 | Agent 推理、RAG、巡检逻辑（等 Agent 方案确定） |
-| `ingest-service`：HTTP 批量接入、API Key 鉴权、限流、写 Kafka | WebSocket 持续推送接入（J5） |
-| `stream-processor`：解析、脱敏、规则检测、去重 | 学习型异常检测（基线异常检测见 §14.3 P2） |
-| `core-service`：身份与权限、服务目录与拓扑、日志源、规则管理、告警与 Incident、Outbox | 知识库、对话、巡检计划、Agent 任务派发（预留接口） |
-| 单元测试、Kafka Streams 拓扑测试、Testcontainers 集成测试 | 前端控制台（后续单独规划） |
+已实现和还没做的见 §0。明确不做的：RAG 知识库、定时巡检（§14.4 D2）、WebSocket 持续推送接入、Agent 执行任何修复操作（只给建议）。
 
 ---
 
@@ -170,14 +204,14 @@ JSON Schema 放在仓库根目录 `contracts/kafka/`，供 Python 侧使用；Ja
 
 | 模块 | 职责 | 阶段 |
 |---|---|---|
-| `identity` | 用户、团队、角色；登录与 JWT 签发；权限校验 | J3 |
+| `identity` | 用户、团队、角色；登录与 JWT 签发；权限校验 | 计划（P5）；之前 core-service 只监听 127.0.0.1 |
 | `catalog` | 服务、服务依赖、日志源与 API Key | 服务与依赖已实现（R3）；日志源与 API Key 待做 |
-| `rules` | 规则的增删改查、版本、启停、校验；变更发布到 `rules.changelog` | J3 |
+| `rules` | 规则的增删改查、版本、启停、校验；变更发布到 `rules.changelog` | 计划（P5）；现在规则在 stream-processor 的 `default-rules.json`，启动时写入 `rules.changelog` |
 | `alerting` | 消费 `alerts` 并落库；静默规则；告警查询 | 落库与查询已实现（R2，2026-10-17）；静默规则待做 |
 | `incident` | 把告警关联成 Incident（§8.4）；生命周期状态机、时间线；以后加指派、评论，领域事件发布到 `incident.events` | 关联、状态机、时间线与查询已实现（R3，2026-10-17） |
-| `shared` | 错误处理（ProblemDetail）、分页、审计字段、Outbox 配置 | J3 |
+| `shared` | 错误处理（ProblemDetail）、分页、审计字段、Outbox 配置 | 错误处理、分页、Outbox 已实现 |
 | `agentops` | 向 Agent 派发 Incident 分析任务（自动或手动）；校验 Agent 的结论并落库；查询（§7.6） | 已实现（P4 第一版，2026-10-17） |
-| `tools`、`knowledge`、`chat`、`scheduling` | 为 Agent 预留：工具调用的鉴权与审计、知识库、问答、巡检 | 待定 |
+| `tools`、`knowledge`、`scheduling` | 为 Agent 预留：工具调用的鉴权与审计、知识库、巡检 | 未做；问答由 Agent 的值班助手实现（§6.7），会话存在 Agent 一侧 |
 
 ### 6.5 `agent/`（Python）
 
@@ -405,7 +439,9 @@ route ─┬─ chitchat / out_of_scope ─────────────�
 
 ### 7.3 core-service
 
-所有接口都需要 JWT。角色：`ADMIN`（全局）；`SRE`、`DEVELOPER`、`VIEWER`（按团队）。
+**已实现的接口**（identity 完成前不做认证，core-service 只监听 127.0.0.1）：catalog 的 `GET /api/v1/topology`、`PUT /api/v1/services/{name}`、`PUT /api/v1/services/{name}/dependencies`；alerting 的 `GET /api/v1/alerts`、`GET /api/v1/alerts/{id}`；incident 的列表、详情、`/alerts`、`/timeline`、`/transitions`；agentops 的三个接口。表中其余接口（identity、rules、silences、log-sources、assignee、comments、实时推送）是设计，尚未实现。
+
+计划：所有接口都需要 JWT。角色：`ADMIN`（全局）；`SRE`、`DEVELOPER`、`VIEWER`（按团队）。
 
 | 模块 | 方法与路径 | 说明 | 权限 |
 |---|---|---|---|
@@ -636,22 +672,22 @@ PostgreSQL，schema `core`，Flyway 管理。主键为 UUIDv7（`uuid` 类型）
 
 | 表 | 主要字段 | 阶段 |
 |---|---|---|
-| `teams` | `id`、`name`（唯一）、`created_at` | J3 |
-| `users` | `id`、`username`（唯一）、`display_name`、`password_hash`（BCrypt）、`status`、`created_at` | J3 |
-| `user_roles` | `user_id`、`team_id`（ADMIN 时为空）、`role` | J3 |
-| `refresh_tokens` | `id`、`user_id`、`token_hash`、`expires_at`、`revoked_at` | J3 |
-| `services` | `id`、`name`（唯一）、`team_id`、`tier`、`description` | J3 |
-| `service_dependencies` | `service_id`、`depends_on_id`（联合主键） | J3 |
-| `log_sources` | `id`、`name`、`source_type`、`team_id`、`enabled`、`last_seen_at` | J3 |
-| `log_source_keys` | `id`、`source_id`、`key_hash`、`created_at`、`revoked_at` | J3 |
-| `rules` | `id`（rule_id）、`name`、`team_id`、`current_version`、`enabled` | J3 |
-| `rule_versions` | `rule_id`、`version`、`definition`（jsonb）、`created_by`、`created_at` | J3 |
+| `teams` | `id`、`name`（唯一）、`created_at` | 计划（P5） |
+| `users` | `id`、`username`（唯一）、`display_name`、`password_hash`（BCrypt）、`status`、`created_at` | 计划（P5） |
+| `user_roles` | `user_id`、`team_id`（ADMIN 时为空）、`role` | 计划（P5） |
+| `refresh_tokens` | `id`、`user_id`、`token_hash`、`expires_at`、`revoked_at` | 计划（P5） |
+| `services` | `id`、`name`（唯一）、`team_id`、`tier`、`description` | 已实现（R3，V2） |
+| `service_dependencies` | `service_id`、`depends_on_id`（联合主键） | 已实现（R3，V2） |
+| `log_sources` | `id`、`name`、`source_type`、`team_id`、`enabled`、`last_seen_at` | 计划；现在日志源在 ingest-service 的配置里 |
+| `log_source_keys` | `id`、`source_id`、`key_hash`、`created_at`、`revoked_at` | 计划 |
+| `rules` | `id`（rule_id）、`name`、`team_id`、`current_version`、`enabled` | 计划（P5） |
+| `rule_versions` | `rule_id`、`version`、`definition`（jsonb）、`created_by`、`created_at` | 计划（P5） |
 | `alerts` | `id`、`rule_id`、`rule_version`、`fingerprint`、`severity`、`group_key`、`service`、`host`、`window_start`、`window_end`、`count`、`threshold`、`first_event_at`、`last_event_at`、`summary`、`group_values`（jsonb）、`sample_event_ids`（jsonb）、`samples`（jsonb，证据）、`incident_id`、`created_at`、`stored_at` | 已实现（R2） |
-| `silences` | `id`、`matcher`（jsonb）、`starts_at`、`ends_at`、`reason`、`created_by` | J4 |
-| `incidents` | `id`、`title`、`status`、`severity`、`group_key`、`session_start`、`session_end`、`services`（text[]）、`team_id`、`assignee_id`、`opened_at`、`acknowledged_at`、`resolved_at`、`closed_at`、`version` | J4 |
-| `incident_alerts` | `incident_id`、`alert_id` | J4 |
-| `incident_events` | `id`、`incident_id`、`type`、`actor_type`、`actor_id`、`from_status`、`to_status`、`payload`（jsonb）、`created_at` | J4 |
-| `event_publication` | Spring Modulith 管理 | J3 |
+| `silences` | `id`、`matcher`（jsonb）、`starts_at`、`ends_at`、`reason`、`created_by` | 计划 |
+| `incidents` | `id`、`title`、`status`、`severity`、`group_key`、`session_start`、`session_end`、`services`（text[]）、`team_id`、`assignee_id`、`opened_at`、`acknowledged_at`、`resolved_at`、`closed_at`、`version` | 已实现（R3，V4；字段以迁移脚本为准，含主体和共同依赖） |
+| `incident_alerts` | `incident_id`、`alert_id` | 已实现（R3，V4） |
+| `incident_events` | `id`、`incident_id`、`type`、`actor_type`、`actor_id`、`from_status`、`to_status`、`payload`（jsonb）、`created_at` | 已实现（R3，V4） |
+| `event_publication` | Spring Modulith 管理 | 已实现（V3） |
 
 - 幂等：`alerts.id` 为消息中的 `alert_id`，写入用 `ON CONFLICT (id) DO NOTHING`；`incidents` 在 `(group_key, session_start)` 上有唯一约束。
 - **告警模块的实现（R2）：** 消费 `alerts` 时用 `read_committed`（stream-processor 以 exactly-once 事务写入）。读不懂的消息立即转入 `alerts.dlt`；其他失败（典型的是数据库不可用）按 1 s 起、翻倍到 30 s 的退避一直重试，期间这个分区暂停，告警不会因为停库而丢失。查询用 MyBatis-Plus 的 Lambda 条件构造器；分页按 `(created_at, id)` 做键集分页，因为告警 id 由内容推导（UUIDv5），不是按时间递增的 UUIDv7，游标里同时带上最后一条的创建时间和 id。
@@ -749,7 +785,10 @@ cd web && npm ci && npm run dev
 | 契约 | JSON Schema 校验 | record 序列化结果符合 `contracts/kafka/` |
 | 集成 | Testcontainers（Kafka、PostgreSQL、Redis，`@ServiceConnection`） | 接入 → Kafka；消费 → 落库；Outbox 发布 |
 | 架构 | Spring Modulith `ApplicationModules.verify()` | core-service 模块边界 |
-| CI | GitHub Actions | 每次 push 和 PR 运行 `./gradlew build` |
+| Agent | pytest：假的 core-service（httpx 的 MockTransport）和按脚本回答的模型 | 分析循环、证据自查、契约；值班助手的路由、编排的每个分支、降级、引用核对、追问、取消、SSE 接口 |
+| 控制台 | Vitest、vue-tsc | 证据解析、时间线、布局、状态流转；SSE 解析、事件合并、Markdown 与引用渲染（含注入测试） |
+| 评测 | `ops-agent eval-router`、`eval-chat`；演练控制台 | 路由准确率与耗时；真实系统上回答的延迟与正确性；检测、关联、归因的演练打分 |
+| CI | GitHub Actions | 每次 push 和 PR 运行三个任务：`./gradlew build`、Agent 的 pytest、控制台的测试与类型检查 |
 
 ---
 
@@ -799,8 +838,10 @@ Agent 在最上层：它只能通过第 3 层的只读工具看到第 1、2 层�
 | 阶段 | 内容 | 验收 |
 |---|---|---|
 | **P1 演练控制台与评测** | 本机网页（shop-design §15）：持续的正常流量和抢购；一键注入、清除故障；简单的攻击；标准答案时间线。按标准答案自动给 Ops-Agent 打分。故障和攻击的种类逐步增加：先接入已有的 9 个场景，再加资源类故障（CPU、内存、线程池）、进程崩溃、坏的发布，以及攻击（登录暴力破解、请求洪水、SQL 注入特征、绕过订单服务调用内部接口） | 控制台上的每个操作都有标准答案记录；评测按每次演练给出：是否检出、首条告警延迟、Incident 数量和划分是否正确、正常时段的误报 |
-| **P2 补齐确定性底座** | 日志存储与检索（D4）；Prometheus + Alertmanager（连接池、延迟、积压等指标告警进入 core，带触发和恢复）；变更记录（发布、配置变更）；新故障和攻击的规则；无规则的基线异常检测（日志模板 + 频率基线），与规则检测在同一套演练上对比 | 新故障和攻击都能被检出；基线检测与规则检测的检出率、误报、延迟对比有记录 |
-| **P3 只读工具 API** | 给 Agent 和 Ops-Agent 界面用：检索日志（按服务、时间、trace ID）、Incident 及其证据、指标查询、拓扑、最近的变更 | OpenAPI 文档；每个工具有集成测试；只读 |
+| **P2a 日志存储与检索（下一步，2026-10-19 起）** | core-service 消费 `logs.normalized` 存入 PostgreSQL（按天分区、过期整区删除、全文检索）；只读检索接口（按服务、时间、级别、事件类型、trace ID、关键词）；值班助手和 Incident 分析加日志查询工具；演练验证：并发独立故障时能查出被调用服务自己的日志 | 检索接口有集成测试；写入吞吐和查询延迟在固定资源下实测；§6.7 演练场景二里“需要查 payment-service 的日志”的问题能直接回答 |
+| **P2b 统计基线异常检测** | 日志模板提取（Drain）+ 每类日志的频率基线：出现新模板或频率偏离基线时告警。明确校准时段、阈值、冷启动和负载变化（例如抢购）的处理；与规则检测在同一套演练上对比 | 检出率、误报、延迟与规则检测的对比有记录；说明各自漏掉了什么 |
+| **P2c 指标** | Prometheus + Alertmanager（连接池、延迟、积压等指标告警进入 core，带触发和恢复）；Agent 的指标查询工具。内存紧张，视情况再定 | 指标告警进入同一套关联；工具有集成测试 |
+| **P3 只读工具 API** | 随 P2 逐步补齐：检索日志、指标查询、最近的变更（发布、配置变更） | OpenAPI 文档；每个工具有集成测试；只读 |
 | **P4 Agent** | Incident 分析和值班助手已完成（§14.2）。2026-10-19 起不再单独比较大模型和基线谁更会归因：归因交给规则，值班助手把规则的结论和证据整合起来回答，证据和规则不一致时指出来（§6.7）。接下来：工具随 P2、P3 增加（日志检索、指标、变更）；工具调用审计 | 每条结论都能追溯到证据；值班助手的路由和回答有评测记录 |
 | **P5 加固** | identity（JWT，对外部署前必须完成）；规则管理移入 core（版本、经 Outbox 发布到 `rules.changelog`）；`incident.events`；Ops-Agent 界面的其余部分（告警与规则页面、登录，第一版见 §14.2） | 未认证请求被拒；规则变更不重启生效 |
 
@@ -811,7 +852,7 @@ Agent 在最上层：它只能通过第 3 层的只读工具看到第 1、2 层�
 | D1 | 持久层：MyBatis-Plus 或 Spring Data JPA | core-service | **已定：MyBatis-Plus**（2026-10-17） |
 | D2 | Agent 的功能范围 | P3 的工具、P4 | 先做 Incident 归因分析（2026-10-17）；**加入问答**：值班助手（2026-10-19，§6.7）；巡检以后再定 |
 | D3 | 被监控的业务 | 数据集、规则、评测 | **已定：电商靶场**，保留 MySQL（2026-10-17）；是否接入真实服务器日志作为第二个环境，以后再定 |
-| D4 | 日志存储与检索：PostgreSQL（按天分区、全文检索）还是 OpenSearch | P2、P3 | P2 开工前确定 |
+| D4 | 日志存储与检索：PostgreSQL（按天分区、全文检索）还是 OpenSearch | P2、P3 | **已定：PostgreSQL**（2026-10-19）：数据量是演练级别；开发机只有 5.8 GB 内存，再起 OpenSearch 放不下；沿用现有的数据库和迁移 |
 | D5 | Agent 的实现语言：Python 还是 Java（Spring AI） | P4 | **已定：Python**（2026-10-17），经 Kafka 和只读 HTTP 接口与 Java 端交互 |
 
 ---
