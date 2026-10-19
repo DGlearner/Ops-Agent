@@ -17,19 +17,7 @@ class BaselineAnalyst:
     def analyse(self, task: AgentTask, deadline: datetime | None = None) -> AgentResult:
         started = time.monotonic()
         incident = self._core.incident(task.incident_id)
-        alerts = sorted(self._core.incident_alerts(task.incident_id), key=lambda a: a["created_at"])
-        subjects = incident.get("subjects") or []
-        shared = incident.get("shared_dependencies") or []
-        if shared:
-            # Several subjects failing together, all depending on the same thing: suspect that thing.
-            evidence = [_alert(a) for a in alerts[:5]]
-            hypotheses = [Hypothesis(component=d, cause=f"{'、'.join(subjects)} 同时出现异常，它们都依赖 {d}",
-                                     confidence="low", evidence=[Evidence(kind="topology", id=d), *evidence])
-                          for d in shared[:3]]
-        else:
-            hypotheses = [Hypothesis(component=s, cause=f"告警指向 {s}", confidence="low",
-                                     evidence=[_alert(a) for a in alerts if _subject(a) == s][:5])
-                          for s in subjects[:3]]
+        hypotheses = rule_attribution(incident, self._core.incident_alerts(task.incident_id))
         components = [h.component for h in hypotheses]
         return AgentResult(
             task_id=task.task_id, incident_id=task.incident_id, status="completed",
@@ -38,6 +26,22 @@ class BaselineAnalyst:
             uncertain=True, hypotheses=hypotheses,
             next_steps=[f"检查 {c} 的状态、日志和最近的变更" for c in components],
             model=self.name, tool_calls=0, duration_ms=int((time.monotonic() - started) * 1000))
+
+
+def rule_attribution(incident: dict, alerts: list[dict]) -> list[Hypothesis]:
+    """What the correlation rules point at, most likely first: what the failing subjects share, else the subjects."""
+    alerts = sorted(alerts, key=lambda a: a["created_at"])
+    subjects = incident.get("subjects") or []
+    shared = incident.get("shared_dependencies") or []
+    if shared:
+        # Several subjects failing together, all depending on the same thing: suspect that thing.
+        evidence = [_alert(a) for a in alerts[:5]]
+        return [Hypothesis(component=d, cause=f"{'、'.join(subjects)} 同时出现异常，它们都依赖 {d}",
+                           confidence="low", evidence=[Evidence(kind="topology", id=d), *evidence])
+                for d in shared[:3]]
+    return [Hypothesis(component=s, cause=f"告警指向 {s}", confidence="low",
+                       evidence=[_alert(a) for a in alerts if _subject(a) == s][:5])
+            for s in subjects[:3]]
 
 
 def _subject(alert: dict) -> str | None:

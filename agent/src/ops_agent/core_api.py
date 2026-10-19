@@ -33,9 +33,15 @@ class CoreApi:
         params = {"from": _iso(start), "to": _iso(end), "limit": limit, "service": service, "rule_id": rule_id}
         return self._get("/api/v1/alerts", params)["items"]
 
-    def incidents(self, *, start: datetime, end: datetime, limit: int = 20) -> list[dict]:
+    def incidents(self, *, start: datetime, end: datetime, service: str | None = None, status: str | None = None,
+                  limit: int = 20) -> list[dict]:
         """Incidents opened in [start, end), newest first."""
-        return self._get("/api/v1/incidents", {"from": _iso(start), "to": _iso(end), "limit": limit})["items"]
+        params = {"from": _iso(start), "to": _iso(end), "limit": limit, "service": service, "status": status}
+        return self._get("/api/v1/incidents", params)["items"]
+
+    def analyses(self, incident_id: UUID | str) -> list[dict]:
+        """The incident's analyses by the agent, newest first."""
+        return self._get(f"/api/v1/incidents/{incident_id}/analyses")
 
     def close(self) -> None:
         self._http.close()
