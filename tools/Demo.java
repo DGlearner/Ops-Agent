@@ -24,7 +24,7 @@ import java.util.stream.Stream;
 
 /**
  * Starts the whole demo on one machine: the containers, Ops-Agent's services, the shop and its lab, the log shipper,
- * the agent and the console. Ctrl+C stops the processes it started; the containers keep running.
+ * the agent, its chat server and the console. Ctrl+C stops the processes it started; the containers keep running.
  *
  * <pre>
  * java tools/Demo.java [--skip-build] [--baseline]    start everything, then wait for Ctrl+C
@@ -45,7 +45,7 @@ public class Demo {
     private static final Path WEB = ROOT.resolve("web");
     private static final List<String> OPS = List.of("docker", "compose", "-f", "deploy/compose/compose.yaml");
     private static final List<String> SHOP = List.of("docker", "compose", "-f", "deploy/shop/compose.yaml");
-    private static final int[] PORTS = {8080, 8081, 8082, 8090, 8091, 8092, 8093, 8191, 8192, 8193, 5180};
+    private static final int[] PORTS = {8080, 8081, 8082, 8083, 8090, 8091, 8092, 8093, 8191, 8192, 8193, 5180};
     private static final Duration STARTUP = Duration.ofMinutes(3);
     // Reads the agent's settings the way the agent does (environment, then agent/.env) and never prints the key.
     private static final String AGENT_MODE = "from ops_agent.config import Settings; s = Settings(); "
@@ -155,12 +155,15 @@ public class Demo {
         Service shipper = new Service("log-shipper", ROOT,
                 List.of(java(), "-Xmx128m", "-cp", shipperClasspath,
                         "io.github.dglearner.opsagent.shipper.LogShipper", "--dir", "logs/shop"), Map.of(), null);
+        Map<String, String> pythonEnv = Map.of("PYTHONUNBUFFERED", "1", "PYTHONIOENCODING", "utf-8");
         Service agent = new Service("agent", AGENT,
-                List.of(python.toString(), "-m", "ops_agent", "--mode", mode.split(" ")[0], "run"),
-                Map.of("PYTHONUNBUFFERED", "1", "PYTHONIOENCODING", "utf-8"), null);
+                List.of(python.toString(), "-m", "ops_agent", "--mode", mode.split(" ")[0], "run"), pythonEnv, null);
+        Service chat = new Service("chat", AGENT,
+                List.of(python.toString(), "-m", "ops_agent", "--mode", mode.split(" ")[0], "chat"), pythonEnv,
+                "http://127.0.0.1:8083/api/v1/chat/health");
         Service console = new Service("console", WEB, List.of("node", "node_modules/vite/bin/vite.js"), Map.of(),
                 "http://127.0.0.1:5180/");
-        List<Running> rest = List.of(start(shipper), start(agent), start(console));
+        List<Running> rest = List.of(start(shipper), start(agent), start(chat), start(console));
         awaitReady(rest);
         Thread.sleep(3000);
         for (Running r : rest) {
@@ -173,6 +176,7 @@ public class Demo {
 
                 Ops-Agent is running.
                   console    http://127.0.0.1:5180    incidents, the agent's analyses, the topology
+                  assistant  http://127.0.0.1:5180/chat   ask about alerts and incidents
                   lab        http://127.0.0.1:8090    traffic and faults to try it on
                   core API   http://127.0.0.1:8080/swagger-ui.html
                   agent      %s

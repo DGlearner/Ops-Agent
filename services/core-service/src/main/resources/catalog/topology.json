@@ -8,7 +8,7 @@
      "depends_on": ["shop-mysql"]},
     {"name": "shop-mysql", "kind": "database", "description": "Shop: the MySQL instance of all three services",
      "depends_on": []},
-    {"name": "shop-redis", "kind": "cache", "description": "Shop: flash sale stock, buyers and the queue of accepted orders",
+    {"name": "shop-redis", "kind": "cache", "description": "Shop: flash sales (stock, buyers, the queue of accepted orders) and the product page cache",
      "depends_on": []}
   ]
 }
