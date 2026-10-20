@@ -38,5 +38,10 @@ ops:
     max-sample-events: 5
     # A fingerprint without a match for this long has stopped; if it returns, it alerts again (see AlertSuppressor).
     quiet-period: 2m
+    # Statistical baseline detection beside the rules (docs/project-design.md §8.8); the rest in BaselineProperties.
+    baseline:
+      enabled: true
+      # Each service is only learned from for this long after its first line.
+      calibration: 30m
     # Until core-service manages rules (J3), publish rules/default-rules.json at startup.
     seed-rules: true
