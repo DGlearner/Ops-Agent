@@ -297,7 +297,7 @@ async def test_the_services_own_logs_come_with_the_incident_and_can_be_searched(
     assert logged["payment-service"]["events"] == [{"event_type": "payment_succeeded", "count": 40,
                                                     "severity": "info", "example": "Payment succeeded"}]
     errors = [r for r in core.requests if r.url.path == "/api/v1/logs" and r.url.params.get("min_severity")]
-    assert {r.url.params["min_severity"] for r in errors} == {"medium"}
+    assert {r.url.params["min_severity"] for r in errors} == {"low"}
     counts = [r for r in core.requests if r.url.path == "/api/v1/logs/counts"]
     assert {r.url.params["service"] for r in counts} == {"order-service", "payment-service"}
 

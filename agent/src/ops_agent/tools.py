@@ -68,7 +68,7 @@ class Toolbox:
                  _object({
                      "service": {"type": "string", "description": "只看这个服务的日志"},
                      "min_severity": {"enum": ["info", "low", "medium", "high", "critical"],
-                                      "description": "至少这么严重，例如 medium 只看警告和错误"},
+                                      "description": "至少这么严重：low 起是警告和错误（WARN），medium 起只有错误（ERROR）"},
                      "event_type": {"type": "string", "description": "只看这类事件，如 database_unavailable"},
                      "text": {"type": "string", "description": "消息里包含的文字（至少 3 个字符，不分大小写）"},
                      "minutes_before": {"type": "integer", "minimum": 0, "maximum": 10,

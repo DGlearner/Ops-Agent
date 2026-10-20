@@ -123,7 +123,8 @@ class ChatTools:
         errors in full, citable. An empty list of errors is a finding too: the service itself reported nothing."""
         counts, errors = await asyncio.gather(
             asyncio.to_thread(self._core.log_counts, start=start, end=end, service=service, limit=MAX_LOG_KINDS),
-            asyncio.to_thread(self._core.logs, start=start, end=end, service=service, min_severity="medium",
+            # WARN lines come out as low, ERROR as medium (stream-processor's parsers): warnings are wanted too.
+            asyncio.to_thread(self._core.logs, start=start, end=end, service=service, min_severity="low",
                               limit=MAX_LOG_ERRORS))
         return {"events": [{"event_type": c["key"], "count": c["count"], "severity": c["severity"],
                             "example": (c.get("example") or "")[:150]} for c in counts],
@@ -194,7 +195,7 @@ class ChatTools:
                              "incident": {"type": "string", "description": "查这个 Incident 前后的日志，如 I1"},
                              "minutes": minutes,
                              "min_severity": {"enum": ["info", "low", "medium", "high", "critical"],
-                                              "description": "至少这么严重；medium 只看警告和错误"},
+                                              "description": "至少这么严重：low 起是警告和错误（WARN），medium 起只有错误（ERROR）"},
                              "event_type": {"type": "string", "description": "只看这类事件"},
                              "text": {"type": "string", "description": "消息里包含的文字，至少 3 个字符"},
                              "limit": {"type": "integer", "minimum": 1, "maximum": 20}},
