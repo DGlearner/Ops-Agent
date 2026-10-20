@@ -2,6 +2,7 @@ package io.github.dglearner.opsagent.stream.config;
 
 import io.github.dglearner.opsagent.contracts.JsonSerde;
 import io.github.dglearner.opsagent.contracts.RuleDefinition;
+import io.github.dglearner.opsagent.stream.baseline.BaselineProperties;
 import io.github.dglearner.opsagent.stream.parse.ParserRegistry;
 import io.github.dglearner.opsagent.stream.topology.OpsTopology;
 import java.time.Clock;
@@ -24,8 +25,9 @@ class StreamConfiguration {
 
     /** Registers the topology on the StreamsBuilder that Spring Kafka starts and stops with the application. */
     @Bean
-    OpsTopology opsTopology(StreamsBuilder builder, StreamProperties properties, Clock clock) {
-        OpsTopology topology = new OpsTopology(ParserRegistry.withDefaultParsers(), properties, clock);
+    OpsTopology opsTopology(StreamsBuilder builder, StreamProperties properties, BaselineProperties baseline,
+            Clock clock) {
+        OpsTopology topology = new OpsTopology(ParserRegistry.withDefaultParsers(), properties, baseline, clock);
         topology.addTo(builder);
         return topology;
     }
