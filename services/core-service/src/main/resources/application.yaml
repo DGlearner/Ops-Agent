@@ -83,6 +83,15 @@ ops:
     scan-interval: 15s
     timeout: 3m
     language: zh
+  lab:
+    # The shop lab the remediations act on (docs/agent-design.md §13.2): the containers that may be started, by their
+    # catalog name, and the docker names Demo.java's compose project gives them.
+    containers:
+      shop-mysql: ops-shop-mysql-1
+      shop-redis: ops-shop-redis-1
+    mysql-container: ops-shop-mysql-1
+    mysql-root-password: ${SHOP_MYSQL_ROOT_PASSWORD:shop-root-dev}
+    order-management: http://127.0.0.1:8191
   logs:
     # Stored log lines are kept this long, as long as Kafka keeps logs.normalized (docs/project-design.md §8.7).
     retention: 3d

@@ -113,7 +113,21 @@ public class Incidents {
     /** Moves the incident to {@code to}; 409 if the lifecycle does not allow it or someone changed it meanwhile. */
     @Transactional
     public IncidentView transition(UUID incidentId, IncidentStatus to, String note) {
+        return transition(incidentId, to, note, null, null);
+    }
+
+    /**
+     * As above, and 409 STALE_VERSION if {@code expectedVersion} is given and the incident is no longer at it: the
+     * caller decided on what it saw then (a chat action confirmed by the user, docs/project-design.md §6.7).
+     */
+    @Transactional
+    public IncidentView transition(UUID incidentId, IncidentStatus to, String note, Integer expectedVersion,
+            String actionId) {
         IncidentRecord incident = require(incidentId);
+        if (expectedVersion != null && !expectedVersion.equals(incident.getVersion())) {
+            throw new ApiProblem(HttpStatus.CONFLICT, "STALE_VERSION", "The incident is at version "
+                    + incident.getVersion() + ", not " + expectedVersion + "; read it again before deciding");
+        }
         IncidentStatus from = IncidentStatus.of(incident.getStatus());
         if (!from.canMoveTo(to)) {
             throw new ApiProblem(HttpStatus.CONFLICT, "ILLEGAL_TRANSITION",
@@ -126,6 +140,9 @@ public class Incidents {
         Map<String, Object> payload = new LinkedHashMap<>();
         if (note != null) {
             payload.put("note", note);
+        }
+        if (actionId != null) {
+            payload.put("action_id", actionId);
         }
         mapper.insertEvent(Ids.newId(), incidentId, "STATUS_CHANGED", "USER", from.wire(), to.wire(),
                 OpsJson.toJson(payload));

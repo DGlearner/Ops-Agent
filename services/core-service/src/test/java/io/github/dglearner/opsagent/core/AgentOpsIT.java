@@ -17,9 +17,14 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -165,6 +170,78 @@ class AgentOpsIT extends CoreTestSupport {
         // Its only evidence was made up, so it cannot be taken as certain.
         assertThat(late.path("uncertain").asBoolean()).isTrue();
         assertThat(late.path("hypotheses").get(0).path("evidence")).isEmpty();
+    }
+
+    @Test
+    void anAnswerNamingAnotherIncidentIsRefusedAndTheTaskStillWaits() throws Exception {
+        Instant t = Instant.parse("2027-09-01T10:00:00Z");
+        send(alert("shop-unhandled-errors", "inventory-service", null, Severity.HIGH, t));
+        String incidentId = awaitIncidents(t, 1, 1).getFirst().path("incident_id").asString();
+        String taskId = awaitAnalyses(incidentId, 1).getFirst().path("analysis_id").asString();
+
+        answer(new AgentResult(UUID.fromString(taskId), UUID.randomUUID(), AgentResult.COMPLETED, "别的 Incident。",
+                false, null, null, "test-model", 1, 10, null, Instant.now()));
+        Thread.sleep(1500);
+        assertThat(getJson("/api/v1/analyses/" + taskId).path("summary").asString("")).isEmpty();
+
+        // The refusal did not use the task up: the right answer is still taken.
+        answer(new AgentResult(UUID.fromString(taskId), UUID.fromString(incidentId), AgentResult.COMPLETED,
+                "库存服务内部错误。", false, null, null, "test-model", 1, 10, null, Instant.now()));
+        assertThat(awaitAnalysis(taskId, "completed").path("summary").asString()).isEqualTo("库存服务内部错误。");
+    }
+
+    @Test
+    void requestsAtTheSameTimeShareOneAnalysis() throws Exception {
+        Instant t = Instant.parse("2027-09-02T10:00:00Z");
+        send(alert("shop-unhandled-errors", "inventory-service", null, Severity.HIGH, t));
+        String incidentId = awaitIncidents(t, 1, 1).getFirst().path("incident_id").asString();
+
+        ExecutorService pool = Executors.newFixedThreadPool(8);
+        try {
+            List<Future<String>> asked = new ArrayList<>();
+            for (int i = 0; i < 8; i++) {
+                asked.add(pool.submit(() -> OpsJson.mapper()
+                        .readTree(post("/api/v1/incidents/" + incidentId + "/analyses", "").body())
+                        .path("analysis_id").asString()));
+            }
+            Set<String> ids = new HashSet<>();
+            for (Future<String> f : asked) {
+                ids.add(f.get());
+            }
+            assertThat(ids).hasSize(1);
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(jdbc.sql("SELECT count(*) FROM incident_analyses WHERE incident_id = ?::uuid")
+                .param(incidentId).query(Long.class).single()).isEqualTo(1L);
+    }
+
+    @Test
+    void aLateAnswerBelongsToItsOwnTaskAndLeavesTheRetryAlone() throws Exception {
+        Instant t = Instant.parse("2027-09-03T10:00:00Z");
+        send(alert("shop-unhandled-errors", "inventory-service", null, Severity.HIGH, t));
+        String incidentId = awaitIncidents(t, 1, 1).getFirst().path("incident_id").asString();
+        String oldId = awaitAnalyses(incidentId, 1).getFirst().path("analysis_id").asString();
+        awaitAnalysis(oldId, "timed_out");
+
+        String retryId = OpsJson.mapper().readTree(post("/api/v1/incidents/" + incidentId + "/analyses", "").body())
+                .path("analysis_id").asString();
+        assertThat(retryId).isNotEqualTo(oldId);
+
+        answer(new AgentResult(UUID.fromString(oldId), UUID.fromString(incidentId), AgentResult.COMPLETED,
+                "迟到的结论。", false, null, null, "test-model", 1, 10, null, Instant.now()));
+        assertThat(awaitAnalysis(oldId, "completed").path("summary").asString()).isEqualTo("迟到的结论。");
+        // The retry was not answered by it; it is its own record, and the newest.
+        JsonNode retry = getJson("/api/v1/analyses/" + retryId);
+        assertThat(retry.path("status").asString()).isNotEqualTo("completed");
+        assertThat(retry.path("summary").asString("")).isEmpty();
+        assertThat(getJson("/api/v1/incidents/" + incidentId + "/analyses").get(0).path("analysis_id").asString())
+                .isEqualTo(retryId);
+
+        answer(new AgentResult(UUID.fromString(retryId), UUID.fromString(incidentId), AgentResult.COMPLETED,
+                "重试的结论。", false, null, null, "test-model", 1, 10, null, Instant.now()));
+        assertThat(awaitAnalysis(retryId, "completed").path("summary").asString()).isEqualTo("重试的结论。");
+        assertThat(getJson("/api/v1/analyses/" + oldId).path("summary").asString()).isEqualTo("迟到的结论。");
     }
 
     private static void answer(AgentResult result) throws Exception {

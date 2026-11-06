@@ -30,6 +30,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -42,7 +43,10 @@ import tools.jackson.databind.JsonNode;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
     // Incidents are analysed soon after their last alert, and the agent (absent here) is not waited for long.
-    "ops.agent.settle-after=2s", "ops.agent.scan-interval=1s", "ops.agent.timeout=5s"})
+    "ops.agent.settle-after=2s", "ops.agent.scan-interval=1s", "ops.agent.timeout=5s",
+    // Verifications are due soon after a remediation, and a claim's lease runs out quickly.
+    "ops.lab.verify-window=1s", "ops.lab.verify-grace=0s", "ops.lab.lease-duration=2s"})
+@Import(FakeLab.Configuration.class)
 abstract class CoreTestSupport {
 
     @ServiceConnection
