@@ -16,6 +16,7 @@ final class Timestamps {
     private static final DateTimeFormatter SYSLOG_MONTH_DAY = DateTimeFormatter.ofPattern("MMM d", Locale.ENGLISH);
     private static final DateTimeFormatter NGINX =
             DateTimeFormatter.ofPattern("dd/MMM/yyyy:HH:mm:ss Z", Locale.ENGLISH);
+    private static final DateTimeFormatter NGINX_ERROR = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
 
     /**
      * Syslog lines carry neither year nor zone. UTC is assumed, and the year is the one that puts the line closest
@@ -46,6 +47,15 @@ final class Timestamps {
     static Instant nginx(String text) {
         try {
             return OffsetDateTime.parse(text, NGINX).toInstant();
+        } catch (DateTimeParseException e) {
+            return null;
+        }
+    }
+
+    /** The error log is written in the server's local time without a zone; UTC is assumed, as for BSD syslog. */
+    static Instant nginxError(String text) {
+        try {
+            return LocalDateTime.parse(text, NGINX_ERROR).toInstant(ZoneOffset.UTC);
         } catch (DateTimeParseException e) {
             return null;
         }

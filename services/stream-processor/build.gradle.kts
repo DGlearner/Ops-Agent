@@ -20,3 +20,13 @@ tasks.test {
     inputs.dir(datasetDir).withPathSensitivity(PathSensitivity.RELATIVE)
     systemProperty("datasets.dir", datasetDir.asFile.absolutePath)
 }
+
+// How well real log files fit the parsers (docs/project-design.md §8.9), e.g.
+// ./gradlew :services:stream-processor:parseFit --args="linux:auth:/var/log/auth.log* nginx:nginx:/var/log/nginx/*.log*"
+tasks.register<JavaExec>("parseFit") {
+    group = "verification"
+    description = "Runs real log files through the parsers and reports what fits"
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass = "io.github.dglearner.opsagent.stream.parse.ParseFit"
+    maxHeapSize = "512m"
+}

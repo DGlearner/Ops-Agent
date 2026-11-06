@@ -78,6 +78,19 @@
     "summary_template": "{count} HTTP 5xx responses on {host} within {window}"
   },
   {
+    "rule_id": "nginx-upstream-errors",
+    "version": 1,
+    "enabled": true,
+    "name": "Nginx cannot reach its upstream",
+    "match": {"event_types": ["http_upstream_error"]},
+    "group_by": ["host"],
+    "window": "PT5M",
+    "threshold": 5,
+    "severity": "high",
+    "suppress_for": "PT10M",
+    "summary_template": "Nginx on {host} failed to reach its upstream {count} times within {window}"
+  },
+  {
     "rule_id": "container-oom-killed",
     "version": 1,
     "enabled": true,
