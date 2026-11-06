@@ -2,16 +2,33 @@
 import { ChatDotRound, Delete, Plus, Promotion, VideoPause } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
-import { type ChatMessage, chatApi, type ChatSession } from '@/api/chat'
+import { useRoute, useRouter } from 'vue-router'
+import {
+  type ActionCard,
+  type ChatMessage,
+  chatApi,
+  type ChatSession,
+  type PageContext,
+  type QuestionAnswer,
+} from '@/api/chat'
+import { ApiError } from '@/api/client'
+import CasePanel from '@/components/CasePanel.vue'
 import ChatAnswer from '@/components/ChatAnswer.vue'
-import { applyEvent, EXAMPLES, newAnswer } from '@/chat'
+import { ACTION_STATUS, applyEvent, EXAMPLES, newAnswer, replyText } from '@/chat'
 import { errorMessage } from '@/errors'
 import { formatTime } from '@/format'
 
 const props = defineProps<{ id?: string }>()
 
 const router = useRouter()
+const route = useRoute()
+// Opened from an incident's page (?incident=…): "这个" is that incident, for the questions asked from here.
+const page = ref<PageContext | undefined>(
+  typeof route.query.incident === 'string' ? { incident_id: route.query.incident } : undefined,
+)
+// The case the conversation works on, and a tick to reload it after something changed it.
+const caseId = ref<string | null>(null)
+const caseTick = ref(0)
 const sessions = ref<ChatSession[]>([])
 const messages = ref<ChatMessage[]>([])
 const input = ref('')
@@ -19,6 +36,10 @@ const loading = ref(false)
 const error = ref('')
 const asking = ref(false)
 const list = ref<HTMLElement>()
+// The session's action cards as they stand now, the questionnaire still open, and what is being decided on.
+const actions = ref<Record<string, ActionCard>>({})
+const openPause = ref<string | null>(null)
+const busy = ref<string | null>(null)
 let controller: AbortController | undefined
 // 深度思考: remembered in this browser; storage may be unavailable (private window), then it starts off.
 const thinking = ref(readThinking())
@@ -53,12 +74,19 @@ async function loadSessions() {
 async function open(id: string | undefined) {
   stop()
   messages.value = []
+  actions.value = {}
+  openPause.value = null
+  caseId.value = null
   if (!id) {
     return
   }
   loading.value = true
   try {
-    messages.value = (await chatApi.session(id)).messages
+    const detail = await chatApi.session(id)
+    messages.value = detail.messages
+    actions.value = Object.fromEntries(detail.actions.map((a) => [a.action_id, a]))
+    openPause.value = detail.pause?.pause_id ?? null
+    caseId.value = [...detail.messages].reverse().find((m) => m.trace?.case?.case_id)?.trace?.case?.case_id ?? null
     error.value = ''
     await scrollDown()
   } catch (e) {
@@ -68,13 +96,17 @@ async function open(id: string | undefined) {
   }
 }
 
-async function ask(text = input.value) {
+async function ask(text = input.value, reply?: { pause_id: string; answers: QuestionAnswer[] }) {
   const content = text.trim()
   if (!content || asking.value) {
     return
   }
   asking.value = true
-  input.value = ''
+  if (!reply) {
+    input.value = ''
+  }
+  // Answered, or superseded by the new question: either way it cannot be answered any more.
+  openPause.value = null
   let sessionId = props.id
   try {
     if (!sessionId) {
@@ -100,9 +132,23 @@ async function ask(text = input.value) {
       thinking.value,
       (event, data) => {
         applyEvent(answer, event, data as Record<string, unknown>)
+        if (event === 'action') {
+          const card = data as ActionCard
+          actions.value[card.action_id] = card
+        } else if (event === 'questionnaire') {
+          openPause.value = (data as { pause_id: string }).pause_id
+        } else if (event === 'case' || event === 'done') {
+          const id = (data as { case_id?: string | null }).case_id
+          if (id) {
+            caseId.value = id
+            caseTick.value++
+          }
+        }
         void scrollDown(true)
       },
       controller.signal,
+      reply,
+      page.value,
     )
     if (answer.status === 'streaming') {
       answer.status = controller.signal.aborted ? 'cancelled' : 'failed'
@@ -123,6 +169,46 @@ async function ask(text = input.value) {
 
 function stop() {
   controller?.abort()
+}
+
+async function decide(card: ActionCard, confirm: boolean) {
+  if (!props.id || busy.value) {
+    return
+  }
+  busy.value = card.action_id
+  try {
+    const done = confirm
+      ? await chatApi.confirmAction(props.id, card.action_id, card.version, card.payload_digest)
+      : await chatApi.declineAction(props.id, card.action_id, card.version)
+    actions.value[done.action_id] = done
+    caseTick.value++
+    const status = ACTION_STATUS[done.status]
+    const show = done.status === 'succeeded' ? ElMessage.success : done.status === 'declined' ? ElMessage.info : ElMessage.warning
+    show(`${done.title}：${status.label}`)
+  } catch (e) {
+    ElMessage.warning(errorMessage(e))
+    if (e instanceof ApiError && e.status === 409) {
+      // The card moved on (another tab, an expiry): show it as it stands.
+      const items = (await chatApi.actions(props.id)).items
+      actions.value = Object.fromEntries(items.map((a) => [a.action_id, a]))
+    }
+  } finally {
+    busy.value = null
+  }
+}
+
+async function answer(answers: QuestionAnswer[]) {
+  const pauseId = openPause.value
+  const asked = messages.value.find((m) => m.trace?.questionnaire?.pause_id === pauseId)?.trace?.questionnaire
+  if (!pauseId || !asked) {
+    return
+  }
+  busy.value = pauseId
+  try {
+    await ask(replyText(asked, answers), { pause_id: pauseId, answers })
+  } finally {
+    busy.value = null
+  }
 }
 
 async function remove(session: ChatSession) {
@@ -204,16 +290,26 @@ onBeforeUnmount(stop)
         <div v-if="!messages.length && !loading" class="welcome">
           <el-icon :size="32"><ChatDotRound /></el-icon>
           <h3>Ops-Agent 值班助手</h3>
-          <p class="muted">只读系统的告警和 Incident，回答都附带可以点开核对的证据。</p>
+          <p class="muted">查系统的告警和 Incident，回答都附带可以点开核对的证据；改状态这类操作只会提出，你确认后才执行。</p>
           <div class="examples">
             <el-button v-for="q in EXAMPLES" :key="q" round @click="ask(q)">{{ q }}</el-button>
           </div>
         </div>
         <div v-for="m in messages" :key="m.message_id" class="message" :class="m.role">
           <div v-if="m.role === 'user'" class="bubble">{{ m.content }}</div>
-          <ChatAnswer v-else :message="m" />
+          <ChatAnswer
+            v-else
+            :message="m"
+            :actions="actions"
+            :open-pause="openPause"
+            :busy="busy"
+            @confirm="(c) => decide(c, true)"
+            @decline="(c) => decide(c, false)"
+            @answer="answer"
+          />
         </div>
       </div>
+      <CasePanel v-if="caseId" :case-id="caseId" :refresh="caseTick" class="case" />
       <div class="composer">
         <el-input
           v-model="input"
@@ -315,6 +411,12 @@ onBeforeUnmount(stop)
   background: var(--el-bg-color);
   border: 1px solid var(--el-border-color-light);
   border-radius: 8px;
+}
+
+.case {
+  margin: 0 24px 8px;
+  max-height: 40vh;
+  overflow: auto;
 }
 
 .messages {

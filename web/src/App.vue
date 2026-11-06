@@ -4,7 +4,13 @@ import { useRoute } from 'vue-router'
 
 const route = useRoute()
 const activeMenu = computed(() =>
-  route.path.startsWith('/topology') ? '/topology' : route.path.startsWith('/chat') ? '/chat' : '/incidents',
+  route.path.startsWith('/topology')
+    ? '/topology'
+    : route.path.startsWith('/chat')
+      ? '/chat'
+      : route.path.startsWith('/memories')
+        ? '/memories'
+        : '/incidents',
 )
 // One chat page for all its sessions: it keeps an answer streaming when its new session's URL is filled in.
 const viewKey = computed(() => (route.path.startsWith('/chat') ? '/chat' : route.path))
@@ -21,6 +27,7 @@ const viewKey = computed(() => (route.path.startsWith('/chat') ? '/chat' : route
         <el-menu-item index="/incidents">Incident</el-menu-item>
         <el-menu-item index="/topology">服务拓扑</el-menu-item>
         <el-menu-item index="/chat">值班助手</el-menu-item>
+        <el-menu-item index="/memories">经验审核</el-menu-item>
       </el-menu>
     </el-header>
     <el-main class="main">

@@ -7,6 +7,7 @@ import { api, ApiError } from '@/api/client'
 import type { Alert, Analysis, Incident, IncidentStatus, TimelineEntry, Topology } from '@/api/types'
 import AlertList from '@/components/AlertList.vue'
 import AnalysisPanel from '@/components/AnalysisPanel.vue'
+import CasePanel from '@/components/CasePanel.vue'
 import SeverityTag from '@/components/SeverityTag.vue'
 import StatusTag from '@/components/StatusTag.vue'
 import TopologyGraph from '@/components/TopologyGraph.vue'
@@ -30,6 +31,9 @@ const requesting = ref(false)
 const transitioning = ref(false)
 const expanded = ref<string[]>([])
 const flash = ref<string>()
+// The case this incident is being handled in, if any (docs/agent-design.md §2).
+const caseId = ref<string | null>(null)
+const caseTick = ref(0)
 
 async function load() {
   if (notFound.value) {
@@ -48,6 +52,13 @@ async function load() {
       expanded.value = a.slice(0, 3).map((x) => x.alert_id)
     }
     incident.value = i
+    try {
+      const cases = (await api.cases(props.id)).items
+      caseId.value = (cases.find((c) => c.status !== 'resolved') ?? cases[0])?.case_id ?? null
+      caseTick.value++
+    } catch {
+      // An older core-service without cases: the page works without.
+    }
     alerts.value = a
     timeline.value = t
     analyses.value = an
@@ -155,6 +166,9 @@ async function locate(alertId: string) {
         >
           {{ TRANSITION_LABEL[to] }}
         </el-button>
+        <router-link :to="{ path: '/chat', query: { incident: incident.incident_id } }">
+          <el-button size="small" type="primary" plain>在值班助手里处理</el-button>
+        </router-link>
       </div>
       <el-descriptions :column="3" size="small" class="facts">
         <el-descriptions-item label="开始">{{ formatTime(incident.opened_at) }}</el-descriptions-item>
@@ -193,6 +207,7 @@ async function locate(alertId: string) {
         </el-card>
       </el-col>
       <el-col :xs="24" :lg="10">
+        <CasePanel v-if="caseId" :case-id="caseId" :refresh="caseTick" class="case-card" />
         <el-card v-if="topology" shadow="never">
           <template #header><div class="card-head">影响范围</div></template>
           <TopologyGraph :topology="topology" :affected="incident.subjects" :suspected="suspected" :height="280" />
@@ -218,6 +233,10 @@ async function locate(alertId: string) {
 </template>
 
 <style scoped>
+.case-card {
+  margin-bottom: 16px;
+}
+
 .back {
   display: inline-flex;
   align-items: center;

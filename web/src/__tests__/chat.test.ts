@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { SseParser } from '@/api/chat'
-import { applyEvent, citationLink, metricsLine, newAnswer, renderAnswer } from '@/chat'
+import { type ActionCard, SseParser, type UsageSpan } from '@/api/chat'
+import {
+  applyEvent,
+  canDecide,
+  citationLink,
+  currentCard,
+  filledAnswers,
+  metricsLine,
+  newAnswer,
+  renderAnswer,
+  replyText,
+  spanBar,
+  tokens,
+} from '@/chat'
 
 describe('SseParser', () => {
   it('reads events split anywhere by the network, and skips the keep-alive comments', () => {
@@ -121,5 +133,108 @@ describe('metricsLine', () => {
     expect(metricsLine({ duration_ms: 1, tool_calls: 0, degraded: false, model: 'm', thinking: true }, null)).toBe(
       '用时 1 ms · 模型 m（深度思考）',
     )
+  })
+})
+
+describe('tokens', () => {
+  it('does not pass off a lower bound as the total', () => {
+    expect(tokens(1234, 0)).toBe('1,234 tokens')
+    expect(tokens(1234, 2)).toBe('至少 1,234 tokens')
+    expect(tokens(null, 2)).toBe('用量未知')
+    expect(tokens(null, 0)).toBe('')
+    expect(tokens(undefined, undefined)).toBe('')
+  })
+
+  it('is in the line under the answer', () => {
+    const m = { duration_ms: 1, tool_calls: 0, degraded: false, model: 'm', total_tokens: 12, calls_without_usage: 0 }
+    expect(metricsLine(m, null)).toBe('用时 1 ms · 12 tokens · 模型 m')
+  })
+})
+
+describe('spanBar', () => {
+  const span = (at_ms: number, duration_ms: number | null): UsageSpan => ({
+    kind: 'model',
+    name: 'm',
+    at_ms,
+    duration_ms,
+    status: 'ok',
+  })
+
+  it('places a span on the run', () => {
+    expect(spanBar(span(250, 500), 1000)).toEqual({ left: '25.00%', width: '50.00%' })
+  })
+
+  it('keeps a short span visible and inside the run', () => {
+    expect(spanBar(span(0, 0), 1000).width).toBe('0.50%')
+    expect(spanBar(span(999, null), 1000)).toEqual({ left: '99.90%', width: '0.10%' })
+    expect(spanBar(span(0, 0), 0)).toEqual({ left: '0.00%', width: '0.50%' })
+  })
+})
+
+describe('cards', () => {
+  const card: ActionCard = {
+    action_id: 'a1',
+    session_id: 's',
+    message_id: 'm',
+    kind: 'transition_incident',
+    status: 'proposed',
+    version: 1,
+    title: '把 I1 改为「已确认」',
+    params: { to_status: 'acknowledged' },
+    risk: 'medium',
+    reason: 'r',
+    target: { ref: 'I1', incident_id: 'i', title: 't', status: 'open', version: 1 },
+    evidence: [],
+    receipt: null,
+    created_at: '2026-11-01T10:00:00Z',
+    updated_at: '2026-11-01T10:00:00Z',
+    expires_at: '2026-11-01T10:15:00Z',
+  }
+
+  it('keeps the cards and the questionnaire an answer streams', () => {
+    const m = newAnswer()
+    applyEvent(m, 'action', { ...card })
+    applyEvent(m, 'memory', { memory_id: 'k1', text: '经验', status: 'candidate' })
+    applyEvent(m, 'questionnaire', { pause_id: 'p1', questions: [] })
+
+    expect(m.trace?.actions?.map((a) => a.action_id)).toEqual(['a1'])
+    expect(m.trace?.memories?.[0]?.memory_id).toBe('k1')
+    expect(m.trace?.questionnaire?.pause_id).toBe('p1')
+  })
+
+  it('offers the buttons only on a proposed card that has not expired', () => {
+    const before = Date.parse('2026-11-01T10:05:00Z')
+    const after = Date.parse('2026-11-01T10:20:00Z')
+
+    expect(canDecide({ ...card }, before)).toBe(true)
+    expect(canDecide({ ...card }, after)).toBe(false)
+    expect(canDecide({ ...card, status: 'succeeded' }, before)).toBe(false)
+  })
+
+  it('shows a card as it stands now when the session knows it', () => {
+    const done = { ...card, status: 'succeeded' as const, version: 3 }
+
+    expect(currentCard({ ...card }, { a1: done }).status).toBe('succeeded')
+    expect(currentCard({ ...card }, {}).status).toBe('proposed')
+  })
+
+  it('words the answers as the server does, and leaves out the empty ones', () => {
+    const q = {
+      pause_id: 'p',
+      source: 'orchestration' as const,
+      expires_at: '',
+      questions: [
+        { id: 'target', title: '你问的是哪个？', kind: 'single' as const, allow_text: false,
+          options: [{ id: 'I2', label: '[I2] payment 503' }] },
+        { id: 'seen', title: '看到了什么？', kind: 'single' as const, allow_text: true, options: [] },
+      ],
+    }
+    const answers = filledAnswers([
+      { id: 'target', choices: ['I2'], text: '' },
+      { id: 'seen', choices: [], text: '  ' },
+    ])
+
+    expect(answers).toEqual([{ id: 'target', choices: ['I2'] }])
+    expect(replyText(q, answers)).toBe('你问的是哪个？ [I2] payment 503')
   })
 })

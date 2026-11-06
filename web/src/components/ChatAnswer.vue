@@ -2,10 +2,25 @@
 import { CircleCheck, CircleClose, Loading, WarningFilled } from '@element-plus/icons-vue'
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import type { ChatMessage, StepItem } from '@/api/chat'
-import { citationLink, citationTitle, METHOD_LABEL, metricsLine, renderAnswer, seconds } from '@/chat'
+import type { ActionCard as Card, ChatMessage, QuestionAnswer, StepItem } from '@/api/chat'
+import ActionCard from '@/components/ActionCard.vue'
+import QuestionnaireCard from '@/components/QuestionnaireCard.vue'
+import { citationLink, citationTitle, currentCard, METHOD_LABEL, metricsLine, renderAnswer, seconds } from '@/chat'
 
-const props = defineProps<{ message: ChatMessage }>()
+const props = withDefaults(
+  defineProps<{
+    message: ChatMessage
+    /** The session's cards as they stand now, by id. */
+    actions?: Record<string, Card>
+    /** The questionnaire that can still be answered. */
+    openPause?: string | null
+    /** An action being decided on, or an answer on its way. */
+    busy?: string | null
+  }>(),
+  { actions: () => ({}), openPause: null, busy: null },
+)
+const emit = defineEmits<{ confirm: [card: Card]; decline: [card: Card]; answer: [answers: QuestionAnswer[]] }>()
+const cards = computed(() => (trace.value.actions ?? []).map((c) => currentCard(c, props.actions)))
 
 const router = useRouter()
 const trace = computed(() => props.message.trace ?? { route: null, items: [], citations: [] })
@@ -99,6 +114,26 @@ function follow(event: MouseEvent) {
 
     <el-alert v-if="trace.error" type="error" :title="trace.error" show-icon :closable="false" class="error" />
 
+    <QuestionnaireCard
+      v-if="trace.questionnaire"
+      :questionnaire="trace.questionnaire"
+      :active="trace.questionnaire.pause_id === openPause && !streaming"
+      :busy="busy === trace.questionnaire.pause_id"
+      @answer="(a) => emit('answer', a)"
+    />
+    <ActionCard
+      v-for="c in cards"
+      :key="c.action_id"
+      :card="c"
+      :busy="busy === c.action_id"
+      @confirm="(x) => emit('confirm', x)"
+      @decline="(x) => emit('decline', x)"
+    />
+    <div v-for="m in trace.memories ?? []" :key="m.memory_id" class="memory muted">
+      已记为候选经验，审核通过后才会在之后的对话里使用：{{ m.text }}
+      <router-link to="/memories">去审核</router-link>
+    </div>
+
     <div v-if="trace.citations.length" class="citations">
       <span class="muted">引用</span>
       <template v-for="c in citations" :key="c.ref">
@@ -118,6 +153,7 @@ function follow(event: MouseEvent) {
     <div v-if="!streaming" class="meta muted">
       <span v-if="statusNote" class="status">{{ statusNote }}</span>
       {{ metricsLine(trace.metrics, trace.route) }}
+      <router-link v-if="trace.metrics?.run_id" :to="`/runs/${trace.metrics.run_id}`" class="run-link">运行详情</router-link>
     </div>
   </div>
 </template>
@@ -308,6 +344,10 @@ a.chip:hover {
   font-size: 12px;
 }
 
+.run-link {
+  margin-left: 6px;
+}
+
 .status {
   color: var(--el-color-warning);
   margin-right: 4px;
@@ -315,5 +355,13 @@ a.chip:hover {
 
 .error {
   margin-top: 8px;
+}
+
+.memory {
+  margin-top: 8px;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: var(--el-fill-color-lighter);
 }
 </style>
