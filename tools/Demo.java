@@ -161,9 +161,12 @@ public class Demo {
         Service chat = new Service("chat", AGENT,
                 List.of(python.toString(), "-m", "ops_agent", "--mode", mode.split(" ")[0], "chat"), pythonEnv,
                 "http://127.0.0.1:8083/api/v1/chat/health");
+        // Judges whether a case recovered after a remediation (docs/agent-design.md §6).
+        Service verify = new Service("verify", AGENT, List.of(python.toString(), "-m", "ops_agent", "verify"),
+                pythonEnv, null);
         Service console = new Service("console", WEB, List.of("node", "node_modules/vite/bin/vite.js"), Map.of(),
                 "http://127.0.0.1:5180/");
-        List<Running> rest = List.of(start(shipper), start(agent), start(chat), start(console));
+        List<Running> rest = List.of(start(shipper), start(agent), start(chat), start(verify), start(console));
         awaitReady(rest);
         Thread.sleep(3000);
         for (Running r : rest) {

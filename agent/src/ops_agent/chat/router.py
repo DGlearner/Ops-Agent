@@ -66,6 +66,8 @@ NAMED = ("订单服务", "库存服务", "支付服务")
 PRESENT = ("现在", "目前", "当前", "刚才", "刚刚", "最近", "今天", "昨天", "上午", "下午", "晚上", "这次", "这个", "那个",
            "它", "上面", "我们", "线上", "系统里")
 FOLLOW_UP = ("它", "这个", "那个", "这次", "上面", "刚才那个", "该")
+# Asking the assistant to keep something for later sessions: only the ops path can (propose_memory).
+REMEMBER = ("记住", "记下", "记一下", "remember")
 OUT_OF_SCOPE = ("写诗", "写一首", "笑话", "天气", "股票", "菜谱", "小说", "作文", "星座")
 
 
@@ -98,6 +100,15 @@ class Decision:
     def as_dict(self) -> dict:
         return {"route": self.route, "label": self.label, "method": self.method, "reason": self.reason,
                 "entities": self.entities.as_dict(), "duration_ms": self.duration_ms}
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "Decision":
+        """Back from as_dict, e.g. from a pause point."""
+        e = d.get("entities") or {}
+        return cls(d["route"], d["method"], d.get("reason", ""),
+                   Entities(services=tuple(e.get("services") or ()), minutes=e.get("minutes"),
+                            incident_ids=tuple(e.get("incident_ids") or ()), follow_up=bool(e.get("follow_up"))),
+                   d.get("duration_ms", 0))
 
 
 @dataclass(frozen=True)
@@ -143,6 +154,9 @@ def match_rules(question: str, now: datetime, catalog: set[str], has_focus: bool
         if query and not diagnosis:
             return RuleMatch("ops_query", True, "问题里有 Incident 编号，问的是情况", found)
         return RuleMatch("ops_diagnosis", True, "问题里有 Incident 编号", found)
+    if _any(q, REMEMBER) and (scope or has_focus):
+        # Kept only as a candidate with evidence from this session (chat.knowledge), so it goes where the data is.
+        return RuleMatch("ops_query", True, "要把运维经验记下来", replace(found, follow_up=has_focus))
     if knowledge and not present and not named:
         return RuleMatch("ops_knowledge", True, f"问的是一般概念（“{knowledge}”），没有指向当前系统", found)
     if system and diagnosis and not knowledge:
@@ -156,6 +170,9 @@ def match_rules(question: str, now: datetime, catalog: set[str], has_focus: bool
     # Not sure: the model decides, and if it cannot, this guess stands.
     if scope:
         return RuleMatch("ops_diagnosis" if diagnosis else "ops_query", False, "可能涉及系统，但问法不确定", found)
+    # "现在有几个问题，是同一个原因吗": no system noun, but the here and now and a question about causes or counts.
+    if present and (why or query) and not knowledge:
+        return RuleMatch("ops_query", False, "问现在的情况，但没有说是哪部分", found)
     if knowledge:
         return RuleMatch("ops_knowledge", False, "像是一般问题", found)
     return RuleMatch("chitchat", False, "没有运维相关的词", found)

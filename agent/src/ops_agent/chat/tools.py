@@ -80,6 +80,12 @@ class ChatTools:
     async def detail(self, incident: dict, max_alerts: int = MAX_ALERTS) -> dict:
         """An incident with its alerts and samples, what the correlation rules point at, and the background
         analysis if the agent has made one."""
+        return self.shape_detail(incident, await self.fetch_detail(incident), max_alerts)
+
+    async def fetch_detail(self, incident: dict) -> dict:
+        """What detail is made of, fetched in parallel; no refs yet. Several incidents are fetched at once, and
+        their refs are given afterwards in their own order (shape_detail): A1 is the same alert however the
+        requests happen to finish."""
         incident_id = incident["incident_id"]
         services = await self._logging_services(incident)
         start = parse_time(incident["opened_at"]) - LOG_MARGIN
@@ -88,22 +94,30 @@ class ChatTools:
             asyncio.to_thread(self._core.incident_alerts, incident_id),
             asyncio.to_thread(self._core.incident_timeline, incident_id),
             asyncio.to_thread(self._core.analyses, incident_id),
-            *(self._service_logs(s, start, end, incident_id) for s in services))
-        alerts = sorted(alerts, key=lambda a: a["created_at"])
+            *(self._service_logs(s, start, end) for s in services))
+        return {"alerts": sorted(alerts, key=lambda a: a["created_at"]), "timeline": timeline, "analyses": analyses,
+                "logs": dict(zip(services, logs))}
+
+    def shape_detail(self, incident: dict, raw: dict, max_alerts: int = MAX_ALERTS) -> dict:
+        incident_id = incident["incident_id"]
+        alerts = raw["alerts"]
         result = self.brief(incident)
         result["rule_attribution"] = [{"component": h.component, "basis": h.cause}
                                       for h in rule_attribution(incident, alerts)]
-        completed = next((a for a in analyses if a.get("status") == "completed"), None)
+        completed = next((a for a in raw["analyses"] if a.get("status") == "completed"), None)
         if completed and completed.get("model") != "baseline":
             result["background_analysis"] = {
                 "model": completed.get("model"), "summary": completed.get("summary"),
                 "uncertain": completed.get("uncertain", False),
                 "causes": [{"component": h["component"], "confidence": h["confidence"]}
                            for h in completed.get("hypotheses") or []]}
-        if services:
-            result["service_logs"] = dict(zip(services, logs))
+        if raw["logs"]:
+            result["service_logs"] = {service: {"events": got["events"],
+                                                "warnings_and_errors": [self._line(line, incident_id)
+                                                                        for line in got["errors"]]}
+                                      for service, got in raw["logs"].items()}
         result["status_changes"] = [{"to": e["to_status"], "at": self.local(e["at"])}
-                                    for e in timeline if e["type"] == "STATUS_CHANGED" and e.get("to_status")]
+                                    for e in raw["timeline"] if e["type"] == "STATUS_CHANGED" and e.get("to_status")]
         # The first ones in full; past MAX_ALERTS one sample each, to keep the answer short.
         result["alerts"] = [self._alert(a, incident_id, samples=MAX_SAMPLES if n < MAX_ALERTS else 1)
                             for n, a in enumerate(alerts[:max_alerts])]
@@ -118,9 +132,10 @@ class ChatTools:
         names = list(dict.fromkeys([*incident.get("subjects", []), *incident.get("services", [])]))
         return [n for n in names if kinds.get(n, "service") == "service"][:LOG_SERVICES]
 
-    async def _service_logs(self, service: str, start: datetime, end: datetime, incident_id: str) -> dict:
+    async def _service_logs(self, service: str, start: datetime, end: datetime) -> dict:
         """What a service logged around an incident: each kind of event with its count, and its latest warnings and
-        errors in full, citable. An empty list of errors is a finding too: the service itself reported nothing."""
+        errors in full (citable once shaped). An empty list of errors is a finding too: the service itself reported
+        nothing."""
         counts, errors = await asyncio.gather(
             asyncio.to_thread(self._core.log_counts, start=start, end=end, service=service, limit=MAX_LOG_KINDS),
             # WARN lines come out as low, ERROR as medium (stream-processor's parsers): warnings are wanted too.
@@ -128,7 +143,7 @@ class ChatTools:
                               limit=MAX_LOG_ERRORS))
         return {"events": [{"event_type": c["key"], "count": c["count"], "severity": c["severity"],
                             "example": (c.get("example") or "")[:150]} for c in counts],
-                "warnings_and_errors": [self._line(line, incident_id) for line in errors]}
+                "errors": errors}
 
     def _line(self, line: dict, incident_id: str | None) -> dict:
         return {"ref": self.refs.ref("event", line["event_id"], line.get("message") or "", incident_id),

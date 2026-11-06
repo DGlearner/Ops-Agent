@@ -99,7 +99,7 @@ async def test_the_model_reasons_over_the_fetched_evidence_and_may_look_further(
     assert "rule_attribution" in data and "background_analysis" in data and "[I1]" not in data
     assert MYSQL_INCIDENT not in data, "the model sees refs, not ids"
     assert first["tools"] == ["list_incidents", "get_incident", "search_alerts", "search_logs", "count_logs",
-                              "get_topology"]
+                              "get_topology", "propose_action", "propose_memory", "ask_user"]
     assert model.calls[1]["messages"][-1]["role"] == "tool"
     assert model.calls[1]["messages"][-2]["reasoning_content"].startswith("规则指向")
 

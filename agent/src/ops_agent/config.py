@@ -55,6 +55,14 @@ class Settings(BaseSettings):
     # The evidence fetched before the model is asked; off leaves it for the model to fetch with its tools (the
     # experiment's baseline).
     chat_prefetch: bool = True
+    # Actions the model proposes and the user confirms (§6.7 操作卡片): off, a confirmed card is not run (blocked).
+    chat_actions: bool = True
+    # A card not decided on in this time expires: the evidence it was proposed on may be out of date.
+    chat_action_ttl_s: float = 900
+    # Cases, runbooks and remediations (docs/agent-design.md §13.4): off, the assistant answers as before.
+    chat_casework: bool = True
+    # The verify worker (ops-agent verify): how often it asks core-service for a due verification.
+    verify_poll_s: float = 5
 
     @property
     def llm_configured(self) -> bool:

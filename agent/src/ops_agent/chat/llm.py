@@ -14,6 +14,7 @@ from ..llm import ToolCall
 log = logging.getLogger(__name__)
 
 Delta = Callable[[str], None]
+UsageSink = Callable[[dict[str, int]], None]
 
 
 @dataclass
@@ -47,8 +48,9 @@ class StreamingModel(Protocol):
         ...
 
     async def quick(self, messages: list[dict], *, json_output: bool = False, timeout_s: float | None = None,
-                    on_content: Delta | None = None) -> str:
-        """One turn of the quick model (routing, summaries, small talk), without tools."""
+                    on_content: Delta | None = None, on_usage: UsageSink | None = None) -> str:
+        """One turn of the quick model (routing, summaries, small talk), without tools. on_usage: told the tokens
+        this call took, if the provider says."""
         ...
 
 
@@ -77,7 +79,7 @@ class OpenAIStreamingChat:
         async with response:
             async for chunk in response:
                 if chunk.usage:
-                    turn.usage = {"prompt": chunk.usage.prompt_tokens, "completion": chunk.usage.completion_tokens}
+                    turn.usage = usage_of(chunk.usage)
                 if not chunk.choices:
                     continue
                 delta = chunk.choices[0].delta
@@ -103,24 +105,40 @@ class OpenAIStreamingChat:
         return turn
 
     async def quick(self, messages: list[dict], *, json_output: bool = False, timeout_s: float | None = None,
-                    on_content: Delta | None = None) -> str:
+                    on_content: Delta | None = None, on_usage: UsageSink | None = None) -> str:
         kwargs: dict[str, Any] = {"response_format": {"type": "json_object"}} if json_output else {}
         if timeout_s is not None:
             kwargs["timeout"] = timeout_s
         if on_content is None:
             response = await self._client.chat.completions.create(
                 model=self._fast_model, messages=messages, temperature=0, extra_body=self._fast_extra, **kwargs)
+            if on_usage and response.usage:
+                on_usage(usage_of(response.usage))
             return response.choices[0].message.content or ""
         text = ""
         response = await self._client.chat.completions.create(
             model=self._fast_model, messages=messages, temperature=0.3, extra_body=self._fast_extra, stream=True,
-            **kwargs)
+            stream_options={"include_usage": True}, **kwargs)
         async with response:
             async for chunk in response:
+                if on_usage and chunk.usage:
+                    on_usage(usage_of(chunk.usage))
                 if chunk.choices and chunk.choices[0].delta.content:
                     text += chunk.choices[0].delta.content
                     on_content(chunk.choices[0].delta.content)
         return text
+
+
+def usage_of(usage: Any) -> dict[str, int]:
+    """The tokens an answer says it took. Cached and reasoning tokens are extras that not every provider reports:
+    DeepSeek has prompt_cache_hit_tokens, the OpenAI shape has them in the details."""
+    extra = usage.model_extra or {}
+    prompt_details = getattr(usage, "prompt_tokens_details", None)
+    completion_details = getattr(usage, "completion_tokens_details", None)
+    found = {"prompt": usage.prompt_tokens, "completion": usage.completion_tokens,
+             "cached": extra.get("prompt_cache_hit_tokens", getattr(prompt_details, "cached_tokens", None)),
+             "reasoning": getattr(completion_details, "reasoning_tokens", None)}
+    return {k: v for k, v in found.items() if v is not None}
 
 
 def parse_json_object(text: str) -> dict:

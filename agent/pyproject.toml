@@ -18,6 +18,7 @@ dependencies = [
     "uvicorn>=0.40",
     "sse-starlette>=3.0",
     "langgraph>=1.2",
+    "pyyaml>=6",
     # zoneinfo has no time zone database of its own on Windows
     "tzdata; sys_platform == 'win32'",
 ]

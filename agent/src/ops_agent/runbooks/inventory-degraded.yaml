@@ -1,0 +1,35 @@
+# inventory-service fails or is slow (inventory-errors, inventory-slow).
+id: inventory-degraded
+version: 1
+title: 库存服务出错或变慢
+match:
+  components: [inventory-service]
+  signals: ["Inventory reservation failed", "inventory-service"]
+probes:
+  - id: switches
+    kind: switches
+    title: 订单服务的降级开关
+  - id: lock_waits
+    kind: transactions
+    min_age_s: 1
+    waiting_only: true
+    title: 正在等锁的 MySQL 事务
+# Reservations waiting on a lock look like a slow inventory-service well before "Lock wait timeout" reaches the logs.
+# Failing every order is then the wrong first move: the transaction is what to look at.
+defer:
+  - {probe: lock_waits, to: row-lock-wait, says: "MySQL 里有事务正在等锁"}
+look_at:
+  - inventory-service 自己的日志：数据库错误、锁等待（是的话按行锁等待处理）
+  - 订单服务对库存的调用：失败的比例、是超时还是错误
+remediations:
+  - op: set_switch
+    params: {name: inventory.fast-fail, "on": true, minutes: 10}
+    requires:
+      - {probe: switches, field: inventory.fast-fail, equals: false, says: "库存的降级开关是关着的"}
+    title: 打开库存降级（快速失败）
+    effect: 订单不再等库存超时，直接取消；这是止血，不是修复：期间的订单都会失败
+    blast_radius: 所有新订单在开关打开期间都会被取消
+    rollback: 关闭开关（到期也会自动关闭）
+escalate:
+  - when: 库存服务自己的日志在报数据库或锁的错误
+    to: 库存服务的开发

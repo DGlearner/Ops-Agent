@@ -1,0 +1,26 @@
+# payment-service (a third party in the lab's story) fails or is slow (payment-errors, payment-timeout).
+id: payment-degraded
+version: 1
+title: 支付服务出错或变慢
+match:
+  components: [payment-service]
+  signals: ["Charge request did not reach payment", "Charge outcome unknown", "payment-service"]
+probes:
+  - id: switches
+    kind: switches
+    title: 订单服务的降级开关
+look_at:
+  - payment-service 自己的日志：它是不是也在报错（不是的话，问题在它之外或在调用链上）
+  - 订单服务对支付的调用：失败的比例、是超时还是错误
+remediations:
+  - op: set_switch
+    params: {name: payment.fast-fail, "on": true, minutes: 10}
+    requires:
+      - {probe: switches, field: payment.fast-fail, equals: false, says: "支付的降级开关是关着的"}
+    title: 打开支付降级（快速失败）
+    effect: 订单不再等支付超时，直接取消并释放库存；这是止血，不是修复：期间的订单都会失败
+    blast_radius: 所有新订单在开关打开期间都不会支付成功
+    rollback: 关闭开关（到期也会自动关闭）
+escalate:
+  - when: 支付服务自己的日志也在报错，或者降级之后仍有失败
+    to: 支付对接人：Ops-Agent 修不了第三方

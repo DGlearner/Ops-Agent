@@ -7,14 +7,15 @@ import re
 from dataclasses import asdict, dataclass
 from typing import Literal
 
-Kind = Literal["incident", "alert", "event"]
-PREFIX: dict[str, Kind] = {"I": "incident", "A": "alert", "E": "event"}
+Kind = Literal["incident", "alert", "event", "probe"]
+# P: what a runbook's probe saw in the lab (chat.runbooks), cited like the data it is.
+PREFIX: dict[str, Kind] = {"I": "incident", "A": "alert", "E": "event", "P": "probe"}
 _PREFIX_OF = {kind: prefix for prefix, kind in PREFIX.items()}
-KIND_LABEL = {"incident": "Incident", "alert": "告警", "event": "日志"}
+KIND_LABEL = {"incident": "Incident", "alert": "告警", "event": "日志", "probe": "探针"}
 
 # [A1] or [A1, E2]; the model also writes Chinese commas.
-CITATION = re.compile(r"\[\s*([AIE]\d{1,4}(?:\s*[,，、]\s*[AIE]\d{1,4})*)\s*\]")
-REF = re.compile(r"[AIE]\d{1,4}")
+CITATION = re.compile(r"\[\s*([AIEP]\d{1,4}(?:\s*[,，、]\s*[AIEP]\d{1,4})*)\s*\]")
+REF = re.compile(r"[AIEP]\d{1,4}")
 
 
 @dataclass(frozen=True)

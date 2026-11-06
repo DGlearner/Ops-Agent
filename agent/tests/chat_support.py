@@ -2,13 +2,14 @@
 scripted streaming model."""
 
 import copy
+import json
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
 import httpx
 
 from ops_agent.chat.llm import Turn
-from ops_agent.core_api import CoreApi
+from ops_agent.core_api import CoreApi, CoreWriter
 from ops_agent.llm import ToolCall
 
 MYSQL_INCIDENT = "0199f000-0000-7000-8000-000000000011"
@@ -19,6 +20,12 @@ STRAY_ALERT = "0199f000-0000-7000-8000-0000000000c3"
 DB_EVENT = "0199f000-0000-7000-8000-0000000000d1"
 RECOVERY_EVENT = "0199f000-0000-7000-8000-0000000000d2"
 LOG_EVENT = "0199f000-0000-7000-8000-0000000000d3"
+PAYMENT_INCIDENT = "0199f000-0000-7000-8000-000000000013"
+PAYMENT_ALERT = "0199f000-0000-7000-8000-0000000000c4"
+PAYMENT_EVENT = "0199f000-0000-7000-8000-0000000000d4"
+MOVES = {"open": {"acknowledged", "investigating", "mitigated", "resolved"},
+         "acknowledged": {"investigating", "mitigated", "resolved"}, "investigating": {"mitigated", "resolved"},
+         "mitigated": {"investigating", "resolved"}, "resolved": {"open", "closed"}, "closed": set()}
 RANK = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
 
 TOPOLOGY = {"nodes": [{"name": "order-service", "kind": "service", "description": "orders"},
@@ -90,11 +97,59 @@ class ChatCore:
                                "example": "Database unavailable: Communications link failure"}]}
         self.requests: list[httpx.Request] = []
         self.down = False
+        # The writes that reached core-service, as (path, body), and how the next ones go wrong:
+        # "lost": applied, but the answer never arrives; "dropped": neither; "lie": 200 without applying;
+        # "race": someone else moves the incident just before; an int: that HTTP status.
+        self.writes: list[tuple[str, dict | None]] = []
+        self.write_fault: str | int | None = None
+
+    def add_payment_incident(self, minutes_ago: int = 4) -> None:
+        """A second fault, unrelated to the database: payment-service answering 503."""
+        now = datetime.now(timezone.utc)
+        self.incidents[PAYMENT_INCIDENT] = {
+            "incident_id": PAYMENT_INCIDENT, "title": "payment-service answered with 503", "status": "open",
+            "severity": "high", "services": ["order-service"], "subjects": ["payment-service"],
+            "shared_dependencies": [], "alert_count": 1, "opened_at": iso(now - timedelta(minutes=minutes_ago + 1)),
+            "last_alert_at": iso(now - timedelta(minutes=minutes_ago)), "version": 1}
+        self.alerts[PAYMENT_INCIDENT] = [alert(PAYMENT_ALERT, "shop-dependency-call-failures", "order-service",
+                                               now - timedelta(minutes=minutes_ago), PAYMENT_EVENT,
+                                               "payment-service returned 503", dependency="payment-service")]
+
+    def _write(self, request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        body = json.loads(request.content) if request.content else None
+        incident_id = path.split("/")[4]
+        incident = self.incidents.get(incident_id)
+        if incident is None:
+            return httpx.Response(404, json={"code": "INCIDENT_NOT_FOUND", "detail": "no such incident"})
+        fault, self.write_fault = self.write_fault, None
+        if fault == "dropped":
+            raise httpx.ReadTimeout("timed out", request=request)
+        if isinstance(fault, int):
+            self.writes.append((path, body))
+            return httpx.Response(fault, json={"code": "BOOM", "detail": "injected"})
+        if fault == "race":
+            incident["status"], incident["version"] = "investigating", incident["version"] + 1
+        self.writes.append((path, body))
+        if path.endswith("/analyses"):
+            return httpx.Response(202, json={"analysis_id": "an-" + incident_id[-4:], "incident_id": incident_id,
+                                             "status": "pending"})
+        if body.get("expected_version") is not None and body["expected_version"] != incident["version"]:
+            return httpx.Response(409, json={"code": "STALE_VERSION", "detail": "the incident changed"})
+        if body["to_status"] not in MOVES[incident["status"]]:
+            return httpx.Response(409, json={"code": "ILLEGAL_TRANSITION", "detail": "not allowed"})
+        if fault != "lie":
+            incident["status"], incident["version"] = body["to_status"], incident["version"] + 1
+        if fault == "lost":
+            raise httpx.ReadTimeout("timed out", request=request)
+        return httpx.Response(200, json=copy.deepcopy(incident))
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
         if self.down:
             return httpx.Response(503, json={"detail": "core is down"})
+        if request.method == "POST":
+            return self._write(request)
         path = request.url.path
         if path == "/api/v1/topology":
             return httpx.Response(200, json=TOPOLOGY)
@@ -123,6 +178,10 @@ class ChatCore:
         return CoreApi("http://core", client=httpx.Client(base_url="http://core",
                                                           transport=httpx.MockTransport(self.handle)))
 
+    def writer(self) -> CoreWriter:
+        return CoreWriter("http://core", client=httpx.Client(base_url="http://core",
+                                                             transport=httpx.MockTransport(self.handle)))
+
 
 @dataclass
 class Script:
@@ -131,12 +190,14 @@ class Script:
     reasoning: str = ""
     tool_calls: list[tuple[str, str]] = field(default_factory=list)
     fail: Exception | None = None
+    usage: dict = field(default_factory=dict)
 
 
 class ScriptedStreamingModel:
     name = "scripted"
 
-    def __init__(self, *turns: Script, quick: list[str | Exception] | None = None):
+    def __init__(self, *turns: Script, quick: list[str | Exception] | None = None, quick_usage: dict | None = None):
+        self.quick_usage = quick_usage
         self.turns = list(turns)
         self.quick_answers = list(quick or [])
         self.calls: list[dict] = []
@@ -155,9 +216,9 @@ class ScriptedStreamingModel:
         for i in range(0, len(script.content), 4):
             on_content and on_content(script.content[i:i + 4])
         return Turn(script.content, script.reasoning,
-                    [ToolCall(f"call_{n}", name, args) for n, (name, args) in enumerate(script.tool_calls)])
+                    [ToolCall(f"call_{n}", name, args) for n, (name, args) in enumerate(script.tool_calls)], script.usage)
 
-    async def quick(self, messages, *, json_output=False, timeout_s=None, on_content=None) -> str:
+    async def quick(self, messages, *, json_output=False, timeout_s=None, on_content=None, on_usage=None) -> str:
         self.quick_calls.append(copy.deepcopy(messages))
         if not self.quick_answers:
             raise AssertionError("the quick model was asked more often than scripted")
@@ -166,6 +227,8 @@ class ScriptedStreamingModel:
             raise answer
         if on_content:
             on_content(answer)
+        if on_usage and self.quick_usage:
+            on_usage(self.quick_usage)
         return answer
 
 
