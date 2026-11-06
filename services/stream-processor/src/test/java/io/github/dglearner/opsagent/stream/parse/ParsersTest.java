@@ -166,6 +166,65 @@ class ParsersTest {
     }
 
     @Test
+    void syslogWithRfc3339TimeAsRsyslogWritesSinceDebian12() {
+        NormalizedEvent e = parsed(raw(SourceType.LINUX, "kozy", null,
+                "2026-10-29T13:03:24.510115+08:00 kozy sshd[1078449]: Failed password for root from 198.51.100.7 "
+                        + "port 37568 ssh2"));
+
+        assertThat(e.eventType()).isEqualTo("ssh_login_failed");
+        assertThat(e.timestamp()).isEqualTo(Instant.parse("2026-10-29T05:03:24.510115Z"));
+        assertThat(e.fields()).containsEntry("user", "root").containsEntry("pid", 1078449L);
+    }
+
+    @Test
+    void nginxErrorLogUpstreamRefused() {
+        NormalizedEvent e = parsed(raw(SourceType.NGINX, "kozy", "nginx",
+                "2026/10/06 08:15:02 [error] 811#811: *48213 connect() failed (111: Connection refused) while "
+                        + "connecting to upstream, client: 203.0.113.9, server: 192.0.2.1, request: \"GET / HTTP/1.1\", "
+                        + "upstream: \"http://127.0.0.1:8080/\", host: \"192.0.2.1\""));
+
+        assertThat(e.eventType()).isEqualTo("http_upstream_error");
+        assertThat(e.severity()).isEqualTo(Severity.MEDIUM);
+        assertThat(e.timestamp()).isEqualTo(Instant.parse("2026-10-06T08:15:02Z"));
+        assertThat(e.fields()).containsEntry("upstream_error", "refused")
+                .containsEntry("upstream", "http://127.0.0.1:8080/").containsEntry("client_ip", "203.0.113.9")
+                .containsEntry("request", "GET / HTTP/1.1").containsEntry("level", "error")
+                .containsEntry("error", "connect() failed (111: Connection refused) while connecting to upstream");
+    }
+
+    @Test
+    void nginxErrorLogCausedByAClientIsLow() {
+        NormalizedEvent e = parsed(raw(SourceType.NGINX, "kozy", "nginx",
+                "2026/10/06 08:15:02 [error] 811#811: *48214 open() \"/var/www/html/.env\" failed (2: No such file or "
+                        + "directory), client: 203.0.113.9, server: _, request: \"GET /.env HTTP/1.1\", host: \"x\""));
+
+        assertThat(e.eventType()).isEqualTo("nginx_error_log");
+        assertThat(e.severity()).isEqualTo(Severity.LOW);
+        assertThat(e.fields()).containsEntry("server", "_").containsEntry("request", "GET /.env HTTP/1.1");
+    }
+
+    @Test
+    void dockerEventsJsonTellsAnOutOfMemoryKillFromAHealthCheck() {
+        String attributes = "\"Actor\":{\"ID\":\"23874f8e\",\"Attributes\":{\"image\":\"redis:8.8.3-alpine\","
+                + "\"name\":\"ops-agent-redis-1\"%s}},\"scope\":\"local\",\"time\":1792485944,"
+                + "\"timeNano\":1792485944467730468}";
+        NormalizedEvent oom = parsed(raw(SourceType.DOCKER, "kozy", null,
+                "{\"Type\":\"container\",\"Action\":\"oom\"," + attributes.formatted("")));
+        NormalizedEvent died = parsed(raw(SourceType.DOCKER, "kozy", null,
+                "{\"Type\":\"container\",\"Action\":\"die\"," + attributes.formatted(",\"exitCode\":\"137\"")));
+        NormalizedEvent check = parsed(raw(SourceType.DOCKER, "kozy", null,
+                "{\"Type\":\"container\",\"Action\":\"exec_start: redis-cli ping\"," + attributes.formatted("")));
+
+        assertThat(oom.eventType()).isEqualTo("container_oom_killed");
+        assertThat(oom.service()).isEqualTo("ops-agent-redis-1");
+        assertThat(oom.timestamp()).isEqualTo(Instant.parse("2026-10-20T08:45:44.467730468Z"));
+        assertThat(died.eventType()).isEqualTo("container_died");
+        assertThat(died.fields()).containsEntry("exitCode", 137L).containsEntry("image", "redis:8.8.3-alpine");
+        assertThat(check.eventType()).isEqualTo("container_exec");
+        assertThat(check.fields()).containsEntry("event", "exec_start").containsEntry("detail", "redis-cli ping");
+    }
+
+    @Test
     void linesWithoutTheExpectedFormatAreUnparsedWithAReason() {
         ParseOutcome outcome = registry.parse(raw(SourceType.NGINX, "web-01", "nginx", "not an access log"));
 

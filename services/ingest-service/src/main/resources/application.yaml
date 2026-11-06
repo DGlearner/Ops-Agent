@@ -29,6 +29,9 @@ spring:
 
 server:
   port: 8081
+  # The local profile accepts the published development key, so by default only this machine can reach it. A deployment
+  # that receives logs from other hosts sets server.address (SERVER_ADDRESS) together with its own ops.ingest.sources.
+  address: 127.0.0.1
 
 management:
   endpoints:

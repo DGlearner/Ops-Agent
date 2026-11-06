@@ -24,6 +24,8 @@ final class Stats {
     final LongAdder duplicatesWrong = new LongAdder();
     final LongAdder unexpected = new LongAdder();
     final LongAdder retries = new LongAdder();
+    /** Flash sale through Redis: buyers turned away with 409 SOLD_OUT, which creates no order. */
+    final LongAdder soldOut = new LongAdder();
     private final ConcurrentLinkedQueue<Long> latencies = new ConcurrentLinkedQueue<>();
     private final Map<String, ConcurrentLinkedQueue<Long>> latenciesByOutcome = new ConcurrentHashMap<>();
     private final ConcurrentLinkedQueue<String> failures = new ConcurrentLinkedQueue<>();
@@ -54,7 +56,9 @@ final class Stats {
             return reason.isEmpty() ? orderStatus : orderStatus + "/" + reason;
         }
         if (status == 202) {
-            return "PAYMENT_UNKNOWN";
+            // An order awaiting payment reconciliation, or a flash sale order waiting in the queue (QUEUED).
+            String orderStatus = response.body().path("status").asString();
+            return orderStatus.isEmpty() ? "PAYMENT_UNKNOWN" : orderStatus;
         }
         return "HTTP_" + status + (code.isEmpty() ? "" : "/" + code);
     }

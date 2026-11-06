@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.dglearner.opsagent.contracts.Alert;
 import io.github.dglearner.opsagent.contracts.Severity;
+import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -79,5 +80,27 @@ class IncidentIT extends CoreTestSupport {
         assertThat(getJson("/api/v1/incidents/" + id + "/timeline").findValuesAsString("to_status"))
                 .containsExactly("acknowledged", "resolved", "closed");
         assertThat(get("/api/v1/incidents/" + UUID.randomUUID()).statusCode()).isEqualTo(404);
+    }
+
+    @Test
+    void aTransitionDecidedOnAnOlderVersionChangesNothing() throws Exception {
+        Instant t = Instant.parse("2027-03-02T10:00:00Z");
+        send(alert("shop-unhandled-errors", "payment-service", null, Severity.HIGH, t));
+        String id = awaitIncidents(t, 1, 1).getFirst().path("incident_id").asString();
+        String path = "/api/v1/incidents/" + id + "/transitions";
+        int version = getJson("/api/v1/incidents/" + id).path("version").asInt();
+
+        HttpResponse<String> ok = post(path, "{\"to_status\":\"acknowledged\",\"expected_version\":" + version
+                + ",\"action_id\":\"act-1\"}");
+        assertThat(ok.statusCode()).isEqualTo(200);
+        // The same decision again, e.g. a retried request: the incident has moved on, nothing happens twice.
+        HttpResponse<String> again = post(path, "{\"to_status\":\"investigating\",\"expected_version\":" + version
+                + "}");
+        assertThat(again.statusCode()).isEqualTo(409);
+        assertThat(again.body()).contains("STALE_VERSION");
+
+        JsonNode timeline = getJson("/api/v1/incidents/" + id + "/timeline");
+        assertThat(timeline.findValuesAsString("to_status")).containsExactly("acknowledged");
+        assertThat(timeline.findValuesAsString("action_id")).containsExactly("act-1");
     }
 }

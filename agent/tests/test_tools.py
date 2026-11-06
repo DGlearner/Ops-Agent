@@ -1,6 +1,6 @@
 import json
 
-from conftest import A1, A2, A3, E1, INCIDENT, OTHER_INCIDENT_ID
+from conftest import A1, A2, A3, E1, INCIDENT, LOG_EVENT, OTHER_INCIDENT_ID
 from ops_agent.contracts import Evidence
 from ops_agent.tools import MAX_MESSAGE_CHARS, Toolbox
 
@@ -79,3 +79,26 @@ def test_evidence_the_incident_does_not_have_is_found(core):
            Evidence(kind="incident", id=OTHER_INCIDENT_ID)]
 
     assert toolbox.unknown_evidence(good + bad) == bad
+
+
+def test_a_services_own_logs_are_searched_around_the_incident_and_become_citable(core, fake_core):
+    toolbox = Toolbox(core, INCIDENT)
+    evidence = [Evidence(kind="event", id=LOG_EVENT)]
+    assert toolbox.unknown_evidence(evidence) == evidence, "not citable before the model saw it"
+
+    found = run(toolbox, "search_logs", service="payment-service", min_severity="medium", text="JDBC")
+
+    assert found["lines"][0]["event_id"] == LOG_EVENT and found["lines"][0]["timing"] == "during"
+    query = fake_core.query("/api/v1/logs")
+    assert query == {"from": "2026-10-17T09:58:00Z", "to": "2026-10-17T10:02:20Z", "service": "payment-service",
+                     "min_severity": "medium", "q": "JDBC", "limit": "20"}
+    assert toolbox.unknown_evidence(evidence) == []
+
+
+def test_log_counts_show_what_a_service_was_doing(core, fake_core):
+    counts = run(Toolbox(core, INCIDENT), "count_logs", service="payment-service", minutes_before=5)
+
+    assert counts["counts"] == [{"key": "payment_succeeded", "count": 42, "severity": "info",
+                                 "first_at": "2026-10-17T09:55:00Z", "last_at": "2026-10-17T10:05:00Z",
+                                 "example": "Payment succeeded"}]
+    assert fake_core.query("/api/v1/logs/counts")["from"] == "2026-10-17T09:55:00Z"

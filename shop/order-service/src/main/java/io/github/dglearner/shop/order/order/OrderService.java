@@ -16,6 +16,7 @@ import io.github.dglearner.shop.order.client.InventoryClient;
 import io.github.dglearner.shop.order.client.InventoryClient.ReserveResult;
 import io.github.dglearner.shop.order.client.PaymentClient;
 import io.github.dglearner.shop.order.client.PaymentClient.ChargeResult;
+import io.github.dglearner.shop.order.switches.Switches;
 import io.github.dglearner.shop.order.task.InventoryAction;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -51,11 +52,12 @@ public class OrderService {
     private final PaymentClient payment;
     private final TransactionTemplate tx;
     private final OrderMetrics metrics;
+    private final Switches switches;
     private final String currency;
 
     public OrderService(OrderRepository orders, ProductRepository products, OrderSettlement settlement,
             InventoryClient inventory, PaymentClient payment, TransactionTemplate tx, OrderMetrics metrics,
-            OrderProperties properties) {
+            OrderProperties properties, Switches switches) {
         this.orders = orders;
         this.products = products;
         this.settlement = settlement;
@@ -63,6 +65,7 @@ public class OrderService {
         this.payment = payment;
         this.tx = tx;
         this.metrics = metrics;
+        this.switches = switches;
         this.currency = properties.currency();
     }
 
@@ -100,14 +103,54 @@ public class OrderService {
         return orders.find(orderId);
     }
 
+    /**
+     * Places an order that a flash sale accepted (§16.3): one unit of {@code sku}, with the order id the sale gave the
+     * buyer. Delivering the same order again changes nothing and returns it as it is; an unfinished one is completed by
+     * background recovery. Empty if the buyer already has a different order of this sale, which only happens if Redis
+     * lost track of them; the caller then gives the unit back.
+     */
+    public Optional<Order> placeFlashSaleOrder(String saleId, String sku, String orderId, String userId,
+            String paymentToken) {
+        List<OrderLine> lines = List.of(new OrderLine(sku, 1));
+        List<OrderItem> items = price(lines);
+        long amount = items.getFirst().unitPriceCents();
+        try {
+            // The order id doubles as the idempotency key; one order per buyer comes from the sale's own constraint.
+            tx.executeWithoutResult(status -> orders.insert(orderId, userId, orderId,
+                    RequestHash.of(userId, lines, paymentToken), amount, currency, items, saleId));
+        } catch (DuplicateKeyException e) {
+            Optional<Order> delivered = orders.find(orderId);
+            if (delivered.isEmpty()) {
+                log.atWarn().addKeyValue(LogEvents.ACTION, "flash_sale_duplicate_buyer")
+                        .addKeyValue("order_id", orderId).addKeyValue("user_id", userId)
+                        .addKeyValue("flash_sale_id", saleId)
+                        .log("Buyer already has an order of this flash sale; the accepted order is dropped");
+            }
+            return delivered;
+        }
+        log.atInfo().addKeyValue(LogEvents.ACTION, "order_created")
+                .addKeyValue("order_id", orderId).addKeyValue("user_id", userId)
+                .addKeyValue("amount_cents", amount).addKeyValue("items", describe(lines))
+                .addKeyValue("flash_sale_id", saleId).log("Flash sale order created");
+
+        Order order = place(orderId, userId, lines, amount, paymentToken);
+        metrics.placed(order);
+        logOutcome(order);
+        return Optional.of(order);
+    }
+
     private Order place(String orderId, String userId, List<OrderLine> lines, long amount, String token) {
+        if (switches.isOn(Switches.INVENTORY_FAST_FAIL)) {
+            // Degraded on purpose: no reservation was sent, so there is nothing to release.
+            degraded(orderId, "inventory-service", "reserve");
+            return settlement.cancel(orderId, CREATED, FailureReason.INVENTORY_UNAVAILABLE);
+        }
         switch (inventory.reserve(orderId, lines)) {
             case ReserveResult.Reserved reserved -> {
             }
             case ReserveResult.OutOfStock outOfStock -> {
                 // Inventory rolled back the whole reservation: nothing to release.
-                orders.transition(orderId, CREATED, CANCELLED, FailureReason.OUT_OF_STOCK);
-                return current(orderId);
+                return settlement.cancel(orderId, CREATED, FailureReason.OUT_OF_STOCK);
             }
             case ReserveResult.Failed failed -> {
                 log.atWarn().addKeyValue(LogEvents.ACTION, "dependency_call_failed")
@@ -121,6 +164,12 @@ public class OrderService {
         }
         if (!orders.transition(orderId, CREATED, STOCK_RESERVED, null)) {
             return current(orderId);
+        }
+        if (switches.isOn(Switches.PAYMENT_FAST_FAIL)) {
+            // No charge was sent, so none can arrive later: cancel and give the stock back.
+            degraded(orderId, "payment-service", "charge");
+            return settle(orderId, STOCK_RESERVED, CANCELLED, FailureReason.PAYMENT_UNAVAILABLE,
+                    InventoryAction.RELEASE);
         }
 
         return switch (payment.charge(orderId, userId, amount, currency, token)) {
@@ -148,6 +197,12 @@ public class OrderService {
                 yield current(orderId);
             }
         };
+    }
+
+    private void degraded(String orderId, String dependency, String operation) {
+        log.atInfo().addKeyValue(LogEvents.ACTION, "order_degraded").addKeyValue("dependency", dependency)
+                .addKeyValue("operation", operation).addKeyValue("order_id", orderId)
+                .log("Not calling {}: its fast-fail switch is on", dependency);
     }
 
     private Order settle(String orderId, OrderStatus from, OrderStatus to, FailureReason reason,

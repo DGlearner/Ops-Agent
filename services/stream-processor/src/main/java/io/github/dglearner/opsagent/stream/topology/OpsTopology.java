@@ -7,6 +7,9 @@ import io.github.dglearner.opsagent.contracts.RawLogRecord;
 import io.github.dglearner.opsagent.contracts.RuleDefinition;
 import io.github.dglearner.opsagent.contracts.Topics;
 import io.github.dglearner.opsagent.contracts.UnparsedLog;
+import io.github.dglearner.opsagent.stream.baseline.BaselineDetector;
+import io.github.dglearner.opsagent.stream.baseline.BaselineProperties;
+import io.github.dglearner.opsagent.stream.baseline.ServiceModel;
 import io.github.dglearner.opsagent.stream.config.StreamProperties;
 import io.github.dglearner.opsagent.stream.detect.AlertFactory;
 import io.github.dglearner.opsagent.stream.detect.AlertSuppressor;
@@ -44,9 +47,10 @@ import org.apache.kafka.streams.state.WindowStore;
  * <pre>
  * logs.raw ── parse + redact ──┬── logs.normalized
  *                              └── logs.unparsed
- * logs.normalized ── match rules (global table rules.changelog) ── per window tier:
- *     repartition by fingerprint ── drop duplicate events ── sliding-window count ── threshold ── suppression
- *     ── alerts
+ * logs.normalized ─┬─ match rules (global table rules.changelog) ── per window tier:
+ *                  │      repartition by fingerprint ── drop duplicate events ── sliding-window count ── threshold
+ *                  │      ── suppression ── alerts
+ *                  └─ baseline: templates (Drain) and per-minute counts per service ── alerts
  * </pre>
  *
  * Window sizes are fixed per sub-topology, so each supported tier (1, 5, 15 minutes) has its own branch and rules are
@@ -66,16 +70,20 @@ public class OpsTopology {
     static final Serde<WindowAggregate> AGGREGATE = JsonSerde.of(WindowAggregate.class);
     static final Serde<Alert> ALERT = JsonSerde.of(Alert.class);
     static final Serde<AlertSuppressor.State> SUPPRESSION = JsonSerde.of(AlertSuppressor.State.class);
+    static final Serde<ServiceModel> BASELINE = JsonSerde.of(ServiceModel.class);
+    public static final String BASELINE_STORE = "baseline-models";
 
     private static final List<Duration> WINDOW_TIERS = RuleDefinition.SUPPORTED_WINDOWS.stream().sorted().toList();
 
     private final ParserRegistry parsers;
     private final StreamProperties properties;
+    private final BaselineProperties baseline;
     private final Clock clock;
 
-    public OpsTopology(ParserRegistry parsers, StreamProperties properties, Clock clock) {
+    public OpsTopology(ParserRegistry parsers, StreamProperties properties, BaselineProperties baseline, Clock clock) {
         this.parsers = parsers;
         this.properties = properties;
+        this.baseline = baseline;
         this.clock = clock;
     }
 
@@ -113,11 +121,20 @@ public class OpsTopology {
                 Materialized.<String, RuleDefinition>as(Stores.inMemoryKeyValueStore(RULES_STORE))
                         .withKeySerde(STRING).withValueSerde(RULE));
 
-        KStream<String, RuleMatch> matches = builder
+        KStream<String, NormalizedEvent> normalized = builder
                 .stream(Topics.LOGS_NORMALIZED, Consumed.with(STRING, NORMALIZED)
                         .withTimestampExtractor(new DetectionTimestampExtractor(properties.detectionTime()))
-                        .withName("read-normalized"))
+                        .withName("read-normalized"));
+        KStream<String, RuleMatch> matches = normalized
                 .process(() -> new RuleMatchProcessor(RULES_STORE), Named.as("match-rules"));
+        if (baseline.enabled()) {
+            // Keyed by service already (write-normalized): a service's lines reach one task, in order.
+            builder.addStateStore(Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore(BASELINE_STORE), STRING,
+                    BASELINE));
+            normalized.process(() -> new BaselineDetector(BASELINE_STORE, baseline, properties.maxSampleEvents(), clock),
+                            Named.as("baseline"), BASELINE_STORE)
+                    .to(Topics.ALERTS, Produced.with(STRING, ALERT).withName("write-baseline-alerts"));
+        }
 
         for (Duration window : WINDOW_TIERS) {
             String tier = AlertFactory.humanizeWindow(window);

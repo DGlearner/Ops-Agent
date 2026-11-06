@@ -136,3 +136,90 @@ export interface Problem {
   detail?: string
   code?: string
 }
+
+/** A case: handling one fault from diagnosis to sign-off (docs/agent-design.md §2, §13.1). */
+export type CaseStatus =
+  | 'open'
+  | 'diagnosing'
+  | 'mitigating'
+  | 'verifying'
+  | 'monitoring'
+  | 'resolved'
+  | 'handed_over'
+
+export interface CaseEntry {
+  entry_id: string
+  kind: 'statement' | 'observation' | 'fact' | 'hypothesis' | 'constraint' | 'decision' | 'note'
+  status: string
+  text: string
+  source_type: 'user' | 'observation' | 'rule' | 'analyst' | 'model' | 'receipt' | 'verification' | 'system'
+  source_ref?: string
+  evidence: { kind?: string; ref?: string; id?: string }[]
+  data: Record<string, unknown>
+  supersedes?: string
+  superseded_by?: string
+  /** The chat run that wrote it. */
+  run_id?: string
+  created_at: string
+}
+
+export interface CaseEvent {
+  event_id: string
+  type: string
+  actor: string
+  payload: Record<string, unknown>
+  created_at: string
+}
+
+export interface Case {
+  case_id: string
+  title: string
+  status: CaseStatus
+  goal?: string
+  version: number
+  state_version: number
+  incident_ids: string[]
+  entries: CaseEntry[]
+  events: CaseEvent[]
+  created_at: string
+  updated_at: string
+  resolved_at?: string
+}
+
+export interface Remediation {
+  remediation_id: string
+  action_id: string
+  case_id: string
+  op: string
+  params: Record<string, unknown>
+  status: 'accepted' | 'executed' | 'failed' | 'blocked' | 'unknown'
+  precheck: Record<string, unknown>
+  receipt: { summary?: string; observed?: Record<string, unknown>; error?: string; at?: string }
+  /** The chat run that proposed it, and the snapshot it decided on (empty when confirmed before the run ended). */
+  run_id?: string
+  session_id?: string
+  snapshot_digest?: string
+  created_at: string
+  finished_at?: string
+}
+
+export interface VerificationCheck {
+  id: string
+  title: string
+  verdict: 'met' | 'not_met' | 'insufficient'
+  reason: string
+}
+
+export interface Verification {
+  verification_id: string
+  case_id: string
+  remediation_id: string
+  run_id?: string
+  criteria: { goal: 'recover' | 'contain'; checks: { id: string; title: string }[] }
+  window_from: string
+  not_before: string
+  status: 'pending' | 'leased' | 'done' | 'stale'
+  outcome?: 'recovered' | 'not_recovered' | 'inconclusive'
+  result?: { checks: VerificationCheck[] }
+  completed_at?: string
+}

@@ -13,6 +13,7 @@ import io.github.dglearner.opsagent.contracts.SourceType;
 import io.github.dglearner.opsagent.contracts.Topics;
 import io.github.dglearner.opsagent.contracts.UnparsedLog;
 import io.github.dglearner.opsagent.stream.Datasets;
+import io.github.dglearner.opsagent.stream.baseline.BaselineProperties;
 import io.github.dglearner.opsagent.stream.config.StreamProperties;
 import io.github.dglearner.opsagent.stream.detect.DetectionTime;
 import io.github.dglearner.opsagent.stream.parse.ParserRegistry;
@@ -296,8 +297,13 @@ class OpsTopologyTest {
 
     private void start(DetectionTime detectionTime) {
         StreamsBuilder builder = new StreamsBuilder();
+        // The rules alone: the baseline detector has its own test (BaselineDetectorTest).
+        BaselineProperties defaults = BaselineProperties.defaults();
+        BaselineProperties off = new BaselineProperties(false, defaults.calibration(), defaults.novelty(),
+                defaults.newPatternMin(), defaults.spikeMin(), defaults.spikeSigmas(), defaults.baselineMinutes(),
+                defaults.suppressFor(), defaults.similarity(), defaults.maxTemplates(), defaults.grace());
         new OpsTopology(ParserRegistry.withDefaultParsers(),
-                new StreamProperties(Duration.ofSeconds(30), detectionTime, 5, false, Duration.ofMinutes(2)),
+                new StreamProperties(Duration.ofSeconds(30), detectionTime, 5, false, Duration.ofMinutes(2)), off,
                 Clock.fixed(NOW, ZoneOffset.UTC)).addTo(builder);
         Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "ops-topology-test");

@@ -21,7 +21,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/incidents")
 class IncidentController {
 
-    record TransitionRequest(String toStatus, String note) {
+    /**
+     * expectedVersion: the version the caller decided on (optional); if the incident has changed since, 409
+     * STALE_VERSION and nothing changes. actionId: the chat action that asked for it, kept in the timeline.
+     */
+    record TransitionRequest(String toStatus, String note, Integer expectedVersion, String actionId) {
     }
 
     private final Incidents incidents;
@@ -63,7 +67,11 @@ class IncidentController {
         if (request.toStatus() == null) {
             throw new ApiProblem(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "to_status is required");
         }
-        return incidents.transition(incidentId, status(request.toStatus()), request.note());
+        if (request.actionId() != null && request.actionId().length() > 64) {
+            throw new ApiProblem(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "action_id is at most 64 characters");
+        }
+        return incidents.transition(incidentId, status(request.toStatus()), request.note(), request.expectedVersion(),
+                request.actionId());
     }
 
     private static IncidentStatus status(String value) {

@@ -1,0 +1,28 @@
+# The shop's MySQL does not answer (docs/agent-design.md §4; the lab's mysql-down).
+id: mysql-unavailable
+version: 1
+title: 数据库不可用
+match:
+  components: [shop-mysql]
+  signals: ["Communications link failure", "DATABASE_UNAVAILABLE", "Server shutdown in progress", "Connection refused",
+            "CannotCreateTransactionException"]
+probes:
+  - id: mysql_container
+    kind: container
+    name: shop-mysql
+    title: shop-mysql 容器的状态
+look_at:
+  - 依赖方（order-service、inventory-service、payment-service）自己的数据库错误日志，以及开始的时间
+  - shop-mysql 容器的状态（探针）
+remediations:
+  - op: start_container
+    params: {name: shop-mysql}
+    requires:
+      - {probe: mysql_container, field: state, not_in: [running, missing], says: "shop-mysql 容器没有在运行"}
+    title: 启动 shop-mysql 容器
+    effect: 数据库起来后，依赖它的服务自动重连，下单恢复
+    blast_radius: 只涉及 shop-mysql；启动的十几秒里连接仍会失败
+    rollback: 不需要：启动不改数据
+escalate:
+  - when: 容器在运行，依赖方仍然连不上
+    to: DBA：查网络、账号权限、磁盘

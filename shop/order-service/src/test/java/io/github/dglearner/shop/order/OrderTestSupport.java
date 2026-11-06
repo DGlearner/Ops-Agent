@@ -19,18 +19,23 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.mysql.MySQLContainer;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Shared by the order-service integration tests: one MySQL container for the whole test run, and HTTP stubs standing
- * in for inventory and payment so each test can script their answers, delays and outages.
+ * Shared by the order-service integration tests: one MySQL and one Redis container for the whole test run, and HTTP
+ * stubs standing in for inventory and payment so each test can script their answers, delays and outages.
  */
 abstract class OrderTestSupport {
 
     @ServiceConnection
     static final MySQLContainer MYSQL = ShopMySql.newContainer();
+
+    /** For flash sales; the other tests never touch it. Same image as deploy/shop. */
+    @ServiceConnection(name = "redis")
+    static final GenericContainer<?> REDIS = new GenericContainer<>("redis:8.8.3-alpine").withExposedPorts(6379);
 
     static final StubServer INVENTORY = new StubServer();
     static final StubServer PAYMENT = new StubServer();
@@ -43,6 +48,7 @@ abstract class OrderTestSupport {
 
     static {
         MYSQL.start();
+        REDIS.start();
     }
 
     final HttpClient http = HttpClient.newHttpClient();

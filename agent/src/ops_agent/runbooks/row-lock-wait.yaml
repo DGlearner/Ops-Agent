@@ -1,0 +1,27 @@
+# A long transaction holds rows others need (the lab's hot-row-lock).
+id: row-lock-wait
+version: 1
+title: 行锁等待
+match:
+  components: [inventory-service, shop-mysql]
+  signals: ["Lock wait timeout", "lock wait", "Connection is not available"]
+probes:
+  - id: long_transactions
+    kind: transactions
+    min_age_s: 10
+    title: 持续 10 秒以上的 MySQL 事务
+look_at:
+  - 库存服务的锁等待超时、连接池耗尽（Connection is not available）
+  - MySQL 里持续很久、阻塞别人的事务（探针）
+remediations:
+  - op: kill_transaction
+    params_from: {probe: long_transactions, pick: oldest}
+    requires:
+      - {probe: long_transactions, nonempty: true, says: "有持续 10 秒以上的事务"}
+    title: 结束阻塞的事务
+    effect: 锁释放后，等锁的预留请求可以继续，库存服务的连接被放回连接池
+    blast_radius: 被结束的事务回滚；它是谁的、在做什么要先看清楚
+    rollback: 不能撤销：事务已回滚，它的发起方需要重试
+escalate:
+  - when: 事务被结束后很快又出现新的长事务
+    to: 库存服务的开发：查是哪段代码持有锁

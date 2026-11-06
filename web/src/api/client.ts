@@ -1,4 +1,18 @@
-import type { Alert, Analysis, Incident, IncidentStatus, Page, Problem, Severity, TimelineEntry, Topology } from './types'
+import type {
+  Alert,
+  Analysis,
+  Case,
+  CaseStatus,
+  Incident,
+  IncidentStatus,
+  Page,
+  Problem,
+  Remediation,
+  Severity,
+  TimelineEntry,
+  Topology,
+  Verification,
+} from './types'
 
 export class ApiError extends Error {
   constructor(
@@ -80,5 +94,24 @@ export const api = {
   },
   topology(): Promise<Topology> {
     return request('/topology')
+  },
+  case(id: string): Promise<Case> {
+    return request(`/cases/${id}`)
+  },
+  cases(incidentId: string): Promise<{ items: Case[] }> {
+    return request(`/cases${query({ incident_id: incidentId })}`)
+  },
+  remediations(caseId: string): Promise<{ items: Remediation[] }> {
+    return request(`/remediations${query({ case_id: caseId })}`)
+  },
+  verifications(caseId: string): Promise<{ items: Verification[] }> {
+    return request(`/verifications${query({ case_id: caseId })}`)
+  },
+  /** A person signs the case off (or moves it on); expectedVersion: the version they saw. */
+  transitionCase(id: string, toStatus: CaseStatus, expectedVersion: number, note?: string): Promise<Case> {
+    return request(`/cases/${id}/transitions`, {
+      method: 'POST',
+      body: JSON.stringify({ to_status: toStatus, actor: 'user', expected_version: expectedVersion, note }),
+    })
   },
 }

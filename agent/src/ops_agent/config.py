@@ -1,13 +1,15 @@
 """Settings, from environment variables prefixed OPS_AGENT_ or a .env file in the working directory."""
 
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # src/ops_agent/config.py -> the repository's contracts/kafka
 _CONTRACTS = Path(__file__).resolve().parents[3] / "contracts" / "kafka"
+# src/ops_agent/config.py -> agent/data, ignored by git
+_DATA = Path(__file__).resolve().parents[2] / "data"
 
 
 class Settings(BaseSettings):
@@ -33,6 +35,38 @@ class Settings(BaseSettings):
     # Read-only tool calls per analysis; then the model must conclude with what it has.
     max_tool_calls: int = 8
     contracts_dir: Path = _CONTRACTS
+
+    # The chat server (ops-agent chat): docs/project-design.md §6.7.
+    chat_host: str = "127.0.0.1"
+    chat_port: int = 8083
+    chat_db: Path = _DATA / "chat.sqlite3"
+    # Tool calls the model may add to what the orchestration already fetched, per answer.
+    chat_max_tool_calls: int = 4
+    # Earlier turns the model sees word for word; older ones only through the session summary.
+    chat_history_turns: int = 3
+    # For the quick calls (routing, summaries): another model, and fields for the request body, e.g.
+    # {"thinking": {"type": "disabled"}} to turn a reasoning model's thinking off. Defaults: the model above, nothing.
+    chat_fast_model: str | None = None
+    chat_fast_extra_body: dict[str, Any] = {}
+    chat_router_timeout_s: float = 8
+    # The model's thinking when it answers, unless the question says (the console's "深度思考"); off sends
+    # chat_fast_extra_body. Off by default: 1.4 s to the first word instead of 9.7 s, as right (§6.7).
+    chat_thinking: bool = False
+    # The evidence fetched before the model is asked; off leaves it for the model to fetch with its tools (the
+    # experiment's baseline).
+    chat_prefetch: bool = True
+    # Actions the model proposes and the user confirms (§6.7 操作卡片): off, a confirmed card is not run (blocked).
+    chat_actions: bool = True
+    # A card not decided on in this time expires: the evidence it was proposed on may be out of date.
+    chat_action_ttl_s: float = 900
+    # Cases, runbooks and remediations (docs/agent-design.md §13.4): off, the assistant answers as before.
+    chat_casework: bool = True
+    # The verify worker (ops-agent verify): how often it asks core-service for a due verification.
+    verify_poll_s: float = 5
+
+    @property
+    def llm_configured(self) -> bool:
+        return bool(self.llm_base_url and self.llm_model and self.llm_api_key)
 
     def require_llm(self) -> None:
         missing = [name for name, value in (("OPS_AGENT_LLM_BASE_URL", self.llm_base_url),
