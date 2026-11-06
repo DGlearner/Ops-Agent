@@ -16,6 +16,7 @@ import io.github.dglearner.shop.order.client.InventoryClient;
 import io.github.dglearner.shop.order.client.InventoryClient.ReserveResult;
 import io.github.dglearner.shop.order.client.PaymentClient;
 import io.github.dglearner.shop.order.client.PaymentClient.ChargeResult;
+import io.github.dglearner.shop.order.switches.Switches;
 import io.github.dglearner.shop.order.task.InventoryAction;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -51,11 +52,12 @@ public class OrderService {
     private final PaymentClient payment;
     private final TransactionTemplate tx;
     private final OrderMetrics metrics;
+    private final Switches switches;
     private final String currency;
 
     public OrderService(OrderRepository orders, ProductRepository products, OrderSettlement settlement,
             InventoryClient inventory, PaymentClient payment, TransactionTemplate tx, OrderMetrics metrics,
-            OrderProperties properties) {
+            OrderProperties properties, Switches switches) {
         this.orders = orders;
         this.products = products;
         this.settlement = settlement;
@@ -63,6 +65,7 @@ public class OrderService {
         this.payment = payment;
         this.tx = tx;
         this.metrics = metrics;
+        this.switches = switches;
         this.currency = properties.currency();
     }
 
@@ -137,6 +140,11 @@ public class OrderService {
     }
 
     private Order place(String orderId, String userId, List<OrderLine> lines, long amount, String token) {
+        if (switches.isOn(Switches.INVENTORY_FAST_FAIL)) {
+            // Degraded on purpose: no reservation was sent, so there is nothing to release.
+            degraded(orderId, "inventory-service", "reserve");
+            return settlement.cancel(orderId, CREATED, FailureReason.INVENTORY_UNAVAILABLE);
+        }
         switch (inventory.reserve(orderId, lines)) {
             case ReserveResult.Reserved reserved -> {
             }
@@ -156,6 +164,12 @@ public class OrderService {
         }
         if (!orders.transition(orderId, CREATED, STOCK_RESERVED, null)) {
             return current(orderId);
+        }
+        if (switches.isOn(Switches.PAYMENT_FAST_FAIL)) {
+            // No charge was sent, so none can arrive later: cancel and give the stock back.
+            degraded(orderId, "payment-service", "charge");
+            return settle(orderId, STOCK_RESERVED, CANCELLED, FailureReason.PAYMENT_UNAVAILABLE,
+                    InventoryAction.RELEASE);
         }
 
         return switch (payment.charge(orderId, userId, amount, currency, token)) {
@@ -183,6 +197,12 @@ public class OrderService {
                 yield current(orderId);
             }
         };
+    }
+
+    private void degraded(String orderId, String dependency, String operation) {
+        log.atInfo().addKeyValue(LogEvents.ACTION, "order_degraded").addKeyValue("dependency", dependency)
+                .addKeyValue("operation", operation).addKeyValue("order_id", orderId)
+                .log("Not calling {}: its fast-fail switch is on", dependency);
     }
 
     private Order settle(String orderId, OrderStatus from, OrderStatus to, FailureReason reason,

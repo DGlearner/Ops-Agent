@@ -28,7 +28,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus,faults,flashsales
+        include: health,info,metrics,prometheus,faults,flashsales,switches
   health:
     redis:
       # Only flash sales need Redis; regular orders keep working without it, so it does not make the service DOWN.

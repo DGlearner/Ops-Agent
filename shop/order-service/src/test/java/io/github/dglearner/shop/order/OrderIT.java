@@ -7,6 +7,7 @@ import io.github.dglearner.shop.order.order.FailureReason;
 import io.github.dglearner.shop.order.order.Order;
 import io.github.dglearner.shop.order.order.OrderItem;
 import io.github.dglearner.shop.order.order.OrderStatus;
+import io.github.dglearner.shop.order.switches.Switches;
 import io.github.dglearner.shop.order.task.InventoryAction;
 import io.github.dglearner.shop.order.task.InventoryTask;
 import java.net.http.HttpResponse;
@@ -20,6 +21,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import tools.jackson.databind.JsonNode;
 
@@ -37,6 +39,42 @@ import tools.jackson.databind.JsonNode;
 class OrderIT extends OrderTestSupport {
 
     private static final Duration SLOWER_THAN_TIMEOUT = Duration.ofMillis(1500);
+
+    @Autowired
+    Switches switches;
+
+    @Test
+    void withPaymentFastFailOnNoChargeIsSentAndTheStockGoesBack() throws Exception {
+        switches.set(Switches.PAYMENT_FAST_FAIL, true, Duration.ofMinutes(1));
+        try {
+            JsonNode problem = assertProblem(placeOrder(newKey(), "u-ff1", oneItem(), null), 503,
+                    "PAYMENT_UNAVAILABLE");
+
+            assertThat(order(problem.path("order_id").asString()).status()).isEqualTo(OrderStatus.CANCELLED);
+            assertThat(PAYMENT.received("POST", CHARGE)).isEmpty();
+            assertThat(INVENTORY.received("POST", RELEASE)).hasSize(1);
+        } finally {
+            switches.set(Switches.PAYMENT_FAST_FAIL, false, null);
+        }
+    }
+
+    @Test
+    void withInventoryFastFailNothingIsReservedOrCharged() throws Exception {
+        switches.set(Switches.INVENTORY_FAST_FAIL, true, Duration.ofMinutes(1));
+        try {
+            JsonNode problem = assertProblem(placeOrder(newKey(), "u-ff2", oneItem(), null), 503,
+                    "INVENTORY_UNAVAILABLE");
+
+            assertThat(order(problem.path("order_id").asString()).status()).isEqualTo(OrderStatus.CANCELLED);
+            assertThat(INVENTORY.received("POST", RESERVE)).isEmpty();
+            assertThat(INVENTORY.received("POST", RELEASE)).isEmpty();
+            assertThat(PAYMENT.received("POST", CHARGE)).isEmpty();
+        } finally {
+            switches.set(Switches.INVENTORY_FAST_FAIL, false, null);
+        }
+        Order order = json.readValue(placeOrder(newKey(), "u-ff3", oneItem(), null).body(), Order.class);
+        assertThat(order.status()).as("switched off again").isEqualTo(OrderStatus.PAID);
+    }
 
     @Test
     void paidOrderConfirmsStockAndCarriesOneTraceAcrossServices() throws Exception {
