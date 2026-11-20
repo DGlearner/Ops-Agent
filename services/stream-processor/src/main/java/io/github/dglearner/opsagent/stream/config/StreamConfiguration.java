@@ -13,6 +13,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.annotation.EnableKafkaStreams;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
+import io.micrometer.core.instrument.MeterRegistry;
 
 @Configuration(proxyBeanMethods = false)
 @EnableKafkaStreams
@@ -26,8 +27,8 @@ class StreamConfiguration {
     /** Registers the topology on the StreamsBuilder that Spring Kafka starts and stops with the application. */
     @Bean
     OpsTopology opsTopology(StreamsBuilder builder, StreamProperties properties, BaselineProperties baseline,
-            Clock clock) {
-        OpsTopology topology = new OpsTopology(ParserRegistry.withDefaultParsers(), properties, baseline, clock);
+            Clock clock, MeterRegistry meters) {
+        OpsTopology topology = new OpsTopology(ParserRegistry.withDefaultParsers(meters), properties, baseline, clock);
         topology.addTo(builder);
         return topology;
     }

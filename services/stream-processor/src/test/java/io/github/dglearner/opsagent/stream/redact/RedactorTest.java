@@ -33,6 +33,15 @@ class RedactorTest {
     }
 
     @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+            "login failed email=alice@example.com phone=13800138000 | login failed email=*** phone=***",
+            "payment card_no=6222021234567890 cvv=123          | payment card_no=*** cvv=***",
+            "contact +86 138 0013 8000 or bob@example.org       | contact *** or ***"})
+    void masksCommonPersonalAndPaymentData(String input, String expected) {
+        assertThat(redactor.redact(input.strip())).isEqualTo(expected.strip());
+    }
+
+    @ParameterizedTest
     @ValueSource(strings = {
             "{\"Authorization\":\"Bearer fake-opaque-1\"}",
             "{\"request\":{\"headers\":{\"authorization\":\"Basic ZmFrZTpmYWtlLTI=\"}},\"status\":401}",
@@ -46,6 +55,17 @@ class RedactorTest {
         assertThat(output).doesNotContain("fake-", "ZmFrZTpmYWtl", "12345");
         assertThat(JsonMapper.builder().build().readTree(output)).as(output).isNotNull();
         assertThat(output).contains(Redactor.MASK);
+    }
+
+    @Test
+    void masksPersonalFieldsInsideStructuredLogs() {
+        String input = "{\"user\":{\"email\":\"alice@example.com\",\"phone\":\"13800138000\"},"
+                + "\"payment\":{\"card_number\":\"6222021234567890\",\"cvv\":\"123\"}}";
+
+        String output = redactor.redact(input);
+
+        assertThat(output).doesNotContain("alice@example.com", "13800138000", "6222021234567890", "123");
+        assertThat(JsonMapper.builder().build().readTree(output)).isNotNull();
     }
 
     @Test

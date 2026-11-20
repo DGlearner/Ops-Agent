@@ -36,11 +36,13 @@ public final class Redactor {
 
     private static final String SECRET_KEYS =
             "password|passwd|secret|token|api[_-]?key|apikey|access[_-]?key|secret[_-]?key|private[_-]?key"
-                    + "|auth[_-]?token|access[_-]?token|refresh[_-]?token|client[_-]?secret|session[_-]?id";
+            + "|auth[_-]?token|access[_-]?token|refresh[_-]?token|client[_-]?secret|session[_-]?id"
+            + "|card[_-]?(?:no|number)|cardnumber|cvv|cvc|email|phone|mobile|phone[_-]?number|mobile[_-]?number";
 
     private static final Set<String> SECRET_FIELD_NAMES = Set.of("password", "passwd", "secret", "token", "api_key",
             "apikey", "access_key", "secret_key", "private_key", "auth_token", "access_token", "refresh_token",
-            "client_secret", "session_id", "authorization");
+            "client_secret", "session_id", "authorization", "card_no", "card_number", "cardnumber", "cvv",
+            "cvc", "email", "phone", "mobile", "phone_number", "mobile_number");
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
@@ -67,6 +69,14 @@ public final class Redactor {
             new Rule(Pattern.compile("\\beyJ[A-Za-z0-9_-]{5,}\\.[A-Za-z0-9_-]{5,}\\.[A-Za-z0-9_-]{5,}"), MASK),
             // AWS access key ids
             new Rule(Pattern.compile("\\b(?:AKIA|ASIA)[A-Z0-9]{16}\\b"), MASK));
+
+    private static final List<Rule> PERSONAL_DATA = List.of(
+            // Email addresses are masked as a whole in free text. Structured email fields are masked by name above.
+            new Rule(Pattern.compile("(?i)\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b"), MASK),
+            // Mainland China mobile numbers and common international formatting.
+            new Rule(Pattern.compile("(?<!\\d)(?:\\+?86[ -]?)?1[3-9](?:[ -]?\\d){9}(?!\\d)"), MASK),
+            // Payment card-shaped digit sequences. Explicit card fields are masked by field name regardless of length.
+            new Rule(Pattern.compile("(?<!\\d)(?:\\d[ -]?){15,18}\\d(?!\\d)"), MASK));
 
     public String redact(String text) {
         if (text == null || text.isEmpty()) {
@@ -109,6 +119,9 @@ public final class Redactor {
     private static String redactText(String text) {
         String result = maskSecretValues(AUTHORIZATION.apply(text));
         for (Rule rule : TOKENS) {
+            result = rule.apply(result);
+        }
+        for (Rule rule : PERSONAL_DATA) {
             result = rule.apply(result);
         }
         return result;

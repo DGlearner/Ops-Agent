@@ -10,11 +10,29 @@ import io.github.dglearner.opsagent.contracts.SourceType;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
 class ParsersTest {
 
     private final ParserRegistry registry = ParserRegistry.withDefaultParsers();
+
+    @Test
+    void recordsLowCardinalityParseMetrics() {
+        SimpleMeterRegistry meters = new SimpleMeterRegistry();
+        ParserRegistry measured = ParserRegistry.withDefaultParsers(meters);
+
+        assertThat(measured.parse(raw(SourceType.NGINX, "web-01", "nginx", "garbage")))
+                .isInstanceOf(ParseOutcome.Unparsed.class);
+        assertThat(measured.parse(raw(SourceType.NGINX, "web-01", "nginx",
+                "203.0.113.33 - - [01/Jan/2026:00:06:07 +0000] \"GET / HTTP/1.1\" 200 1 \"-\" \"curl\"")))
+                .isInstanceOf(ParseOutcome.Parsed.class);
+
+        assertThat(meters.counter("ops.stream.parse", "result", "parsed").count()).isEqualTo(1);
+        assertThat(meters.counter("ops.stream.parse", "result", "unparsed").count()).isEqualTo(1);
+        assertThat(meters.counter("ops.stream.redaction", "result", "parsed_fields").count()).isEqualTo(1);
+        assertThat(meters.counter("ops.stream.redaction", "result", "unparsed_message").count()).isEqualTo(1);
+    }
 
     @Test
     void nginxServerErrorAndSlowRequest() {

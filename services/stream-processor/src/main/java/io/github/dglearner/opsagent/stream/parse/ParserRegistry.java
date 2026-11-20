@@ -5,6 +5,7 @@ import io.github.dglearner.opsagent.contracts.RawLogRecord;
 import io.github.dglearner.opsagent.contracts.SourceType;
 import io.github.dglearner.opsagent.contracts.UnparsedLog;
 import io.github.dglearner.opsagent.stream.redact.Redactor;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
@@ -16,10 +17,16 @@ public class ParserRegistry {
 
     private final Map<SourceType, LogParser> parsers = new EnumMap<>(SourceType.class);
     private final Redactor redactor;
+    private final MeterRegistry meters;
 
     public ParserRegistry(List<LogParser> parsers, Redactor redactor) {
+        this(parsers, redactor, null);
+    }
+
+    public ParserRegistry(List<LogParser> parsers, Redactor redactor, MeterRegistry meters) {
         parsers.forEach(p -> this.parsers.put(p.sourceType(), p));
         this.redactor = redactor;
+        this.meters = meters;
     }
 
     public static ParserRegistry withDefaultParsers() {
@@ -27,9 +34,15 @@ public class ParserRegistry {
                 new AppServiceParser(), new DockerParser()), new Redactor());
     }
 
+    public static ParserRegistry withDefaultParsers(MeterRegistry meters) {
+        return new ParserRegistry(List.of(new NginxParser(), new LinuxParser(), new MysqlParser(),
+                new AppServiceParser(), new DockerParser()), new Redactor(), meters);
+    }
+
     public ParseOutcome parse(RawLogRecord raw) {
         LogParser parser = parsers.get(raw.sourceType());
         if (parser == null) {
+            count("unparsed");
             return unparsed(raw, "no parser for source type " + wireName(raw.sourceType()));
         }
         Optional<ParsedLog> parsed;
@@ -37,12 +50,15 @@ public class ParserRegistry {
             parsed = parser.parse(raw);
         } catch (RuntimeException e) {
             // A parser bug must not stop the stream; the line is kept in logs.unparsed for inspection.
+            count("error");
             return unparsed(raw, "parser error: " + e);
         }
         if (parsed.isEmpty()) {
+            count("unparsed");
             return unparsed(raw, "no " + wireName(raw.sourceType()) + " pattern matched");
         }
         ParsedLog p = parsed.get();
+        count("parsed");
         return new ParseOutcome.Parsed(new NormalizedEvent(
                 raw.eventId(),
                 raw.sourceId(),
@@ -58,6 +74,14 @@ public class ParserRegistry {
                 redactor.redact(p.message() != null ? p.message() : raw.message()),
                 redactor.redactFields(p.fields()),
                 p.tags()));
+    }
+
+    private void count(String result) {
+        if (meters != null) {
+            meters.counter("ops.stream.parse", "result", result).increment();
+            meters.counter("ops.stream.redaction", "result", result.equals("parsed") ? "parsed_fields" : "unparsed_message")
+                    .increment();
+        }
     }
 
     private ParseOutcome unparsed(RawLogRecord raw, String reason) {
