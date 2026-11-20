@@ -6,10 +6,15 @@ import java.util.UUID;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 @Mapper
 interface AnalysisMapper extends BaseMapper<AnalysisRecord> {
+
+    /** Serialize the freshness check and request, including across chat sessions and the automatic scanner. */
+    @Select("SELECT pg_advisory_xact_lock(hashtext(#{incidentId}::text))")
+    Object lockIncident(@Param("incidentId") UUID incidentId);
 
     /** 0 if the incident has a pending analysis already. */
     @Insert("""

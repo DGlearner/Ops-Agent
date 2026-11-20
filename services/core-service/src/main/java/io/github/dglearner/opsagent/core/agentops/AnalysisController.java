@@ -28,6 +28,13 @@ class AnalysisController {
         return ResponseEntity.accepted().body(analyses.request(incidentId, Analyses.USER));
     }
 
+    /** No waiting for the worker; no forced retries of terminal attempts against the same evidence. */
+    @PostMapping("/incidents/{incidentId}/analyses/ensure")
+    ResponseEntity<AnalysisView> ensure(@PathVariable UUID incidentId) {
+        return analyses.ensure(incidentId).map(a -> ResponseEntity.accepted().body(a))
+                .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
     @GetMapping("/incidents/{incidentId}/analyses")
     List<AnalysisView> forIncident(@PathVariable UUID incidentId) {
         return analyses.forIncident(incidentId);

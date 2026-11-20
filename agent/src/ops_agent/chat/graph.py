@@ -53,6 +53,8 @@ from .llm import StreamingModel
 from .router import OPS_ROUTES, Decision, Router
 from .tools import MAX_ALERTS, ChatTools, ToolResult, _involved
 from .usage import STEP, Ledger
+from . import diagnostics
+from .diagnostics import DiagnosisDesk
 
 log = logging.getLogger(__name__)
 
@@ -66,6 +68,7 @@ TOOL_TITLE = {"list_incidents": "查询 Incident", "get_incident": "查看 Incid
               "search_logs": "查询日志", "count_logs": "统计日志", "get_topology": "查看服务依赖",
               "propose_action": "提出操作", "propose_memory": "记为候选经验", "ask_user": "向用户确认",
               "update_case": "记到处置单"}
+TOOL_TITLE["delegate_diagnosis"] = "委托后台只读诊断"
 # Tools that only make a card for a person to decide on, or note something on the case: they look nothing up.
 CARD_TOOLS = {"propose_action", "propose_memory", "update_case"}
 # The user asks for the incident to be handled, not only explained: without a model, a ready runbook remediation is
@@ -125,6 +128,8 @@ class Run:
     ledger: Ledger = field(default_factory=Ledger)
     steps: int = 0
     answered: list[str] = field(default_factory=list)
+    diagnostics: DiagnosisDesk | None = None
+    diagnosis_allowed: bool = False
 
 
 class ChatState(TypedDict, total=False):
@@ -317,6 +322,22 @@ async def gather(state: ChatState, runtime: Runtime[Run]) -> dict:
         pack["incident_timing"] = _timing(run.tools, incidents[:DETAILED + 7])
     if incidents and state["decision"].route == "ops_diagnosis" and (run.cases or run.books):
         await _casework(runtime, state, incidents[:DETAILED], fetched[:len(incidents[:DETAILED])], pack)
+    if run.diagnostics:
+        for incident, raw, shaped in zip(incidents[:DETAILED], fetched, pack["incidents"]):
+            task = run.diagnostics.observe(shaped["ref"], incident, raw)
+            if task:
+                emit(runtime, "analysis", task)
+        # With no language model, an unmatched diagnosis can still use the existing background worker. A matched
+        # runbook already supplies concrete probes; missing evidence alone is not a reason to enqueue work.
+        if (run.model is None and run.diagnostics.writer and len(incidents) == 1
+                and state["decision"].route == "ops_diagnosis" and not run.work.get("match")
+                and not diagnostics.REANALYSE.search(run.question)):
+            shaped, raw = pack["incidents"][0], fetched[0]
+            if raw["alerts"] and not shaped.get("background_analysis"):
+                task, note = await run.diagnostics.delegate(shaped["ref"], "现有证据尚无适用的后台分析或 Runbook")
+                shaped["diagnosis_dispatch"] = note
+                if task:
+                    emit(runtime, "analysis", task)
     known: list[dict] = []
     if run.known:
         components = set(scope["components"]).union(*(_involved(i) for i in incidents[:DETAILED]))
@@ -343,6 +364,10 @@ async def reason(state: ChatState, runtime: Runtime[Run]) -> dict:
     session_specs = ([action_cards.tool_spec()] if run.propose else []) + (
         [knowledge_cards.tool_spec()] if run.remember else []) + ([ASK_USER] if run.may_ask else []) + (
         [casework.tool_spec()] if run.update_case and run.work.get("case") else [])
+    run.diagnosis_allowed = bool(diagnosis and run.diagnostics and run.diagnostics.writer
+                                and run.diagnostics.scope and not diagnostics.REANALYSE.search(run.question))
+    if run.diagnosis_allowed:
+        session_specs.append(diagnostics.tool_spec())
     calls = 0
 
     def go_on(delta: str) -> None:
@@ -421,6 +446,17 @@ async def verify(state: ChatState, runtime: Runtime[Run]) -> dict:
 async def _call(runtime: Runtime[Run], name: str, arguments: str) -> ToolResult:
     """A tool call: the session's own tools here, the read-only data tools in ChatTools."""
     run = runtime.context
+    if name == "delegate_diagnosis" and run.diagnostics and run.diagnosis_allowed:
+        try:
+            args = _args(arguments)
+            task, note = await run.diagnostics.delegate(args.get("incident"), args.get("reason"))
+        except ValueError as e:
+            return _tool_error(str(e))
+        if task:
+            emit(runtime, "analysis", task)
+        # A model sees the stable Incident ref, not its UUID; task identity lives in the stream and the task card.
+        payload = {"note": note, "task": {k: v for k, v in (task or {}).items() if k != "incident_id"}}
+        return ToolResult(json.dumps(payload, ensure_ascii=False), note)
     if name == "propose_action" and run.propose:
         try:
             card = await run.propose(_args(arguments))
@@ -611,6 +647,7 @@ def written_answer(pack: dict, diagnosis: bool, degraded: bool) -> str:
     incidents = pack.get("incidents") or []
     if not incidents:
         lines.append(f"{where}没有相关的 Incident。")
+        lines.append("当前证据不足，告警或日志可能尚未到达，不能据此判断系统正常或编造根因；重新分析也不保证产生新证据。")
     elif "status" not in incidents[0]:
         # Nothing but the list was fetched (prefetch off).
         lines.append(f"{where}有这些 Incident：")
@@ -620,6 +657,8 @@ def written_answer(pack: dict, diagnosis: bool, degraded: bool) -> str:
             lines.append(f"**[{i['ref']}] {i['title']}**（{_status(i)}，严重度{_severity(i)}，{i['opened_at']} 起"
                          + f"，最后一条告警 {i['last_alert_at']}（{_ago(i)}）" + "）")
             attribution = i.get("rule_attribution") or []
+            if not i.get("alerts"):
+                lines.append("- 当前告警证据不足，不能确认根因或判断系统正常；重新分析不保证产生新证据。")
             lines.append("- 规则归因：" + ("；".join(f"{h['basis']}，可能在 {h['component']}" for h in attribution)
                                           if attribution else "告警没有明确的指向"))
             if i.get("alerts"):
@@ -630,6 +669,12 @@ def written_answer(pack: dict, diagnosis: bool, degraded: bool) -> str:
                     lines.append(f"- 样本日志：{sample['message'][:120]} [{sample['ref']}]")
             if i.get("background_analysis"):
                 lines.append(f"- 后台分析（{i['background_analysis']['model']}）：{i['background_analysis']['summary']}")
+            task = i.get("background_task")
+            if task:
+                lines.append(f"- 后台任务 {task['analysis_id']}：{diagnostics.LABEL.get(task['status'], task['status'])}"
+                             + ("（未覆盖当前证据，不能作为最新结论）" if task["stale"] else ""))
+            if i.get("diagnosis_dispatch"):
+                lines.append(f"- {i['diagnosis_dispatch']}")
             if attribution:
                 lines.append(f"- 建议：检查 {attribution[0]['component']} 的状态、日志和最近的变更")
             lines.append("")

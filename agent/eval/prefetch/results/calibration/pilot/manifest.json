@@ -1,0 +1,29 @@
+{
+  "started_at": "2026-11-17T08:22:54.354804+00:00",
+  "model": "gpt-6-luna",
+  "fast_model": "gpt-6-luna",
+  "thinking": false,
+  "fast_extra_body": {},
+  "temperature": 0.1,
+  "tool_budget": 4,
+  "router_timeout_s": 8.0,
+  "casework": false,
+  "writer": false,
+  "corpus_sha256": "b5f7593f951559022ca7d34f38c0d8fcdbc34c256d96c7518a97328abac6d9ba",
+  "dataset_sha256": "0695f4a0d3fd36a8c8471eabf6a8f42e03fcb2a8234b91b108758743911cc0f4",
+  "repeats": 1,
+  "seed": 1711,
+  "timeout_s": 120,
+  "selected_case_ids": [
+    "mysql-root",
+    "mysql-synonym",
+    "payment-root",
+    "multi-clarify"
+  ],
+  "transport": "real localhost TCP HTTP/SSE; live_core uses actual Java/PostgreSQL; controlled uses replay",
+  "clock": "fixed per-case evaluation-only clock; source requests retain absolute time bounds",
+  "order": "seeded group shuffle; on/off order alternates by group and repetition",
+  "cache": "fresh sessions/agent per group/arm; provider prompt cache uncontrolled and metered; no answer cache",
+  "finished_at": "2026-11-17T08:24:19.741807+00:00",
+  "attempts": 8
+}

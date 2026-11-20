@@ -39,6 +39,7 @@ public class Demo {
     private static final boolean WINDOWS = System.getProperty("os.name").startsWith("Windows");
     private static final Path ROOT = Path.of("").toAbsolutePath();
     private static final Path LOGS = ROOT.resolve("logs/demo");
+    private static final Path SHOP_LOGS = ROOT.resolve("logs/shop");
     /** NAME PID START_MILLIS of the launcher and each process it started, for "stop" from another terminal. */
     private static final Path PIDS = LOGS.resolve("processes.txt");
     private static final Path AGENT = ROOT.resolve("agent");
@@ -139,6 +140,7 @@ public class Demo {
         String mode = agentMode(python, baseline);
 
         step("Starting the services");
+        Files.createDirectories(SHOP_LOGS);
         Runtime.getRuntime().addShutdownHook(new Thread(this::stopStarted));
         Files.deleteIfExists(PIDS);
         // The launcher too: "stop" from another terminal then ends it along with its processes.
@@ -149,6 +151,7 @@ public class Demo {
                 running.add(start(s));
             }
             awaitReady(running);
+            verifyShopLogs(running);
         }
         // Every jar in lib/; a Windows path cannot hold the '*', so it is appended to the string.
         String shipperClasspath = Path.of("tools/log-shipper/build/install/log-shipper/lib") + File.separator + "*";
@@ -204,7 +207,7 @@ public class Demo {
     }
 
     private static List<Service> shopServices() {
-        String shopLogs = "-Dshop.log-dir=" + ROOT.resolve("logs/shop");
+        String shopLogs = "-Dshop.log-dir=" + SHOP_LOGS;
         return List.of(
                 jar("inventory-service", "shop/inventory-service", 8192, "-Xmx256m", shopLogs),
                 jar("payment-service", "shop/payment-service", 8193, "-Xmx256m", shopLogs),
@@ -364,6 +367,31 @@ public class Demo {
                         + waiting.stream().map(r -> r.service().name()).sorted().toList() + "; see logs/demo/");
             }
             Thread.sleep(1000);
+        }
+    }
+
+    /** A healthy HTTP server alone does not prove that the collector has an ECS log source. */
+    private static void verifyShopLogs(List<Running> processes) throws IOException {
+        for (Running r : processes) {
+            String name = r.service().name();
+            if (!List.of("inventory-service", "payment-service", "order-service").contains(name)) {
+                continue;
+            }
+            Path file = SHOP_LOGS.resolve(name + ".log");
+            boolean found = false;
+            if (Files.isRegularFile(file)) {
+                try (Stream<String> lines = Files.lines(file, StandardCharsets.UTF_8)) {
+                    found = lines.anyMatch(line -> line.startsWith("{\"@timestamp\":")
+                            && line.contains("\"pid\":" + r.process().pid() + ",")
+                            && line.contains("\"service\":{\"name\":\"" + name + "\""));
+                }
+            }
+            if (!found) {
+                fail("no ECS startup log from " + name + " (pid " + r.process().pid() + ") in "
+                        + ROOT.relativize(file) + "; check logging.file.name and logging.structured.format.file; "
+                        + "see logs/demo/" + name + ".log");
+            }
+            System.out.printf("  logs    %-18s %s%n", name, ROOT.relativize(file));
         }
     }
 

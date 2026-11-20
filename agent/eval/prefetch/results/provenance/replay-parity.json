@@ -1,0 +1,17 @@
+[
+  {
+    "service": "order-service",
+    "counts": true,
+    "latest_error_ids": true
+  },
+  {
+    "service": "payment-service",
+    "counts": true,
+    "latest_error_ids": true
+  },
+  {
+    "service": "inventory-service",
+    "counts": true,
+    "latest_error_ids": true
+  }
+]

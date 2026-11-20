@@ -200,8 +200,9 @@ class AgentOpsIT extends CoreTestSupport {
         try {
             List<Future<String>> asked = new ArrayList<>();
             for (int i = 0; i < 8; i++) {
+                String suffix = i % 2 == 0 ? "/analyses" : "/analyses/ensure";
                 asked.add(pool.submit(() -> OpsJson.mapper()
-                        .readTree(post("/api/v1/incidents/" + incidentId + "/analyses", "").body())
+                        .readTree(post("/api/v1/incidents/" + incidentId + suffix, "").body())
                         .path("analysis_id").asString()));
             }
             Set<String> ids = new HashSet<>();
@@ -214,6 +215,32 @@ class AgentOpsIT extends CoreTestSupport {
         }
         assertThat(jdbc.sql("SELECT count(*) FROM incident_analyses WHERE incident_id = ?::uuid")
                 .param(incidentId).query(Long.class).single()).isEqualTo(1L);
+    }
+
+    @Test
+    void systemDelegationReusesFailureUntilAnotherAlertArrives() throws Exception {
+        Instant t = Instant.parse("2027-09-04T10:00:00Z");
+        send(alert("shop-unhandled-errors", "inventory-service", null, Severity.HIGH, t));
+        String incidentId = awaitIncidents(t, 1, 1).getFirst().path("incident_id").asString();
+        String path = "/api/v1/incidents/" + incidentId + "/analyses/ensure";
+        var first = post(path, "");
+        assertThat(first.statusCode()).as(first.body()).isEqualTo(202);
+        String taskId = OpsJson.mapper().readTree(first.body()).path("analysis_id").asString();
+        AgentTask task = awaitTask(UUID.fromString(taskId));
+        answer(new AgentResult(task.taskId(), task.incidentId(), AgentResult.FAILED, null, true, null, null,
+                "test-model", 1, 10, "injected failure", Instant.now()));
+        awaitAnalysis(taskId, "failed");
+        assertThat(OpsJson.mapper().readTree(post(path, "").body()).path("analysis_id").asString())
+                .isEqualTo(taskId);
+        assertThat(getJson("/api/v1/incidents/" + incidentId + "/analyses")).hasSize(1);
+
+        // Same event time, but a newly attached alert: freshness is based on arrival, not last_alert_at.
+        send(alert("shop-unhandled-errors", "inventory-service", null, Severity.HIGH, t));
+        awaitIncidents(t, 1, 2);
+        String nextId = OpsJson.mapper().readTree(post(path, "").body()).path("analysis_id").asString();
+        assertThat(nextId).isNotEqualTo(taskId);
+        assertThat(OpsJson.mapper().readTree(post(path, "").body()).path("analysis_id").asString())
+                .isEqualTo(nextId);
     }
 
     @Test

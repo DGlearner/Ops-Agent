@@ -437,9 +437,12 @@ def _judge(action: dict, outcome: WriteOutcome, after: dict | None) -> tuple[str
     target = action["target"]
     ref = target["ref"]
     if action["kind"] == "request_analysis":
-        if outcome.ok and isinstance(outcome.response, dict) and outcome.response.get("analysis_id"):
+        if (outcome.ok and isinstance(outcome.response, dict) and outcome.response.get("analysis_id")
+                and outcome.response.get("incident_id") == target["incident_id"]):
             return "succeeded", f"已请后台 Agent 分析 {ref}（分析 {outcome.response['analysis_id'][:8]}，状态 " \
-                                f"{outcome.response.get('status')}），结果出来后会显示在 Incident 详情里"
+                                f"{outcome.response.get('status')}），结果会显示在对话任务卡和 Incident 详情里"
+        if outcome.ok:
+            return "unknown", "后台任务回执与所问事件不匹配，不能确认本次分析已派发"
         if outcome.status == 0:
             return "unknown", f"core-service 没有回应（{outcome.error}），不知道分析是否已经派发"
         return "failed", f"core-service 拒绝了：HTTP {outcome.status} {outcome.code or ''}".strip()
@@ -490,7 +493,7 @@ def _state(incident: dict) -> str:
 
 def _excerpt(value: Any) -> Any:
     if isinstance(value, dict):
-        keep = ("incident_id", "status", "version", "analysis_id", "remediation_id", "code", "detail")
+        keep = ("incident_id", "status", "version", "analysis_id", "requested_at", "remediation_id", "code", "detail")
         return {k: value[k] for k in keep if k in value}
     text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
     return (text or "")[:300]

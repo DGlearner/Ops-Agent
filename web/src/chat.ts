@@ -8,6 +8,7 @@ import type {
   ActionStatus,
   ChatMessage,
   Citation,
+  DiagnosisTask,
   MemoryCard,
   Metrics,
   Questionnaire,
@@ -84,6 +85,14 @@ export function applyEvent(m: ChatMessage, event: string, data: Record<string, u
     case 'action':
       ;(trace.actions ??= []).push(data as unknown as ActionCard)
       break
+    case 'analysis': {
+      const task = data as unknown as DiagnosisTask
+      const tasks = (trace.analyses ??= [])
+      const i = tasks.findIndex((t) => t.incident_id === task.incident_id)
+      if (i >= 0) tasks[i] = task
+      else tasks.push(task)
+      break
+    }
     case 'memory':
       ;(trace.memories ??= []).push(data as unknown as MemoryCard)
       break

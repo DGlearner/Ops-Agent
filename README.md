@@ -37,6 +37,7 @@ java tools/Demo.java              # 启动容器、构建、启动全部服务�
 - **Agent 的模式：** 有大模型配置（`agent/.env` 或 `OPS_AGENT_LLM_*` 环境变量，见 [agent/README.md](agent/README.md)）时用大模型，没有就自动用基线模式；`--baseline` 强制用基线。
 - 每个进程的输出在 `logs/demo/<名字>.log`。Ctrl+C 只停进程，容器继续运行；`java tools/Demo.java stop` 把容器也停掉（数据保留），启动脚本被强制结束时它也会清理留下的进程。
 - 演示时故障之间只隔几分钟，所以关联间隔设为 3 分钟（默认 15 分钟），每次故障各自成为一个 Incident。
+- 启动时会核对当前商店进程的 ECS 文件日志。mysql-down 无告警的排查、修复与实测记录见 [日志链路验证](docs/mysql-down-log-pipeline.md)。
 
 **演示流程：**
 

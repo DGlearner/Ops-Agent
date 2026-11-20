@@ -1,0 +1,8 @@
+{
+  "version": "1.1",
+  "cases_sha256": "3c38e3c02fc224f074ef738acbf0ebbe37629372a88d530e76cabf948c385a25",
+  "corpus_sha256": "b5f7593f951559022ca7d34f38c0d8fcdbc34c256d96c7518a97328abac6d9ba",
+  "live_cases": 20,
+  "controlled_cases": 8,
+  "calibration_exclusion": "pilot and interrupted live-v1 retained separately. Quiet clock corrected to include API +1 minute tolerance. Semantic rubrics unchanged."
+}

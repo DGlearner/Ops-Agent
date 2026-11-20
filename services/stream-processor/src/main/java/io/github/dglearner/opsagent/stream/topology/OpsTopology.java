@@ -13,7 +13,7 @@ import io.github.dglearner.opsagent.stream.baseline.ServiceModel;
 import io.github.dglearner.opsagent.stream.config.StreamProperties;
 import io.github.dglearner.opsagent.stream.detect.AlertFactory;
 import io.github.dglearner.opsagent.stream.detect.AlertSuppressor;
-import io.github.dglearner.opsagent.stream.detect.DetectionTimestampExtractor;
+import io.github.dglearner.opsagent.stream.detect.DetectionTimestampProcessor;
 import io.github.dglearner.opsagent.stream.detect.DuplicateMatchFilter;
 import io.github.dglearner.opsagent.stream.detect.RuleMatch;
 import io.github.dglearner.opsagent.stream.detect.RuleMatchProcessor;
@@ -45,12 +45,12 @@ import org.apache.kafka.streams.state.WindowStore;
  * The stream-processor topology.
  *
  * <pre>
- * logs.raw ── parse + redact ──┬── logs.normalized
+ * logs.raw ── parse + redact ──┬── logs.normalized (independent storage/search output)
+ *                              ├── match rules (global table rules.changelog) ── per window tier:
+ *                              │      repartition by fingerprint ── drop duplicate events ── sliding-window count
+ *                              │      ── threshold ── suppression ── alerts
+ *                              ├── baseline: templates (Drain) and per-minute counts per service ── alerts
  *                              └── logs.unparsed
- * logs.normalized ─┬─ match rules (global table rules.changelog) ── per window tier:
- *                  │      repartition by fingerprint ── drop duplicate events ── sliding-window count ── threshold
- *                  │      ── suppression ── alerts
- *                  └─ baseline: templates (Drain) and per-minute counts per service ── alerts
  * </pre>
  *
  * Window sizes are fixed per sub-topology, so each supported tier (1, 5, 15 minutes) has its own branch and rules are
@@ -88,11 +88,11 @@ public class OpsTopology {
     }
 
     public void addTo(StreamsBuilder builder) {
-        addParsing(builder);
-        addDetection(builder);
+        KStream<String, NormalizedEvent> parsed = addParsing(builder);
+        addDetection(builder, parsed);
     }
 
-    private void addParsing(StreamsBuilder builder) {
+    private KStream<String, NormalizedEvent> addParsing(StreamsBuilder builder) {
         Map<String, KStream<String, ParseOutcome>> outcomes = builder
                 .stream(Topics.LOGS_RAW, Consumed.with(STRING, RAW).withName("read-raw"))
                 .mapValues(parsers::parse, Named.as("parse"))
@@ -100,12 +100,15 @@ public class OpsTopology {
                 .branch((key, outcome) -> outcome instanceof ParseOutcome.Parsed, Branched.as("ok"))
                 .defaultBranch(Branched.as("unparsed"));
 
-        outcomes.get("parse-ok")
+        KStream<String, NormalizedEvent> normalized = outcomes.get("parse-ok")
                 .map((key, outcome) -> {
                     NormalizedEvent event = ((ParseOutcome.Parsed) outcome).event();
                     return KeyValue.pair(event.serviceOrHost(), event);
-                }, Named.as("key-by-service"))
-                .to(Topics.LOGS_NORMALIZED, Produced.with(STRING, NORMALIZED).withName("write-normalized"));
+                }, Named.as("key-by-service"));
+
+        // Keep this as an independent output: core-service consumes logs.normalized for durable search and the
+        // console/Agent use that history. Detection below deliberately consumes the parsed branch directly.
+        normalized.to(Topics.LOGS_NORMALIZED, Produced.with(STRING, NORMALIZED).withName("write-normalized"));
 
         outcomes.get("parse-unparsed")
                 .map((key, outcome) -> {
@@ -113,25 +116,28 @@ public class OpsTopology {
                     return KeyValue.pair(ParserRegistry.wireName(log.raw().sourceType()), log);
                 }, Named.as("key-by-source-type"))
                 .to(Topics.LOGS_UNPARSED, Produced.with(STRING, UNPARSED).withName("write-unparsed"));
+
+        return normalized;
     }
 
-    private void addDetection(StreamsBuilder builder) {
+    private void addDetection(StreamsBuilder builder, KStream<String, NormalizedEvent> parsed) {
         builder.globalTable(Topics.RULES_CHANGELOG,
                 Consumed.with(STRING, RULE).withName("read-rules"),
                 Materialized.<String, RuleDefinition>as(Stores.inMemoryKeyValueStore(RULES_STORE))
                         .withKeySerde(STRING).withValueSerde(RULE));
 
-        KStream<String, NormalizedEvent> normalized = builder
-                .stream(Topics.LOGS_NORMALIZED, Consumed.with(STRING, NORMALIZED)
-                        .withTimestampExtractor(new DetectionTimestampExtractor(properties.detectionTime()))
-                        .withName("read-normalized"));
-        KStream<String, RuleMatch> matches = normalized
+        // The old source extractor ran after a Kafka round trip through logs.normalized. Preserve its timestamp
+        // choice explicitly while avoiding that round trip for detection and baseline processing.
+        KStream<String, NormalizedEvent> detected = parsed
+                .process(() -> new DetectionTimestampProcessor(properties.detectionTime()),
+                        Named.as("set-detection-time"));
+        KStream<String, RuleMatch> matches = detected
                 .process(() -> new RuleMatchProcessor(RULES_STORE), Named.as("match-rules"));
         if (baseline.enabled()) {
-            // Keyed by service already (write-normalized): a service's lines reach one task, in order.
+            // The parsed branch is already keyed by service: a service's lines reach one task, in order.
             builder.addStateStore(Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore(BASELINE_STORE), STRING,
                     BASELINE));
-            normalized.process(() -> new BaselineDetector(BASELINE_STORE, baseline, properties.maxSampleEvents(), clock),
+            detected.process(() -> new BaselineDetector(BASELINE_STORE, baseline, properties.maxSampleEvents(), clock),
                             Named.as("baseline"), BASELINE_STORE)
                     .to(Topics.ALERTS, Produced.with(STRING, ALERT).withName("write-baseline-alerts"));
         }

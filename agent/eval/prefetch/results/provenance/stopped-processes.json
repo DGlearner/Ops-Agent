@@ -1,0 +1,47 @@
+[
+  {
+    "name": "agent",
+    "pid": 632968,
+    "status": "stopped verified owned process tree"
+  },
+  {
+    "name": "ingest-service",
+    "pid": 624928,
+    "status": "stopped verified owned process tree"
+  },
+  {
+    "name": "stream-processor",
+    "pid": 632160,
+    "status": "stopped verified owned process tree"
+  },
+  {
+    "name": "core-service",
+    "pid": 632264,
+    "status": "stopped verified owned process tree"
+  },
+  {
+    "name": "inventory-service",
+    "pid": 632048,
+    "status": "stopped verified owned process tree"
+  },
+  {
+    "name": "payment-service",
+    "pid": 632768,
+    "status": "stopped verified owned process tree"
+  },
+  {
+    "name": "order-service",
+    "pid": 629508,
+    "status": "stopped verified owned process tree"
+  },
+  {
+    "name": "lab",
+    "pid": 632820,
+    "status": "stopped verified owned process tree"
+  },
+  {
+    "name": "log-shipper",
+    "pid": 632904,
+    "status": "stopped verified owned process tree"
+  }
+]

@@ -29,6 +29,13 @@ import tools.jackson.databind.json.JsonMapper;
 @Component
 class Traffic {
 
+    static final class CatalogUnavailable extends RuntimeException {
+        CatalogUnavailable(IllegalStateException cause) {
+            super("无法读取商品目录。请确认商店和 MySQL 已恢复，再启动流量；演练 mysql-down 时请先启动流量。"
+                    + "已有流量不会因本次启动失败而停止。", cause);
+        }
+    }
+
     private static final int MAX_IN_FLIGHT = 64;
     private static final Duration RECENT = Duration.ofSeconds(60);
 
@@ -150,11 +157,21 @@ class Traffic {
 
     /** Starts steady traffic, replacing what is running. */
     synchronized void start(double rate, double duplicateRate, double declineRate) {
-        stop();
         Options options = options("--rate", rate, "--duplicate-rate", duplicateRate, "--decline-rate", declineRate,
                 "--hot-rate", 0.05);
-        normal = new Run("normal", rate, null, new OrderMix(client.productSkus(), options, new Random()));
+        OrderMix mix = new OrderMix(catalog(), options, new Random());
+        // Preflight first: a failed catalog lookup during an outage must not stop the existing traffic.
+        stop();
+        normal = new Run("normal", rate, null, mix);
         normal.thread.start();
+    }
+
+    private List<String> catalog() {
+        try {
+            return client.productSkus();
+        } catch (IllegalStateException e) {
+            throw new CatalogUnavailable(e);
+        }
     }
 
     synchronized void stop() {
@@ -169,7 +186,7 @@ class Traffic {
         Options options = options("--rate", rate, "--duplicate-rate", 0.05, "--decline-rate", declineRate,
                 "--flash-sale", sku);
         Run sale = new Run("flash-sale " + sku, rate, Instant.now().plus(duration),
-                new OrderMix(client.productSkus(), options, new Random()));
+                new OrderMix(catalog(), options, new Random()));
         sales.removeIf(r -> !r.running());
         sales.add(sale);
         sale.thread.start();

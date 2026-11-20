@@ -241,12 +241,24 @@ export interface Trace {
   citations: Citation[]
   /** The cards as they were proposed; their current state comes from the session's actions. */
   actions?: ActionCard[]
+  /** Exact background tasks observed or delegated by this answer; their current state is read from core. */
+  analyses?: DiagnosisTask[]
   memories?: MemoryCard[]
   questionnaire?: Questionnaire | null
   /** The case this answer worked on (docs/agent-design.md §2). */
   case?: { case_id: string; status?: string } | null
   error?: string
   metrics?: Metrics
+}
+
+export interface DiagnosisTask {
+  incident_id: string
+  incident_ref: string
+  analysis_id: string
+  status: 'pending' | 'completed' | 'failed' | 'timed_out'
+  requested_at?: string
+  evidence_at: string
+  stale: boolean
 }
 
 export type MessageStatus = 'streaming' | 'completed' | 'failed' | 'cancelled'

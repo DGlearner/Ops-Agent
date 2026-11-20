@@ -73,6 +73,7 @@ public class Analyses {
      */
     @Transactional
     public AnalysisView request(UUID incidentId, String requestedBy) {
+        mapper.lockIncident(incidentId);
         if (incidents.find(incidentId).isEmpty()) {
             throw new ApiProblem(HttpStatus.NOT_FOUND, "INCIDENT_NOT_FOUND", "No incident " + incidentId);
         }
@@ -82,8 +83,42 @@ public class Analyses {
         if (mapper.insertPending(id, incidentId, requestedBy, utc(now), utc(deadline)) == 1) {
             events.publishEvent(new AnalysisRequested(new AgentTask(id, AgentTask.INCIDENT_ANALYSIS, incidentId,
                     requestedBy, now, deadline, properties.language())));
+            return find(id).orElseThrow();
         }
-        return view(rows(incidentId).getFirst());
+        return rows(incidentId).stream().filter(a -> a.getStatus().equals("pending"))
+                .findFirst().map(Analyses::view).orElseGet(() -> view(rows(incidentId).getFirst()));
+    }
+
+    /**
+     * System orchestration of a read-only investigation, not a user's forced reanalysis. A terminal attempt for
+     * this evidence is returned too: polling, a second model turn or another chat must not become a retry loop.
+     * New alert arrival (including a late alert with an old event time) permits a new automatic attempt.
+     */
+    @Transactional
+    public Optional<AnalysisView> ensure(UUID incidentId) {
+        mapper.lockIncident(incidentId);
+        var incident = incidents.find(incidentId).orElseThrow(() -> new ApiProblem(HttpStatus.NOT_FOUND,
+                "INCIDENT_NOT_FOUND", "No incident " + incidentId));
+        List<AnalysisRecord> previous = rows(incidentId);
+        var pending = previous.stream().filter(a -> a.getStatus().equals("pending")).findFirst();
+        if (pending.isPresent()) {
+            return pending.map(Analyses::view);
+        }
+        var arrived = incidents.timeline(incidentId).stream()
+                .filter(e -> Set.of("OPENED", "ALERT_ATTACHED").contains(e.type()))
+                .map(e -> e.at()).max(Instant::compareTo);
+        if (arrived.isEmpty() || incident.alertCount() == 0) {
+            return Optional.empty();
+        }
+        if (!previous.isEmpty() && !arrived.get().isAfter(previous.getFirst().getRequestedAt().toInstant())) {
+            return Optional.of(view(previous.getFirst()));
+        }
+        if (!Set.of("open", "acknowledged", "investigating", "mitigated").contains(incident.status())
+                || previous.stream().filter(a -> a.getRequestedBy().equals(SYSTEM)).count()
+                        >= properties.maxAutoAnalyses()) {
+            return Optional.empty();
+        }
+        return Optional.of(request(incidentId, SYSTEM));
     }
 
     /** The incident's analyses, newest first. */
@@ -104,18 +139,7 @@ public class Analyses {
      */
     @Transactional
     void requestIfDue(Incidents.Settled incident) {
-        List<AnalysisRecord> previous = rows(incident.incidentId());
-        if (previous.stream().anyMatch(a -> a.getStatus().equals("pending"))) {
-            return;
-        }
-        if (!previous.isEmpty()
-                && !incident.lastAlertArrivedAt().isAfter(previous.getFirst().getRequestedAt().toInstant())) {
-            return;
-        }
-        if (previous.stream().filter(a -> a.getRequestedBy().equals(SYSTEM)).count() >= properties.maxAutoAnalyses()) {
-            return;
-        }
-        request(incident.incidentId(), SYSTEM);
+        ensure(incident.incidentId());
     }
 
     /** Analyses still waiting past their deadline are marked timed out; a late answer is still stored. */

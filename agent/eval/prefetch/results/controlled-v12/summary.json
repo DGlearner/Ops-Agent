@@ -1,0 +1,1077 @@
+{
+  "quantile_algorithm": "Hyndman-Fan type 7; h=(n-1)*p, linear interpolation",
+  "evidence_scoring": {
+    "version": "1.2",
+    "dataset_sha256": "e31f3cd8d65c7f679f10882c89a28d52b3512da042cb94bb97a2ae43ac0ef23b",
+    "reason": "incident-scoped sample identity; individual sample-message matching; no model rerun"
+  },
+  "latency_denominator": "completed runs with observed numeric timing; failed/missing separately counted; not silently excluded",
+  "correctness": "requires separate evidence/rubric review; contract_pass is not answer correctness",
+  "tables": {
+    "controlled/on/all": {
+      "attempts": 8,
+      "unique_cases": 8,
+      "completed": 8,
+      "transport_failures": 0,
+      "noncompleted": 0,
+      "degraded": 0,
+      "core_api_failed_calls": 0,
+      "questionnaire": 0,
+      "prefetch_sufficient": 8,
+      "route_correct": 8,
+      "routes": {
+        "rule": 8
+      },
+      "contract_pass": 8,
+      "semantic_reviewed": 8,
+      "correct": 8,
+      "zero_extra_evidence_and_correct": 3,
+      "supplemented": 5,
+      "read_tool_requests_total": 9,
+      "executed_tools_total": 8,
+      "extra_answer_model_calls": 6,
+      "first_event_ms": {
+        "n": 8,
+        "median": 4.545,
+        "p90": 9.376,
+        "p95": 14.243,
+        "max": 19.109
+      },
+      "first_answer_ms": {
+        "n": 8,
+        "median": 5563.547,
+        "p90": 7145.871,
+        "p95": 7627.947,
+        "max": 8110.024
+      },
+      "nonpaused_first_answer_ms": {
+        "n": 8,
+        "median": 5563.547,
+        "p90": 7145.871,
+        "p95": 7627.947,
+        "max": 8110.024
+      },
+      "first_final_answer_ms": {
+        "n": 8,
+        "median": 5563.547,
+        "p90": 7145.871,
+        "p95": 7627.947,
+        "max": 8110.024
+      },
+      "complete_ms": {
+        "n": 8,
+        "median": 12711.22,
+        "p90": 14934.576,
+        "p95": 15048.198,
+        "max": 15161.821
+      },
+      "stage_spans_ms": {
+        "step_locate": {
+          "n": 8,
+          "median": 0.0,
+          "p90": 0.0,
+          "p95": 0.0,
+          "max": 0
+        },
+        "step_fetch": {
+          "n": 8,
+          "median": 23.5,
+          "p90": 31.3,
+          "p95": 31.65,
+          "max": 32
+        },
+        "model_answer": {
+          "n": 14,
+          "median": 6648.5,
+          "p90": 10467.0,
+          "p95": 10892.65,
+          "max": 11360
+        },
+        "step_check": {
+          "n": 8,
+          "median": 0.0,
+          "p90": 0.0,
+          "p95": 0.0,
+          "max": 0
+        },
+        "step_tool": {
+          "n": 8,
+          "median": 7.5,
+          "p90": 31.0,
+          "p95": 31.0,
+          "max": 31
+        }
+      },
+      "source_api_bytes": {
+        "n": 8,
+        "median": 37042.0,
+        "p90": 73167.0,
+        "p95": 73167.0,
+        "max": 73167
+      },
+      "prefetch_pack_bytes": {
+        "n": 8,
+        "median": 12772.5,
+        "p90": 12774.0,
+        "p95": 12774.0,
+        "max": 12774
+      },
+      "cached_tokens_reported": 43904
+    },
+    "controlled/on/failed_report": {
+      "attempts": 2,
+      "unique_cases": 2,
+      "completed": 2,
+      "transport_failures": 0,
+      "noncompleted": 0,
+      "degraded": 0,
+      "core_api_failed_calls": 0,
+      "questionnaire": 0,
+      "prefetch_sufficient": 2,
+      "route_correct": 2,
+      "routes": {
+        "rule": 2
+      },
+      "contract_pass": 2,
+      "semantic_reviewed": 2,
+      "correct": 2,
+      "zero_extra_evidence_and_correct": 1,
+      "supplemented": 1,
+      "read_tool_requests_total": 1,
+      "executed_tools_total": 1,
+      "extra_answer_model_calls": 1,
+      "first_event_ms": {
+        "n": 2,
+        "median": 11.825,
+        "p90": 17.652,
+        "p95": 18.381,
+        "max": 19.109
+      },
+      "first_answer_ms": {
+        "n": 2,
+        "median": 4936.717,
+        "p90": 6373.473,
+        "p95": 6553.068,
+        "max": 6732.662
+      },
+      "nonpaused_first_answer_ms": {
+        "n": 2,
+        "median": 4936.717,
+        "p90": 6373.473,
+        "p95": 6553.068,
+        "max": 6732.662
+      },
+      "first_final_answer_ms": {
+        "n": 2,
+        "median": 4936.717,
+        "p90": 6373.473,
+        "p95": 6553.068,
+        "max": 6732.662
+      },
+      "complete_ms": {
+        "n": 2,
+        "median": 10249.562,
+        "p90": 12837.356,
+        "p95": 13160.83,
+        "max": 13484.304
+      },
+      "stage_spans_ms": {
+        "step_locate": {
+          "n": 2,
+          "median": 0.0,
+          "p90": 0.0,
+          "p95": 0.0,
+          "max": 0
+        },
+        "step_fetch": {
+          "n": 2,
+          "median": 23.0,
+          "p90": 29.4,
+          "p95": 30.2,
+          "max": 31
+        },
+        "model_answer": {
+          "n": 3,
+          "median": 6953.0,
+          "p90": 9439.4,
+          "p95": 9750.2,
+          "max": 10061
+        },
+        "step_check": {
+          "n": 2,
+          "median": 0.0,
+          "p90": 0.0,
+          "p95": 0.0,
+          "max": 0
+        },
+        "step_tool": {
+          "n": 1,
+          "median": 31.0,
+          "p90": 31.0,
+          "p95": 31.0,
+          "max": 31
+        }
+      },
+      "source_api_bytes": {
+        "n": 2,
+        "median": 55101.5,
+        "p90": 69550.7,
+        "p95": 71356.85,
+        "max": 73163
+      },
+      "prefetch_pack_bytes": {
+        "n": 2,
+        "median": 12772.0,
+        "p90": 12772.0,
+        "p95": 12772.0,
+        "max": 12772
+      },
+      "cached_tokens_reported": 10112
+    },
+    "controlled/on/missing_evidence": {
+      "attempts": 2,
+      "unique_cases": 2,
+      "completed": 2,
+      "transport_failures": 0,
+      "noncompleted": 0,
+      "degraded": 0,
+      "core_api_failed_calls": 0,
+      "questionnaire": 0,
+      "prefetch_sufficient": 2,
+      "route_correct": 2,
+      "routes": {
+        "rule": 2
+      },
+      "contract_pass": 2,
+      "semantic_reviewed": 2,
+      "correct": 2,
+      "zero_extra_evidence_and_correct": 0,
+      "supplemented": 2,
+      "read_tool_requests_total": 6,
+      "executed_tools_total": 5,
+      "extra_answer_model_calls": 3,
+      "first_event_ms": {
+        "n": 2,
+        "median": 4.168,
+        "p90": 4.473,
+        "p95": 4.511,
+        "max": 4.549
+      },
+      "first_answer_ms": {
+        "n": 2,
+        "median": 6840.372,
+        "p90": 7856.094,
+        "p95": 7983.059,
+        "max": 8110.024
+      },
+      "nonpaused_first_answer_ms": {
+        "n": 2,
+        "median": 6840.372,
+        "p90": 7856.094,
+        "p95": 7983.059,
+        "max": 8110.024
+      },
+      "first_final_answer_ms": {
+        "n": 2,
+        "median": 6840.372,
+        "p90": 7856.094,
+        "p95": 7983.059,
+        "max": 8110.024
+      },
+      "complete_ms": {
+        "n": 2,
+        "median": 13916.744,
+        "p90": 14653.097,
+        "p95": 14745.141,
+        "max": 14837.185
+      },
+      "stage_spans_ms": {
+        "step_locate": {
+          "n": 2,
+          "median": 0.0,
+          "p90": 0.0,
+          "p95": 0.0,
+          "max": 0
+        },
+        "step_fetch": {
+          "n": 2,
+          "median": 0.0,
+          "p90": 0.0,
+          "p95": 0.0,
+          "max": 0
+        },
+        "model_answer": {
+          "n": 5,
+          "median": 4032.0,
+          "p90": 9872.2,
+          "p95": 10256.6,
+          "max": 10641
+        },
+        "step_tool": {
+          "n": 5,
+          "median": 0.0,
+          "p90": 9.0,
+          "p95": 12.0,
+          "max": 15
+        },
+        "step_check": {
+          "n": 2,
+          "median": 0.0,
+          "p90": 0.0,
+          "p95": 0.0,
+          "max": 0
+        }
+      },
+      "source_api_bytes": {
+        "n": 2,
+        "median": 24904.5,
+        "p90": 25496.1,
+        "p95": 25570.05,
+        "max": 25644
+      },
+      "prefetch_pack_bytes": {
+        "n": 2,
+        "median": 3037.0,
+        "p90": 3049.0,
+        "p95": 3050.5,
+        "max": 3052
+      },
+      "cached_tokens_reported": 12416
+    },
+    "controlled/on/pending": {
+      "attempts": 2,
+      "unique_cases": 2,
+      "completed": 2,
+      "transport_failures": 0,
+      "noncompleted": 0,
+      "degraded": 0,
+      "core_api_failed_calls": 0,
+      "questionnaire": 0,
+      "prefetch_sufficient": 2,
+      "route_correct": 2,
+      "routes": {
+        "rule": 2
+      },
+      "contract_pass": 2,
+      "semantic_reviewed": 2,
+      "correct": 2,
+      "zero_extra_evidence_and_correct": 1,
+      "supplemented": 1,
+      "read_tool_requests_total": 1,
+      "executed_tools_total": 1,
+      "extra_answer_model_calls": 1,
+      "first_event_ms": {
+        "n": 2,
+        "median": 4.543,
+        "p90": 5.073,
+        "p95": 5.139,
+        "max": 5.205
+      },
+      "first_answer_ms": {
+        "n": 2,
+        "median": 3834.874,
+        "p90": 5212.072,
+        "p95": 5384.222,
+        "max": 5556.372
+      },
+      "nonpaused_first_answer_ms": {
+        "n": 2,
+        "median": 3834.874,
+        "p90": 5212.072,
+        "p95": 5384.222,
+        "max": 5556.372
+      },
+      "first_final_answer_ms": {
+        "n": 2,
+        "median": 3834.874,
+        "p90": 5212.072,
+        "p95": 5384.222,
+        "max": 5556.372
+      },
+      "complete_ms": {
+        "n": 2,
+        "median": 9406.763,
+        "p90": 11822.263,
+        "p95": 12124.201,
+        "max": 12426.138
+      },
+      "stage_spans_ms": {
+        "step_locate": {
+          "n": 2,
+          "median": 0.0,
+          "p90": 0.0,
+          "p95": 0.0,
+          "max": 0
+        },
+        "step_fetch": {
+          "n": 2,
+          "median": 23.5,
+          "p90": 29.5,
+          "p95": 30.25,
+          "max": 31
+        },
+        "model_answer": {
+          "n": 3,
+          "median": 6344.0,
+          "p90": 8994.4,
+          "p95": 9325.7,
+          "max": 9657
+        },
+        "step_check": {
+          "n": 2,
+          "median": 0.0,
+          "p90": 0.0,
+          "p95": 0.0,
+          "max": 0
+        },
+        "step_tool": {
+          "n": 1,
+          "median": 15.0,
+          "p90": 15.0,
+          "p95": 15.0,
+          "max": 15
+        }
+      },
+      "source_api_bytes": {
+        "n": 2,
+        "median": 55104.5,
+        "p90": 69554.5,
+        "p95": 71360.75,
+        "max": 73167
+      },
+      "prefetch_pack_bytes": {
+        "n": 2,
+        "median": 12774.0,
+        "p90": 12774.0,
+        "p95": 12774.0,
+        "max": 12774
+      },
+      "cached_tokens_reported": 8448
+    },
+    "controlled/on/stale": {
+      "attempts": 2,
+      "unique_cases": 2,
+      "completed": 2,
+      "transport_failures": 0,
+      "noncompleted": 0,
+      "degraded": 0,
+      "core_api_failed_calls": 0,
+      "questionnaire": 0,
+      "prefetch_sufficient": 2,
+      "route_correct": 2,
+      "routes": {
+        "rule": 2
+      },
+      "contract_pass": 2,
+      "semantic_reviewed": 2,
+      "correct": 2,
+      "zero_extra_evidence_and_correct": 1,
+      "supplemented": 1,
+      "read_tool_requests_total": 1,
+      "executed_tools_total": 1,
+      "extra_answer_model_calls": 1,
+      "first_event_ms": {
+        "n": 2,
+        "median": 4.386,
+        "p90": 4.919,
+        "p95": 4.985,
+        "max": 5.052
+      },
+      "first_answer_ms": {
+        "n": 2,
+        "median": 4926.627,
+        "p90": 6122.149,
+        "p95": 6271.59,
+        "max": 6421.03
+      },
+      "nonpaused_first_answer_ms": {
+        "n": 2,
+        "median": 4926.627,
+        "p90": 6122.149,
+        "p95": 6271.59,
+        "max": 6421.03
+      },
+      "first_final_answer_ms": {
+        "n": 2,
+        "median": 4926.627,
+        "p90": 6122.149,
+        "p95": 6271.59,
+        "max": 6421.03
+      },
+      "complete_ms": {
+        "n": 2,
+        "median": 11144.855,
+        "p90": 14358.428,
+        "p95": 14760.124,
+        "max": 15161.821
+      },
+      "stage_spans_ms": {
+        "step_locate": {
+          "n": 2,
+          "median": 0.0,
+          "p90": 0.0,
+          "p95": 0.0,
+          "max": 0
+        },
+        "step_fetch": {
+          "n": 2,
+          "median": 31.5,
+          "p90": 31.9,
+          "p95": 31.95,
+          "max": 32
+        },
+        "model_answer": {
+          "n": 3,
+          "median": 7078.0,
+          "p90": 10503.6,
+          "p95": 10931.8,
+          "max": 11360
+        },
+        "step_check": {
+          "n": 2,
+          "median": 0.0,
+          "p90": 0.0,
+          "p95": 0.0,
+          "max": 0
+        },
+        "step_tool": {
+          "n": 1,
+          "median": 31.0,
+          "p90": 31.0,
+          "p95": 31.0,
+          "max": 31
+        }
+      },
+      "source_api_bytes": {
+        "n": 2,
+        "median": 55104.5,
+        "p90": 69554.5,
+        "p95": 71360.75,
+        "max": 73167
+      },
+      "prefetch_pack_bytes": {
+        "n": 2,
+        "median": 12773.0,
+        "p90": 12773.0,
+        "p95": 12773.0,
+        "max": 12773
+      },
+      "cached_tokens_reported": 12928
+    },
+    "controlled/off/all": {
+      "attempts": 8,
+      "unique_cases": 8,
+      "completed": 8,
+      "transport_failures": 0,
+      "noncompleted": 0,
+      "degraded": 0,
+      "core_api_failed_calls": 0,
+      "questionnaire": 0,
+      "prefetch_sufficient": 0,
+      "route_correct": 8,
+      "routes": {
+        "rule": 8
+      },
+      "contract_pass": 8,
+      "semantic_reviewed": 8,
+      "correct": 7,
+      "zero_extra_evidence_and_correct": 0,
+      "supplemented": 8,
+      "read_tool_requests_total": 10,
+      "executed_tools_total": 10,
+      "extra_answer_model_calls": 10,
+      "first_event_ms": {
+        "n": 8,
+        "median": 4.171,
+        "p90": 5.404,
+        "p95": 5.559,
+        "max": 5.714
+      },
+      "first_answer_ms": {
+        "n": 8,
+        "median": 6359.048,
+        "p90": 7797.765,
+        "p95": 7899.669,
+        "max": 8001.573
+      },
+      "nonpaused_first_answer_ms": {
+        "n": 8,
+        "median": 6359.048,
+        "p90": 7797.765,
+        "p95": 7899.669,
+        "max": 8001.573
+      },
+      "first_final_answer_ms": {
+        "n": 8,
+        "median": 6359.048,
+        "p90": 7797.765,
+        "p95": 7899.669,
+        "max": 8001.573
+      },
+      "complete_ms": {
+        "n": 8,
+        "median": 12444.599,
+        "p90": 15068.539,
+        "p95": 15375.146,
+        "max": 15681.754
+      },
+      "stage_spans_ms": {
+        "step_locate": {
+          "n": 8,
+          "median": 0.0,
+          "p90": 4.2,
+          "p95": 9.1,
+          "max": 14
+        },
+        "model_answer": {
+          "n": 18,
+          "median": 3462.0,
+          "p90": 9890.4,
+          "p95": 11004.05,
+          "max": 13594
+        },
+        "step_tool": {
+          "n": 10,
+          "median": 31.0,
+          "p90": 32.0,
+          "p95": 32.0,
+          "max": 32
+        },
+        "step_check": {
+          "n": 8,
+          "median": 0.0,
+          "p90": 0.0,
+          "p95": 0.0,
+          "max": 0
+        }
+      },
+      "source_api_bytes": {
+        "n": 8,
+        "median": 37521.0,
+        "p90": 48359.5,
+        "p95": 61003.25,
+        "max": 73647
+      },
+      "prefetch_pack_bytes": {
+        "n": 8,
+        "median": 283.0,
+        "p90": 292.0,
+        "p95": 302.5,
+        "max": 313
+      },
+      "cached_tokens_reported": 40576
+    },
+    "controlled/off/failed_report": {
+      "attempts": 2,
+      "unique_cases": 2,
+      "completed": 2,
+      "transport_failures": 0,
+      "noncompleted": 0,
+      "degraded": 0,
+      "core_api_failed_calls": 0,
+      "questionnaire": 0,
+      "prefetch_sufficient": 0,
+      "route_correct": 2,
+      "routes": {
+        "rule": 2
+      },
+      "contract_pass": 2,
+      "semantic_reviewed": 2,
+      "correct": 1,
+      "zero_extra_evidence_and_correct": 0,
+      "supplemented": 2,
+      "read_tool_requests_total": 2,
+      "executed_tools_total": 2,
+      "extra_answer_model_calls": 2,
+      "first_event_ms": {
+        "n": 2,
+        "median": 3.9,
+        "p90": 4.038,
+        "p95": 4.056,
+        "max": 4.073
+      },
+      "first_answer_ms": {
+        "n": 2,
+        "median": 4977.744,
+        "p90": 5555.112,
+        "p95": 5627.283,
+        "max": 5699.454
+      },
+      "nonpaused_first_answer_ms": {
+        "n": 2,
+        "median": 4977.744,
+        "p90": 5555.112,
+        "p95": 5627.283,
+        "max": 5699.454
+      },
+      "first_final_answer_ms": {
+        "n": 2,
+        "median": 4977.744,
+        "p90": 5555.112,
+        "p95": 5627.283,
+        "max": 5699.454
+      },
+      "complete_ms": {
+        "n": 2,
+        "median": 10785.619,
+        "p90": 12347.385,
+        "p95": 12542.605,
+        "max": 12737.826
+      },
+      "stage_spans_ms": {
+        "step_locate": {
+          "n": 2,
+          "median": 7.0,
+          "p90": 12.6,
+          "p95": 13.3,
+          "max": 14
+        },
+        "model_answer": {
+          "n": 4,
+          "median": 4445.5,
+          "p90": 9407.9,
+          "p95": 9977.45,
+          "max": 10547
+        },
+        "step_tool": {
+          "n": 2,
+          "median": 31.5,
+          "p90": 31.9,
+          "p95": 31.95,
+          "max": 32
+        },
+        "step_check": {
+          "n": 2,
+          "median": 0.0,
+          "p90": 0.0,
+          "p95": 0.0,
+          "max": 0
+        }
+      },
+      "source_api_bytes": {
+        "n": 2,
+        "median": 37520.0,
+        "p90": 37520.0,
+        "p95": 37520.0,
+        "max": 37520
+      },
+      "prefetch_pack_bytes": {
+        "n": 2,
+        "median": 283.0,
+        "p90": 283.0,
+        "p95": 283.0,
+        "max": 283
+      },
+      "cached_tokens_reported": 8704
+    },
+    "controlled/off/missing_evidence": {
+      "attempts": 2,
+      "unique_cases": 2,
+      "completed": 2,
+      "transport_failures": 0,
+      "noncompleted": 0,
+      "degraded": 0,
+      "core_api_failed_calls": 0,
+      "questionnaire": 0,
+      "prefetch_sufficient": 0,
+      "route_correct": 2,
+      "routes": {
+        "rule": 2
+      },
+      "contract_pass": 2,
+      "semantic_reviewed": 2,
+      "correct": 2,
+      "zero_extra_evidence_and_correct": 0,
+      "supplemented": 2,
+      "read_tool_requests_total": 3,
+      "executed_tools_total": 3,
+      "extra_answer_model_calls": 3,
+      "first_event_ms": {
+        "n": 2,
+        "median": 5.492,
+        "p90": 5.67,
+        "p95": 5.692,
+        "max": 5.714
+      },
+      "first_answer_ms": {
+        "n": 2,
+        "median": 6615.889,
+        "p90": 7724.436,
+        "p95": 7863.005,
+        "max": 8001.573
+      },
+      "nonpaused_first_answer_ms": {
+        "n": 2,
+        "median": 6615.889,
+        "p90": 7724.436,
+        "p95": 7863.005,
+        "max": 8001.573
+      },
+      "first_final_answer_ms": {
+        "n": 2,
+        "median": 6615.889,
+        "p90": 7724.436,
+        "p95": 7863.005,
+        "max": 8001.573
+      },
+      "complete_ms": {
+        "n": 2,
+        "median": 13181.871,
+        "p90": 14006.269,
+        "p95": 14109.319,
+        "max": 14212.369
+      },
+      "stage_spans_ms": {
+        "step_locate": {
+          "n": 2,
+          "median": 0.0,
+          "p90": 0.0,
+          "p95": 0.0,
+          "max": 0
+        },
+        "model_answer": {
+          "n": 5,
+          "median": 3408.0,
+          "p90": 9290.2,
+          "p95": 9449.6,
+          "max": 9609
+        },
+        "step_tool": {
+          "n": 3,
+          "median": 14.0,
+          "p90": 15.6,
+          "p95": 15.8,
+          "max": 16
+        },
+        "step_check": {
+          "n": 2,
+          "median": 0.0,
+          "p90": 0.0,
+          "p95": 0.0,
+          "max": 0
+        }
+      },
+      "source_api_bytes": {
+        "n": 2,
+        "median": 13267.5,
+        "p90": 13464.7,
+        "p95": 13489.35,
+        "max": 13514
+      },
+      "prefetch_pack_bytes": {
+        "n": 2,
+        "median": 298.0,
+        "p90": 310.0,
+        "p95": 311.5,
+        "max": 313
+      },
+      "cached_tokens_reported": 8576
+    },
+    "controlled/off/pending": {
+      "attempts": 2,
+      "unique_cases": 2,
+      "completed": 2,
+      "transport_failures": 0,
+      "noncompleted": 0,
+      "degraded": 0,
+      "core_api_failed_calls": 0,
+      "questionnaire": 0,
+      "prefetch_sufficient": 0,
+      "route_correct": 2,
+      "routes": {
+        "rule": 2
+      },
+      "contract_pass": 2,
+      "semantic_reviewed": 2,
+      "correct": 2,
+      "zero_extra_evidence_and_correct": 0,
+      "supplemented": 2,
+      "read_tool_requests_total": 2,
+      "executed_tools_total": 2,
+      "extra_answer_model_calls": 2,
+      "first_event_ms": {
+        "n": 2,
+        "median": 4.105,
+        "p90": 4.237,
+        "p95": 4.253,
+        "max": 4.27
+      },
+      "first_answer_ms": {
+        "n": 2,
+        "median": 6047.842,
+        "p90": 7310.439,
+        "p95": 7468.263,
+        "max": 7626.088
+      },
+      "nonpaused_first_answer_ms": {
+        "n": 2,
+        "median": 6047.842,
+        "p90": 7310.439,
+        "p95": 7468.263,
+        "max": 7626.088
+      },
+      "first_final_answer_ms": {
+        "n": 2,
+        "median": 6047.842,
+        "p90": 7310.439,
+        "p95": 7468.263,
+        "max": 7626.088
+      },
+      "complete_ms": {
+        "n": 2,
+        "median": 12142.561,
+        "p90": 14973.916,
+        "p95": 15327.835,
+        "max": 15681.754
+      },
+      "stage_spans_ms": {
+        "step_locate": {
+          "n": 2,
+          "median": 0.0,
+          "p90": 0.0,
+          "p95": 0.0,
+          "max": 0
+        },
+        "model_answer": {
+          "n": 4,
+          "median": 4273.5,
+          "p90": 11461.0,
+          "p95": 12527.5,
+          "max": 13594
+        },
+        "step_tool": {
+          "n": 2,
+          "median": 31.0,
+          "p90": 31.0,
+          "p95": 31.0,
+          "max": 31
+        },
+        "step_check": {
+          "n": 2,
+          "median": 0.0,
+          "p90": 0.0,
+          "p95": 0.0,
+          "max": 0
+        }
+      },
+      "source_api_bytes": {
+        "n": 2,
+        "median": 37522.0,
+        "p90": 37522.0,
+        "p95": 37522.0,
+        "max": 37522
+      },
+      "prefetch_pack_bytes": {
+        "n": 2,
+        "median": 283.0,
+        "p90": 283.0,
+        "p95": 283.0,
+        "max": 283
+      },
+      "cached_tokens_reported": 11392
+    },
+    "controlled/off/stale": {
+      "attempts": 2,
+      "unique_cases": 2,
+      "completed": 2,
+      "transport_failures": 0,
+      "noncompleted": 0,
+      "degraded": 0,
+      "core_api_failed_calls": 0,
+      "questionnaire": 0,
+      "prefetch_sufficient": 0,
+      "route_correct": 2,
+      "routes": {
+        "rule": 2
+      },
+      "contract_pass": 2,
+      "semantic_reviewed": 2,
+      "correct": 2,
+      "zero_extra_evidence_and_correct": 0,
+      "supplemented": 2,
+      "read_tool_requests_total": 3,
+      "executed_tools_total": 3,
+      "extra_answer_model_calls": 3,
+      "first_event_ms": {
+        "n": 2,
+        "median": 4.457,
+        "p90": 4.862,
+        "p95": 4.912,
+        "max": 4.963
+      },
+      "first_answer_ms": {
+        "n": 2,
+        "median": 7364.53,
+        "p90": 7641.24,
+        "p95": 7675.829,
+        "max": 7710.418
+      },
+      "nonpaused_first_answer_ms": {
+        "n": 2,
+        "median": 7364.53,
+        "p90": 7641.24,
+        "p95": 7675.829,
+        "max": 7710.418
+      },
+      "first_final_answer_ms": {
+        "n": 2,
+        "median": 7364.53,
+        "p90": 7641.24,
+        "p95": 7675.829,
+        "max": 7710.418
+      },
+      "complete_ms": {
+        "n": 2,
+        "median": 13148.706,
+        "p90": 14474.327,
+        "p95": 14640.029,
+        "max": 14805.732
+      },
+      "stage_spans_ms": {
+        "step_locate": {
+          "n": 2,
+          "median": 0.0,
+          "p90": 0.0,
+          "p95": 0.0,
+          "max": 0
+        },
+        "model_answer": {
+          "n": 5,
+          "median": 3516.0,
+          "p90": 9249.8,
+          "p95": 9296.4,
+          "max": 9343
+        },
+        "step_tool": {
+          "n": 3,
+          "median": 31.0,
+          "p90": 31.8,
+          "p95": 31.9,
+          "max": 32
+        },
+        "step_check": {
+          "n": 2,
+          "median": 0.0,
+          "p90": 0.0,
+          "p95": 0.0,
+          "max": 0
+        }
+      },
+      "source_api_bytes": {
+        "n": 2,
+        "median": 55584.5,
+        "p90": 70034.5,
+        "p95": 71840.75,
+        "max": 73647
+      },
+      "prefetch_pack_bytes": {
+        "n": 2,
+        "median": 283.0,
+        "p90": 283.0,
+        "p95": 283.0,
+        "max": 283
+      },
+      "cached_tokens_reported": 11904
+    }
+  }
+}

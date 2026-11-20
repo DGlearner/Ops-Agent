@@ -33,7 +33,7 @@
 | **Incident 分析 Agent**（Python + core-service agentops，§6.5、§7.6） | Incident 安静 1 分钟后自动派发分析；大模型通过 5 个只读工具查看 Incident，提交根因、置信度、证据和建议 | 工具调用有预算（8 次），用完只能提交；可以查被调用服务自己的日志（默认 Incident 前后 2 分钟）；提交前自查证据，编造的 id 退回一次；core-service 落库前再校验，不属于本 Incident 的证据单独存放、不作为支持；同一 Incident 只有一个分析在等待（部分唯一索引）；超时 3 分钟；工具结果标明与本 Incident 的时间关系（重叠、之前、之后） | 演练 6 → 7：给工具结果加上时间关系后，全新的 6 个 Incident 归因 6/6（之前 3/4）；常见故障上大模型与不用大模型的基线一样准，多出的是可核对的解释和对证据不足的如实标注（shop-design §15） |
 | **日志存储与检索**（core-service logs，§8.7） | `logs.normalized` 的每一行存入 PostgreSQL，按服务、时间、级别、事件类型、trace、关键词检索和统计；Agent 的日志工具 | 按到达日期分区、过期整区删除；pg_trgm 三元组索引支持任意位置的关键词；批量写入、重复投递只存一次；查询带分区裁剪条件；统计的示例行按索引取，避免整体排序 | 写入约 1.08 万行/秒；70 万行时常规检索 p50 3–10 ms，23 小时全量关键词 72 ms，统计 52–218 ms |
 | **统计基线异常检测**（stream-processor，§8.8） | 不靠规则：每个服务的日志自动提取模板，按分钟计数，与各自的历史比较，新出现的或突增的警告、错误模板告警 | Drain 在线模板提取；指数加权的均值和方差；校准期；告警分钟和新模板期不计入基线，防止一次故障抬高下一次的门槛；同一服务同一分钟合成一条告警；Kafka Streams Processor API + 状态存储，沉寂服务由 stream time 定时结束分钟 | 6 种故障 × 2 轮：12/12 检出（规则 12/12），首条告警中位数 22 s（规则 6 s）；约 50 分钟正常流量和一次抢购，误报 0 |
-| **值班助手**（Python，§6.7） | 控制台里的对话 Agent：问告警、Incident、原因、影响、怎么处理，以及一般运维知识 | **两级路由**：规则只在明确指向当前系统时直接决定（0 ms），其余交给快速模型，结合上文理解“它”“这个故障”；**LangGraph 编排**：定位 Incident → 并行预取告警、样本日志、相关服务自己的日志（统计和最新的警告、错误）、规则归因和后台分析 → 模型推理、最多补查 4 次 → 核对每个引用；以规则归因为起点，证据矛盾时明确指出；Incident 之间的时间关系由编排算好交给模型；**SSE** 推送 9 类事件（路由、步骤、推理、正文、中间说明、引用等），可停止，刷新后与直播一致；证据用短编号（I1、A3、E2），会话内不变；三层记忆（当前话题、最近 3 轮、摘要，摘要按 CAS 写入）；**追问与暂停点**：可能指向几个不相关的故障时先问（1–4 个问题），回答后从暂停点接着走、数据重新查；**操作卡片**：模型只能提出改 Incident 状态或重新分析，提出时校验参数和证据归属，用户按版本确认、CAS 只执行一次，执行前再核对 Incident 是否被改过（core 端 `expected_version`），回执以 core 的答复和读回的状态为准；**跨会话经验**：候选需人工审核才进提示 | 路由：107 条标注问题上准确率 95.2% / 97.7%（只用模型 92.1% / 95.5%），规则直接决定的部分准确率 100%，平均耗时 0.47 / 1.04 s（只用模型约 1.5 s）。回答：先取证据首字 1.4 s，让模型自己调工具 3.1 s，深度思考 9.7 s；`mysql-down` 演练 24 个回答里 23 个结论第一句就指向 shop-mysql，并纠正了被一条无关告警带偏的规则归因。并发独立故障演练暴露的问题和修正见 §6.7 |
+| **值班助手**（Python，§6.7） | 控制台里的对话 Agent：问告警、Incident、原因、影响、怎么处理，以及一般运维知识 | **两级路由**：规则只在明确指向当前系统时直接决定（0 ms），其余交给快速模型，结合上文理解“它”“这个故障”；**LangGraph 编排**：定位 Incident → 并行预取告警、样本日志、相关服务自己的日志（统计和最新的警告、错误）、规则归因和后台分析 → 模型推理、最多补查 4 次 → 核对每个引用；以规则归因为起点，证据矛盾时明确指出；Incident 之间的时间关系由编排算好交给模型；**SSE** 推送 9 类事件（路由、步骤、推理、正文、中间说明、引用等），可停止，刷新后与直播一致；证据用短编号（I1、A3、E2），会话内不变；三层记忆（当前话题、最近 3 轮、摘要，摘要按 CAS 写入）；**追问与暂停点**：可能指向几个不相关的故障时先问（1–4 个问题），回答后从暂停点接着走、数据重新查；**操作卡片**：模型只能提出改 Incident 状态或重新分析，提出时校验参数和证据归属，用户按版本确认、CAS 只执行一次，执行前再核对 Incident 是否被改过（core 端 `expected_version`），回执以 core 的答复和读回的状态为准；**跨会话经验**：候选需人工审核才进提示 | 路由：107 条标注问题上准确率 95.2% / 97.7%（只用模型 92.1% / 95.5%），规则直接决定的部分准确率 100%，平均耗时 0.47 / 1.04 s（只用模型约 1.5 s）。历史小样本回答实验：DeepSeek mysql-down、每方案 6 个回答的进程内首字中位数为预取 1.4 s、模型取证 3.1 s、预取且思考 9.7 s，不含 HTTP；新评测及适用边界见 [预取评测](prefetch-evaluation.md)；`mysql-down` 演练 24 个回答里 23 个结论第一句就指向 shop-mysql，并纠正了被一条无关告警带偏的规则归因。并发独立故障演练暴露的问题和修正见 §6.7 |
 | **控制台**（web，§6.6） | Incident 列表与详情、服务拓扑、值班助手 | 详情页把 Agent 的每条证据解析成告警摘要、日志原文或服务说明，点击定位；影响范围图；时间线合并告警、状态变化和分析；对话页的思考过程、深度思考开关、引用跳转 | 22 个单元测试（SSE 解析、事件合并、Markdown 与引用渲染、证据解析等）+ vue-tsc 类型检查 |
 | **演练与评测**（lab，shop-design §15） | 一键制造流量和 9 种故障，记下标准答案，按 core-service 的数据打分 | 标准答案不进入 Ops-Agent 的任何输入；误报按“顾客视角”判断（告警前后有没有订单真的失败）；评分看是否检出、首条告警延迟、Incident 划分、归因 | 见上面各行引用的演练结果 |
 | **工程** | CI、测试、一键演示 | GitHub Actions 三个任务：Gradle 构建与全部测试、Agent 的 pytest、控制台的测试与类型检查；Testcontainers 集成测试；`java tools/Demo.java` 一条命令启动全部组件；小内存（5.8 GB）下的构建与测试预算（§12） | Java 278 个测试、Python 87 个、前端 22 个（2026-10-20） |
@@ -195,8 +195,8 @@ JSON Schema 放在仓库根目录 `contracts/kafka/`，供 Python 侧使用；Ja
 | 子拓扑 | 输入 | 输出 | 说明 |
 |---|---|---|---|
 | 解析 | `logs.raw` | `logs.normalized`、`logs.unparsed` | 按 `source_type` 选择解析器，之后统一脱敏（§8.1–8.2） |
-| 检测 | `logs.normalized` + 规则全局表 | `alerts` | 规则匹配 → 滑动窗口计数 → 达到阈值 → 去重（§8.3） |
-| 基线检测 | `logs.normalized` | `alerts` | 每个服务的日志模板（Drain）和每分钟计数，新的或突增的警告、错误模板告警（§8.8） |
+| 检测 | 解析后的 `logs.raw` 分支 + 规则全局表 | `alerts` | 解析成功后直接匹配规则 → 按 fingerprint 写内部 repartition topic → 滑动窗口计数 → 去重/抑制（§8.3）；同时保留 `logs.normalized` 输出供检索消费者使用 |
+| 基线检测 | 解析后的 `logs.raw` 分支 | `alerts` | 解析成功后直接按服务进入 Drain 和每分钟计数，新的或突增的警告、错误模板告警（§8.8） |
 | ~~聚合~~ | — | — | 不再在 stream-processor 中做，改在 core-service 关联（§8.4） |
 
 ### 6.4 `services/core-service`
@@ -298,10 +298,11 @@ route ─┬─ chitchat / out_of_scope ─────────────�
 | `answer` | 回答的增量文字 | Markdown 逐字渲染，末尾有光标 |
 | `interim` | 模型先写了一段话、随后又决定调用工具：那段话是中间说明，不是回答 | 移进"思考过程"，标为中间说明 |
 | `citations` | 每个引用解析成什么、是否核对通过 | 引用变成可点的链接，跳到 Incident 详情并定位到那条告警 |
+| `analysis` | 当前事件对应的后台任务身份、实际状态、请求时间、证据时效 | 独立任务卡；只读轮询展示完成结果、假设和证据，不等待后台完成才开始回答 |
 | `error` / `done` | 出错原因；结束状态和用时（首个事件、首字、总时长、工具次数、是否降级） | 回答下方的一行说明 |
 
 - **思考过程**在回答开始时自动收起，保留"思考过程 · 4 步 · 用时 8 秒"，可以展开。
-- **深度思考**是每条消息的开关（默认关，浏览器记住选择）：打开时模型先充分推理，推理过程逐段显示在"思考过程"里，和编排步骤交错；关闭时只有编排步骤，首字快得多（下文实测 1.4 s 对 9.7 s）。路由和摘要始终不思考。
+- **深度思考**是每条消息的开关（默认关，浏览器记住选择）：打开时模型先充分推理，推理过程逐段显示在"思考过程"里，和编排步骤交错；关闭时只有编排步骤，首字快得多（下文历史 DeepSeek、mysql-down、每方案 6 个回答的进程内中位数为 1.4 s 对 9.7 s，不能当作当前模型延迟保证）。路由和摘要始终不思考。
 - **停止：** 停止按钮或离开页面会断开连接，服务端取消生成（模型的流式请求一起取消），已经写出的部分存为"已停止"。
 - **保活：** 每 15 秒一个 SSE 注释行；响应头 `X-Accel-Buffering: no`，经过反向代理时不被缓冲。
 - **一个会话同时只回答一个问题**，第二个请求返回 409。
@@ -425,6 +426,8 @@ route ─┬─ chitchat / out_of_scope ─────────────�
 
 #### 回答的延迟与正确性
 
+以下是 2026-10-19 的历史探索实验，首字为进程内观测，不包含浏览器/HTTP 往返，正确性仅检查结论第一句是否出现目标组件。每方案 6 个回答的中位数不能当作 P90/P95、证据覆盖率或完整答案正确率。2026-11-17 的多问题、HTTP/SSE 和独立证据/答案判定见 [预取评测](prefetch-evaluation.md)。
+
 `ops-agent eval-chat` 在真实系统上计时：演练控制台注入 `mysql-down`，实际持续约 2 分钟（每秒 5 单的正常流量；请求里本想设 40 秒，参数名写错，用了默认的 120 秒），随后在新会话里依次问"刚才下单为什么失败？""它影响了哪些服务？"，四种组合各 3 轮、共 6 个回答（2026-10-19，DeepSeek `deepseek-v4-pro`，取中位数）：
 
 | 组合 | 首字 | 总时长 | 模型补查 | 结论指向 shop-mysql |
@@ -434,7 +437,7 @@ route ─┬─ chitchat / out_of_scope ─────────────�
 | 深度思考，先取证据 | 9.7 s | 14.4 s | 0.7 次 | 6/6 |
 | 深度思考，模型自己用工具取 | 12.8 s | 16.1 s | 1.7 次 | 5/6（1 次结论里只列了受影响的服务） |
 
-- **先取证据：** 首字快一半以上（不思考时 3.1 → 1.4 s），模型基本不再补查。原因是每多一轮"模型决定调用工具 → 等结果 → 再推理"就多 1–3 秒，而定位 Incident、取告警和规则归因这些事不需要模型来决定。
+- **该历史 mysql-down 小样本中的预取：** 首字中位数为 3.1 → 1.4 s，该臂 6 个回答未补查，不能推广到其他问题或当前模型。模型每多一轮"模型决定调用工具 → 等结果 → 再推理"就多 1–3 秒，而定位 Incident、取告警和规则归因这些事不需要模型来决定。
 - **深度思考**在这个故障上没有让结论更准，首字却慢了约 7 倍。所以默认关闭，页面上有"深度思考"开关，打开后模型的推理过程实时显示在"思考过程"里；不开时"思考过程"里是路由和编排的每一步。
 - **这次的规则归因其实是错的：** 订单服务启动时报了一条 Redis 调用失败（靶场的 bug，已修复，见 shop-design §17.5 末尾），这条告警进了同一个 Incident，规则归因因此指向 order-service、shop-redis、payment-service，没有共同依赖。24 个回答里有 23 个在结论第一句就写明根因是 shop-mysql（另一个第一句列的是受影响的服务），依据是样本日志里的“Server shutdown in progress”“Communications link failure”和后台分析。逐字看过的回答（例如第一次试跑）还写明了“规则归因写的是 order-service / shop-redis / payment-service，但样本证据更明确地指向 shop-mysql”，并把 Redis 的错误列为另一个需要单独排查的问题，这正是本节开头说的“证据和规则的结论不一致时指出来”。
 - 回答里的引用全部核对通过（0 条不在数据里）。
@@ -551,7 +554,7 @@ route ─┬─ chitchat / out_of_scope ─────────────�
 | Topic | Key | 值类型 | 分区 | 清理 | 生产者 | 消费者 |
 |---|---|---|---|---|---|---|
 | `logs.raw` | host | `RawLogRecord` | 6 | 保留 7 天 | ingest | stream-processor |
-| `logs.normalized` | service（缺失时用 host） | `NormalizedEvent` | 6 | 3 天 | stream-processor | stream-processor（检测）、core（J5，日志检索） |
+| `logs.normalized` | service（缺失时用 host） | `NormalizedEvent` | 6 | 3 天 | stream-processor | core（J5，日志检索）；stream-processor 仅保留为独立输出，不再回读做检测 |
 | `logs.unparsed` | source_type | `UnparsedLog` | 1 | 7 天 | stream-processor | 离线分析 |
 | `rules.changelog` | rule_id | `RuleDefinition`（删除为 tombstone） | 1 | compact | core（outbox） | stream-processor |
 | `topology.changelog` | service | `TopologyEntry` | 1 | compact | core（outbox） | stream-processor。不再使用（§8.4） |
@@ -704,6 +707,9 @@ route ─┬─ chitchat / out_of_scope ─────────────�
 - **重复事件：** 同一条日志投递多次（例如客户端带同一个 `Idempotency-Key` 重试，§6.2）只计一次。计数前按 `fingerprint` + `event_id` 丢掉重复的匹配；只记匹配过规则的事件，保留窗口加宽限期的时长，相隔更久的副本不可能落进同一个窗口。Kafka 的 exactly-once 只防止流处理自身产生的重复，代替不了这一步。
 - **告警抑制：** 一个问题只告警一次：同一个 `fingerprint` 持续出现时，`suppress_for` 内不再重复告警。一个 `fingerprint` 连续 `quiet-period`（默认 2 分钟）没有匹配的事件，就算这个问题已经停止；之后再出现是新的问题，即使还在上一条告警的抑制期内，也会重新告警。否则，例如抢购时一阵调用库存失败的告警之后几分钟内出现的独立库存故障，会被前一条告警的抑制挡住。间隔短于安静期时仍然算同一个持续的问题：2026-10-17 的演练里，独立库存故障在抢购结束 41 秒后开始，从日志看“调用库存失败”一直没有停过，因此并入了抢购那次告警，没有新告警（shop-design §15）。抑制期限、窗口和过期清理都用同一个检测时间（由 `detection-time` 决定是事件时间还是接收时间），日志自身的时间只作为告警里的证据。抑制状态保存在 Kafka Streams 的状态存储中，与 offset 一起提交，重启或重放时不会重复告警；过期的记录按流时间定期清理。
 - **热更新：** 规则来自 `rules.changelog` 的全局表；规则变更后，新进入的事件立即按新规则匹配。
+- **当前 Kafka Streams 拓扑（2026-11-20）：** `logs.raw` 只解析一次。解析成功的事件一支按服务 key 写入 `logs.normalized`，供 core-service 的日志入库、检索和控制台使用；另一支在同一拓扑内直接进入规则匹配和 baseline。解析失败仍只写 `logs.unparsed`。检测分支在命中规则后按原有 fingerprint key 写入 `detect-1m`、`detect-5m`、`detect-15m` 内部 repartition topic，再执行 fingerprint + event_id 去重、滑动窗口聚合和告警抑制。这样删除了检测分支对 `logs.normalized` 的一次 Kafka consume/fetch、反序列化和 source 节点；`logs.normalized` 的对外写入仍保留，所以没有声称节省这次存储输出的 append。
+- **状态兼容：** 规则全局表、`detect-*` repartition topic、`match-dedup-*`、`windows-*`、`alert-state-*` 和 `baseline-models` 的名称及 value 类型保持不变；直接分支显式使用原来 `DetectionTimestampExtractor` 的事件时间/接收时间选择，窗口宽限期、安静期和状态提交语义不变。命中 key 仍是 fingerprint，因此分区和同一问题的去重边界不变。
+- **安全迁移：** 先让旧实例处理完当前分区并确认 offsets 已提交，再停止旧 `ops-stream-processor`，使用同一个 `application.id` 启动新拓扑，让它从 `logs.raw` 的已提交 offsets 和原有 state stores 恢复。不要让新旧两个 application 同时写 `alerts`，否则会产生重复告警。升级前保留 `logs.raw`（当前保留 7 天）、`logs.normalized` 和 Streams state/changelog 备份；启动后核对 `detect-*` 内部 topic、state restore、告警速率和 `logs.normalized` 的 core-service 消费。若无法恢复旧 state 或必须新建 application ID，应在维护窗口从明确的 raw offset 重放，并清空/隔离旧告警输出后再切换，不能把它当作无缝升级。
 - **默认规则（从 v1 移植并扩充，见 `services/stream-processor/src/main/resources/rules/default-rules.json`）：** SSH 暴力破解（5 分钟 ≥ 5，按 host + 来源 IP）；MySQL 连接被拒绝（1 分钟 ≥ 1）；MySQL 连接数过多；MySQL 慢查询（5 分钟 ≥ 3）；应用数据库连接错误（5 分钟 ≥ 2，按 service + host）；Nginx 5xx（5 分钟 ≥ 5，按 host）；Nginx 连不上 upstream（5 分钟 ≥ 5，按 host，high；2026-10-29 接入本机日志时加入，§8.9）；容器 OOM（≥ 1）；容器频繁重启（15 分钟 ≥ 3，按容器）；内核 OOM；磁盘使用告警（node-exporter 报告 warning 或 critical）。电商靶场（按 `event.action`）：服务连不上数据库（1 分钟 ≥ 3，按服务）；调用其他服务失败（1 分钟 ≥ 10，按服务 + 被调用方）；未处理的异常（≥ 1）；库存结算被拒、需要人工处理（≥ 1）；后台恢复步骤反复失败（5 分钟 ≥ 3）。售罄等正常业务结果不设规则。
 - **样例数据的结果：** 重放 `datasets/aiops_mixed_incident_small.jsonl` 产生 7 条告警：SSH 暴力破解、MySQL 连接被拒绝、MySQL 连接数过多、payment-api 数据库连接错误、web-01 的 5xx 突增、api-gateway 容器 OOM、api-gateway 频繁重启（拓扑测试和真实 Kafka 上的端到端运行结果一致）。
 - **规则来源：** J3 之前没有 core-service，stream-processor 在 `local` 配置下启动时把 `default-rules.json` 写入 `rules.changelog`；J3 起由 core-service 管理。
@@ -785,7 +791,7 @@ resolved -> open    (reopen, only before closed)
   - `baseline-error-spike`：已知的警告或错误模板，一分钟内不少于 5 行，并且高于基线均值 4 个标准差；之后 10 分钟内这个模板不再告警。
 - **校准：** 一个服务在最先出现后的 30 分钟内只学习、不告警；这期间出现的模板都算正常。部署后要先跑一段正常流量。
 - **不检测下降：** 普通日志变少分不清是故障还是顾客少了（停掉演练流量就会全部下降），没有流量指标时只会制造误报。指标（P2c）之后再考虑。
-- **流处理的实现：** Kafka Streams 的 Processor API。`logs.normalized` 已按服务分区，一个服务的日志都到同一个任务、按顺序处理。每个服务的模型（模板、每个模板的基线、当前分钟的计数和样本）在内存里计数，每次一分钟结束时写入状态存储（changelog 备份，`exactly_once_v2` 下与 offset 一起提交），重启后从存储恢复。一分钟由这个服务下一行日志的到来结束；服务不再写日志时，由 stream time 的定时器（每 15 s，宽限 10 s）结束。服务沉寂超过 3 小时，基线按经过的分钟数一次衰减，不逐分钟补算。时间与规则相同，用检测时间。
+- **流处理的实现：** Kafka Streams 的 Processor API。解析后的分支按服务 key 进入 baseline，一个服务的日志都到同一个任务、按顺序处理；`logs.normalized` 仍作为独立输出给 core-service，不再作为检测输入回读。每个服务的模型（模板、每个模板的基线、当前分钟的计数和样本）在内存里计数，每次一分钟结束时写入状态存储（changelog 备份，`exactly_once_v2` 下与 offset 一起提交），重启后从存储恢复。一分钟由这个服务下一行日志的到来结束；服务不再写日志时，由 stream time 的定时器（每 15 s，宽限 10 s）结束。服务沉寂超过 3 小时，基线按经过的分钟数一次衰减，不逐分钟补算。时间与规则相同，用检测时间。
 - **告警：** `rule_id` 是 `baseline-new-pattern` 或 `baseline-error-spike`，`group_values` 带服务和模板，样本是这一分钟的前 5 行，摘要如 `New warning pattern in payment-service: "Failed to obtain JDBC Connection for order <*>" (5 in its first 5 min)`。告警 id 由指纹和分钟决定，重放不会重复。
 
 **与规则检测的对比（2026-10-20，开发服务器，演示环境，每秒 5 单的正常流量）：** 同一套演练，按两种检测各自的告警打分（`rule_id` 以 `baseline-` 开头的是基线检测的）。每个故障从注入起算到结束后 4 分钟为它的窗口，窗口之外的告警都算误报。

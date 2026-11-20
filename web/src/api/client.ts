@@ -88,6 +88,9 @@ export const api = {
   analyses(incidentId: string): Promise<Analysis[]> {
     return request(`/incidents/${incidentId}/analyses`)
   },
+  analysis(analysisId: string): Promise<Analysis> {
+    return request(`/analyses/${analysisId}`)
+  },
   /** Answers at once with the pending analysis, or with the one already pending. */
   requestAnalysis(incidentId: string): Promise<Analysis> {
     return request(`/incidents/${incidentId}/analyses`, { method: 'POST' })

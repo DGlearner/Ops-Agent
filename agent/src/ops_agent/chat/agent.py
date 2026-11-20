@@ -29,6 +29,7 @@ from .llm import StreamingModel
 from .memory import NEW_TITLE, ChatStore, Memory
 from .router import SERVICE_ALIASES, Decision, Router
 from .tools import ChatTools
+from .diagnostics import DiagnosisDesk
 from .usage import Ledger, Metered
 
 log = logging.getLogger(__name__)
@@ -82,6 +83,7 @@ class Recorder:
         self.memories: list[dict] = []
         self.questionnaire: dict | None = None
         self.case: dict | None = None
+        self.analyses: dict[str, dict] = {}
         self.error: str | None = None
         self.first_answer_ms: int | None = None
         self.first_event_ms: int | None = None
@@ -121,6 +123,8 @@ class Recorder:
             self.questionnaire = data
         elif event == "case":
             self.case = {**(self.case or {}), **data}
+        elif event == "analysis":
+            self.analyses[data["incident_id"]] = data
         elif event == "error":
             self.error = data["message"]
 
@@ -133,6 +137,7 @@ class Recorder:
                 **({"memories": self.memories} if self.memories else {}),
                 **({"questionnaire": self.questionnaire} if self.questionnaire else {}),
                 **({"case": self.case} if self.case else {}),
+                **({"analyses": list(self.analyses.values())} if self.analyses else {}),
                 **({"error": self.error} if self.error else {}),
                 "metrics": {"duration_ms": self.elapsed_ms(), "first_event_ms": self.first_event_ms,
                             "first_answer_ms": self.first_answer_ms, **extra}}
@@ -149,6 +154,7 @@ class ChatAgent:
         self._memory = Memory(store, history_turns)
         self._max_tool_calls = max_tool_calls
         self._prefetch = prefetch
+        self._diagnostic_writer = writer
         self._graph = build_graph()
         self._catalog: tuple[float, set[str]] | None = None
         self._background: set[asyncio.Task] = set()
@@ -295,6 +301,7 @@ class ChatAgent:
                   cases=cases, books=self.books, core=self._core,
                   update_case=update_case if self.model and cases and cases.writable else None,
                   page=page, ledger=ledger)
+        run.diagnostics = DiagnosisDesk(self._diagnostic_writer)
         recorder = Recorder()
         state: dict = {}
         # Until the graph ends, a way out is the browser going away.

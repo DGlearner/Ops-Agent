@@ -62,6 +62,35 @@ class LogShipperTest {
     }
 
     @Test
+    void startsBeforeTheLogDirectoryExistsAndShipsFilesThatAppearLater() throws IOException {
+        Path input = dir.resolve("not-created-yet/shop");
+        LogShipper shipper = new LogShipper(ShipperOptions.parse(new String[] {"--dir", input.toString(),
+                "--url", "http://127.0.0.1:" + ingest.getAddress().getPort(), "--once"}));
+
+        shipper.run();
+        assertThat(input.resolve(".log-shipper-state.json")).isRegularFile();
+        Files.writeString(input.resolve("order-service.log"), "first request\n");
+        assertThat(shipper.pollOnce()).isTrue();
+
+        assertThat(shippedLines()).containsExactly("first request");
+    }
+
+    @Test
+    void createsACustomStateDirectoryAndResumesFromIt() throws IOException {
+        Path state = dir.resolve("state/nested/positions.json");
+        Path log = dir.resolve("order-service.log");
+        Files.writeString(log, "first\n");
+
+        ship("--state", state.toString(), "--from-start");
+        append(log, "second\n");
+        ship("--state", state.toString());
+
+        assertThat(shippedLines()).containsExactly("first", "second");
+        assertThat(state).isRegularFile();
+        assertThat(state.resolveSibling("positions.json.tmp")).doesNotExist();
+    }
+
+    @Test
     void shipsCompleteLinesOnlyAndResumesAfterARestart() throws IOException {
         Path log = dir.resolve("order-service.log");
         Files.writeString(log, "one\ntwo\nthree, still being writ");

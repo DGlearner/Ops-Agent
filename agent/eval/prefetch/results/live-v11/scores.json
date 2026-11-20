@@ -1,0 +1,3328 @@
+{
+  "version": "1.2",
+  "dataset_sha256": "e31f3cd8d65c7f679f10882c89a28d52b3512da042cb94bb97a2ae43ac0ef23b",
+  "reason": "incident-scoped sample identity; individual sample-message matching; no model rerun",
+  "rows": [
+    {
+      "row_id": "normal-alerts:1:1",
+      "checks": [
+        {
+          "id": "bounded-empty-alert-and-incident-query",
+          "ok": true,
+          "hits": []
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "normal-alerts:1:0",
+      "checks": [
+        {
+          "id": "bounded-empty-alert-and-incident-query",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "native-log-gap:1:0",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "native-log-gap:1:1",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": true,
+          "hits": [
+            "2797c937-7127-5cea-9a03-93b393afdc20",
+            "32b45ddb-5797-5977-8775-a30ec8bd0aa9",
+            "387c99b1-8657-5954-824e-10632bf16ada",
+            "44953594-9ecc-5eea-ac1c-54878f9bc28c",
+            "4c039e5e-132a-581f-b51f-a37064e23da8",
+            "652b10eb-d361-501b-93f0-a7ea32982e1a",
+            "7c118a81-5801-5a27-a874-7bd70ac973b4",
+            "7e535e8e-bf2f-517c-a4f6-55d4e464d0c9",
+            "7ef14d50-f52b-59a6-b0bd-2799d5d8ead3",
+            "9f4ce71e-e76a-563d-8e0d-9747e50926f8",
+            "a3929741-ac41-5d16-b504-e57432e95d80",
+            "b1ad4011-f502-527c-aa40-cf6e4e907af1",
+            "c0a927ba-bf5a-508f-9fc6-dac5c9cc5dc3",
+            "c8c569d8-f248-51f4-b115-22196d4128c4",
+            "de436790-dce3-5de1-8c0f-dd30f4514be8",
+            "eeabad65-20ca-5f8e-a673-ebe100ff96c4",
+            "f344ef25-abca-591c-873f-57d8aaa88b68"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "multi-independent:1:1",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": true,
+          "hits": [
+            "950026c8-809b-5e80-99a8-24086d0766ed",
+            "f26a931d-97b7-58c2-baa8-c1d3dfc795ec"
+          ]
+        },
+        {
+          "id": "primary-evidence-a687b-order-service",
+          "ok": true,
+          "hits": [
+            "bcb9c846-faa7-5bae-a900-aa00628a0422",
+            "cfbc49a7-21d4-5c56-a806-cf32f8c7fc5c"
+          ]
+        },
+        {
+          "id": "own-log-context-payment-service",
+          "ok": true,
+          "hits": []
+        },
+        {
+          "id": "own-log-context-inventory-service",
+          "ok": true,
+          "hits": []
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "multi-independent:1:0",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "primary-evidence-a687b-order-service",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "own-log-context-payment-service",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "own-log-context-inventory-service",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "payment-time:1:0",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "payment-time:1:1",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "normal-proof:1:1",
+      "checks": [
+        {
+          "id": "bounded-empty-alert-and-incident-query",
+          "ok": true,
+          "hits": []
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "normal-proof:1:0",
+      "checks": [
+        {
+          "id": "bounded-empty-alert-and-incident-query",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "mysql-current:1:0",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "mysql-current:1:1",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": true,
+          "hits": [
+            "2797c937-7127-5cea-9a03-93b393afdc20",
+            "32b45ddb-5797-5977-8775-a30ec8bd0aa9",
+            "387c99b1-8657-5954-824e-10632bf16ada",
+            "44953594-9ecc-5eea-ac1c-54878f9bc28c",
+            "4c039e5e-132a-581f-b51f-a37064e23da8",
+            "652b10eb-d361-501b-93f0-a7ea32982e1a",
+            "7c118a81-5801-5a27-a874-7bd70ac973b4",
+            "7e535e8e-bf2f-517c-a4f6-55d4e464d0c9",
+            "7ef14d50-f52b-59a6-b0bd-2799d5d8ead3",
+            "9f4ce71e-e76a-563d-8e0d-9747e50926f8",
+            "a3929741-ac41-5d16-b504-e57432e95d80",
+            "b1ad4011-f502-527c-aa40-cf6e4e907af1",
+            "c0a927ba-bf5a-508f-9fc6-dac5c9cc5dc3",
+            "c8c569d8-f248-51f4-b115-22196d4128c4",
+            "de436790-dce3-5de1-8c0f-dd30f4514be8",
+            "eeabad65-20ca-5f8e-a673-ebe100ff96c4",
+            "f344ef25-abca-591c-873f-57d8aaa88b68"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "inventory-colloquial:1:1",
+      "checks": [
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "primary-evidence-a687b-order-service",
+          "ok": true,
+          "hits": [
+            "bcb9c846-faa7-5bae-a900-aa00628a0422",
+            "cfbc49a7-21d4-5c56-a806-cf32f8c7fc5c"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "inventory-colloquial:1:0",
+      "checks": [
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "primary-evidence-a687b-order-service",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "multi-time:1:0",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "multi-time:1:1",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": true,
+          "hits": [
+            "2797c937-7127-5cea-9a03-93b393afdc20",
+            "32b45ddb-5797-5977-8775-a30ec8bd0aa9",
+            "387c99b1-8657-5954-824e-10632bf16ada",
+            "44953594-9ecc-5eea-ac1c-54878f9bc28c",
+            "4c039e5e-132a-581f-b51f-a37064e23da8",
+            "652b10eb-d361-501b-93f0-a7ea32982e1a",
+            "7c118a81-5801-5a27-a874-7bd70ac973b4",
+            "7e535e8e-bf2f-517c-a4f6-55d4e464d0c9",
+            "7ef14d50-f52b-59a6-b0bd-2799d5d8ead3",
+            "9f4ce71e-e76a-563d-8e0d-9747e50926f8",
+            "a3929741-ac41-5d16-b504-e57432e95d80",
+            "b1ad4011-f502-527c-aa40-cf6e4e907af1",
+            "c0a927ba-bf5a-508f-9fc6-dac5c9cc5dc3",
+            "c8c569d8-f248-51f4-b115-22196d4128c4",
+            "de436790-dce3-5de1-8c0f-dd30f4514be8",
+            "eeabad65-20ca-5f8e-a673-ebe100ff96c4",
+            "f344ef25-abca-591c-873f-57d8aaa88b68"
+          ]
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": true,
+          "hits": [
+            "950026c8-809b-5e80-99a8-24086d0766ed",
+            "f26a931d-97b7-58c2-baa8-c1d3dfc795ec"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "multi-day:1:1",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "incident-identity-65889",
+          "ok": true,
+          "hits": [
+            "01a1e52c-67fc-7284-9131-747d13765889"
+          ]
+        },
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "incident-identity-4d56c",
+          "ok": true,
+          "hits": [
+            "01a1e4e7-f3eb-7021-ad91-a389ff94d56c"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": true,
+          "hits": [
+            "950026c8-809b-5e80-99a8-24086d0766ed",
+            "f26a931d-97b7-58c2-baa8-c1d3dfc795ec"
+          ]
+        },
+        {
+          "id": "primary-evidence-a687b-order-service",
+          "ok": true,
+          "hits": [
+            "bcb9c846-faa7-5bae-a900-aa00628a0422",
+            "cfbc49a7-21d4-5c56-a806-cf32f8c7fc5c"
+          ]
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "multi-day:1:0",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "incident-identity-65889",
+          "ok": true,
+          "hits": [
+            "01a1e52c-67fc-7284-9131-747d13765889"
+          ]
+        },
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "incident-identity-4d56c",
+          "ok": true,
+          "hits": [
+            "01a1e4e7-f3eb-7021-ad91-a389ff94d56c"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "primary-evidence-a687b-order-service",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "mysql-rule:1:0",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "mysql-rule:1:1",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": true,
+          "hits": [
+            "2797c937-7127-5cea-9a03-93b393afdc20",
+            "32b45ddb-5797-5977-8775-a30ec8bd0aa9",
+            "387c99b1-8657-5954-824e-10632bf16ada",
+            "44953594-9ecc-5eea-ac1c-54878f9bc28c",
+            "4c039e5e-132a-581f-b51f-a37064e23da8",
+            "652b10eb-d361-501b-93f0-a7ea32982e1a",
+            "7c118a81-5801-5a27-a874-7bd70ac973b4",
+            "7e535e8e-bf2f-517c-a4f6-55d4e464d0c9",
+            "7ef14d50-f52b-59a6-b0bd-2799d5d8ead3",
+            "9f4ce71e-e76a-563d-8e0d-9747e50926f8",
+            "a3929741-ac41-5d16-b504-e57432e95d80",
+            "b1ad4011-f502-527c-aa40-cf6e4e907af1",
+            "c0a927ba-bf5a-508f-9fc6-dac5c9cc5dc3",
+            "c8c569d8-f248-51f4-b115-22196d4128c4",
+            "de436790-dce3-5de1-8c0f-dd30f4514be8",
+            "eeabad65-20ca-5f8e-a673-ebe100ff96c4",
+            "f344ef25-abca-591c-873f-57d8aaa88b68"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "mysql-synonym:1:1",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": true,
+          "hits": [
+            "2797c937-7127-5cea-9a03-93b393afdc20",
+            "32b45ddb-5797-5977-8775-a30ec8bd0aa9",
+            "387c99b1-8657-5954-824e-10632bf16ada",
+            "44953594-9ecc-5eea-ac1c-54878f9bc28c",
+            "4c039e5e-132a-581f-b51f-a37064e23da8",
+            "652b10eb-d361-501b-93f0-a7ea32982e1a",
+            "7c118a81-5801-5a27-a874-7bd70ac973b4",
+            "7e535e8e-bf2f-517c-a4f6-55d4e464d0c9",
+            "7ef14d50-f52b-59a6-b0bd-2799d5d8ead3",
+            "9f4ce71e-e76a-563d-8e0d-9747e50926f8",
+            "a3929741-ac41-5d16-b504-e57432e95d80",
+            "b1ad4011-f502-527c-aa40-cf6e4e907af1",
+            "c0a927ba-bf5a-508f-9fc6-dac5c9cc5dc3",
+            "c8c569d8-f248-51f4-b115-22196d4128c4",
+            "de436790-dce3-5de1-8c0f-dd30f4514be8",
+            "eeabad65-20ca-5f8e-a673-ebe100ff96c4",
+            "f344ef25-abca-591c-873f-57d8aaa88b68"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "mysql-synonym:1:0",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "payment-impact:1:0",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "own-log-context-payment-service",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "payment-impact:1:1",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": true,
+          "hits": [
+            "950026c8-809b-5e80-99a8-24086d0766ed",
+            "f26a931d-97b7-58c2-baa8-c1d3dfc795ec"
+          ]
+        },
+        {
+          "id": "own-log-context-payment-service",
+          "ok": true,
+          "hits": []
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "multi-clarify:1:1",
+      "checks": [
+        {
+          "id": "two-distinct-candidates",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b",
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "multi-clarify:1:0",
+      "checks": [
+        {
+          "id": "two-distinct-candidates",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b",
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "mysql-colloquial:1:0",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "mysql-colloquial:1:1",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": true,
+          "hits": [
+            "2797c937-7127-5cea-9a03-93b393afdc20",
+            "32b45ddb-5797-5977-8775-a30ec8bd0aa9",
+            "387c99b1-8657-5954-824e-10632bf16ada",
+            "44953594-9ecc-5eea-ac1c-54878f9bc28c",
+            "4c039e5e-132a-581f-b51f-a37064e23da8",
+            "652b10eb-d361-501b-93f0-a7ea32982e1a",
+            "7c118a81-5801-5a27-a874-7bd70ac973b4",
+            "7e535e8e-bf2f-517c-a4f6-55d4e464d0c9",
+            "7ef14d50-f52b-59a6-b0bd-2799d5d8ead3",
+            "9f4ce71e-e76a-563d-8e0d-9747e50926f8",
+            "a3929741-ac41-5d16-b504-e57432e95d80",
+            "b1ad4011-f502-527c-aa40-cf6e4e907af1",
+            "c0a927ba-bf5a-508f-9fc6-dac5c9cc5dc3",
+            "c8c569d8-f248-51f4-b115-22196d4128c4",
+            "de436790-dce3-5de1-8c0f-dd30f4514be8",
+            "eeabad65-20ca-5f8e-a673-ebe100ff96c4",
+            "f344ef25-abca-591c-873f-57d8aaa88b68"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "bounded-alerts:1:1",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-inventory-service",
+          "ok": true,
+          "hits": [
+            "ebe5aede-9f33-542d-a9d3-a8d11480c03b"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "bounded-alerts:1:0",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-inventory-service",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "payment-root:1:0",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "own-log-context-payment-service",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "payment-root:1:1",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": true,
+          "hits": [
+            "950026c8-809b-5e80-99a8-24086d0766ed",
+            "f26a931d-97b7-58c2-baa8-c1d3dfc795ec"
+          ]
+        },
+        {
+          "id": "own-log-context-payment-service",
+          "ok": true,
+          "hits": []
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "mysql-root:1:1",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": true,
+          "hits": [
+            "2797c937-7127-5cea-9a03-93b393afdc20",
+            "32b45ddb-5797-5977-8775-a30ec8bd0aa9",
+            "387c99b1-8657-5954-824e-10632bf16ada",
+            "44953594-9ecc-5eea-ac1c-54878f9bc28c",
+            "4c039e5e-132a-581f-b51f-a37064e23da8",
+            "652b10eb-d361-501b-93f0-a7ea32982e1a",
+            "7c118a81-5801-5a27-a874-7bd70ac973b4",
+            "7e535e8e-bf2f-517c-a4f6-55d4e464d0c9",
+            "7ef14d50-f52b-59a6-b0bd-2799d5d8ead3",
+            "9f4ce71e-e76a-563d-8e0d-9747e50926f8",
+            "a3929741-ac41-5d16-b504-e57432e95d80",
+            "b1ad4011-f502-527c-aa40-cf6e4e907af1",
+            "c0a927ba-bf5a-508f-9fc6-dac5c9cc5dc3",
+            "c8c569d8-f248-51f4-b115-22196d4128c4",
+            "de436790-dce3-5de1-8c0f-dd30f4514be8",
+            "eeabad65-20ca-5f8e-a673-ebe100ff96c4",
+            "f344ef25-abca-591c-873f-57d8aaa88b68"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "mysql-followup:1:1",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": true,
+          "hits": [
+            "2797c937-7127-5cea-9a03-93b393afdc20",
+            "32b45ddb-5797-5977-8775-a30ec8bd0aa9",
+            "387c99b1-8657-5954-824e-10632bf16ada",
+            "44953594-9ecc-5eea-ac1c-54878f9bc28c",
+            "4c039e5e-132a-581f-b51f-a37064e23da8",
+            "652b10eb-d361-501b-93f0-a7ea32982e1a",
+            "7c118a81-5801-5a27-a874-7bd70ac973b4",
+            "7e535e8e-bf2f-517c-a4f6-55d4e464d0c9",
+            "7ef14d50-f52b-59a6-b0bd-2799d5d8ead3",
+            "9f4ce71e-e76a-563d-8e0d-9747e50926f8",
+            "a3929741-ac41-5d16-b504-e57432e95d80",
+            "b1ad4011-f502-527c-aa40-cf6e4e907af1",
+            "c0a927ba-bf5a-508f-9fc6-dac5c9cc5dc3",
+            "c8c569d8-f248-51f4-b115-22196d4128c4",
+            "de436790-dce3-5de1-8c0f-dd30f4514be8",
+            "eeabad65-20ca-5f8e-a673-ebe100ff96c4",
+            "f344ef25-abca-591c-873f-57d8aaa88b68"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "mysql-root:1:0",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "mysql-followup:1:0",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "inventory-root:1:0",
+      "checks": [
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "primary-evidence-a687b-order-service",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "own-log-context-inventory-service",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "inventory-root:1:1",
+      "checks": [
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "primary-evidence-a687b-order-service",
+          "ok": true,
+          "hits": [
+            "bcb9c846-faa7-5bae-a900-aa00628a0422",
+            "cfbc49a7-21d4-5c56-a806-cf32f8c7fc5c"
+          ]
+        },
+        {
+          "id": "own-log-context-inventory-service",
+          "ok": true,
+          "hits": []
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "status-services:1:1",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "incident-identity-65889",
+          "ok": true,
+          "hits": [
+            "01a1e52c-67fc-7284-9131-747d13765889"
+          ]
+        },
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "incident-identity-4d56c",
+          "ok": true,
+          "hits": [
+            "01a1e4e7-f3eb-7021-ad91-a389ff94d56c"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "status-services:1:0",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "incident-identity-65889",
+          "ok": true,
+          "hits": [
+            "01a1e52c-67fc-7284-9131-747d13765889"
+          ]
+        },
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "incident-identity-4d56c",
+          "ok": true,
+          "hits": [
+            "01a1e4e7-f3eb-7021-ad91-a389ff94d56c"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "mysql-root:2:0",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "mysql-followup:2:0",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "mysql-root:2:1",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": true,
+          "hits": [
+            "2797c937-7127-5cea-9a03-93b393afdc20",
+            "32b45ddb-5797-5977-8775-a30ec8bd0aa9",
+            "387c99b1-8657-5954-824e-10632bf16ada",
+            "44953594-9ecc-5eea-ac1c-54878f9bc28c",
+            "4c039e5e-132a-581f-b51f-a37064e23da8",
+            "652b10eb-d361-501b-93f0-a7ea32982e1a",
+            "7c118a81-5801-5a27-a874-7bd70ac973b4",
+            "7e535e8e-bf2f-517c-a4f6-55d4e464d0c9",
+            "7ef14d50-f52b-59a6-b0bd-2799d5d8ead3",
+            "9f4ce71e-e76a-563d-8e0d-9747e50926f8",
+            "a3929741-ac41-5d16-b504-e57432e95d80",
+            "b1ad4011-f502-527c-aa40-cf6e4e907af1",
+            "c0a927ba-bf5a-508f-9fc6-dac5c9cc5dc3",
+            "c8c569d8-f248-51f4-b115-22196d4128c4",
+            "de436790-dce3-5de1-8c0f-dd30f4514be8",
+            "eeabad65-20ca-5f8e-a673-ebe100ff96c4",
+            "f344ef25-abca-591c-873f-57d8aaa88b68"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "mysql-followup:2:1",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": true,
+          "hits": [
+            "2797c937-7127-5cea-9a03-93b393afdc20",
+            "32b45ddb-5797-5977-8775-a30ec8bd0aa9",
+            "387c99b1-8657-5954-824e-10632bf16ada",
+            "44953594-9ecc-5eea-ac1c-54878f9bc28c",
+            "4c039e5e-132a-581f-b51f-a37064e23da8",
+            "652b10eb-d361-501b-93f0-a7ea32982e1a",
+            "7c118a81-5801-5a27-a874-7bd70ac973b4",
+            "7e535e8e-bf2f-517c-a4f6-55d4e464d0c9",
+            "7ef14d50-f52b-59a6-b0bd-2799d5d8ead3",
+            "9f4ce71e-e76a-563d-8e0d-9747e50926f8",
+            "a3929741-ac41-5d16-b504-e57432e95d80",
+            "b1ad4011-f502-527c-aa40-cf6e4e907af1",
+            "c0a927ba-bf5a-508f-9fc6-dac5c9cc5dc3",
+            "c8c569d8-f248-51f4-b115-22196d4128c4",
+            "de436790-dce3-5de1-8c0f-dd30f4514be8",
+            "eeabad65-20ca-5f8e-a673-ebe100ff96c4",
+            "f344ef25-abca-591c-873f-57d8aaa88b68"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "payment-root:2:1",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": true,
+          "hits": [
+            "950026c8-809b-5e80-99a8-24086d0766ed",
+            "f26a931d-97b7-58c2-baa8-c1d3dfc795ec"
+          ]
+        },
+        {
+          "id": "own-log-context-payment-service",
+          "ok": true,
+          "hits": []
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "payment-root:2:0",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "own-log-context-payment-service",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "multi-day:2:0",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "incident-identity-65889",
+          "ok": true,
+          "hits": [
+            "01a1e52c-67fc-7284-9131-747d13765889"
+          ]
+        },
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "incident-identity-4d56c",
+          "ok": true,
+          "hits": [
+            "01a1e4e7-f3eb-7021-ad91-a389ff94d56c"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "primary-evidence-a687b-order-service",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "multi-day:2:1",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "incident-identity-65889",
+          "ok": true,
+          "hits": [
+            "01a1e52c-67fc-7284-9131-747d13765889"
+          ]
+        },
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "incident-identity-4d56c",
+          "ok": true,
+          "hits": [
+            "01a1e4e7-f3eb-7021-ad91-a389ff94d56c"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": true,
+          "hits": [
+            "950026c8-809b-5e80-99a8-24086d0766ed",
+            "f26a931d-97b7-58c2-baa8-c1d3dfc795ec"
+          ]
+        },
+        {
+          "id": "primary-evidence-a687b-order-service",
+          "ok": true,
+          "hits": [
+            "bcb9c846-faa7-5bae-a900-aa00628a0422",
+            "cfbc49a7-21d4-5c56-a806-cf32f8c7fc5c"
+          ]
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "mysql-rule:2:1",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": true,
+          "hits": [
+            "2797c937-7127-5cea-9a03-93b393afdc20",
+            "32b45ddb-5797-5977-8775-a30ec8bd0aa9",
+            "387c99b1-8657-5954-824e-10632bf16ada",
+            "44953594-9ecc-5eea-ac1c-54878f9bc28c",
+            "4c039e5e-132a-581f-b51f-a37064e23da8",
+            "652b10eb-d361-501b-93f0-a7ea32982e1a",
+            "7c118a81-5801-5a27-a874-7bd70ac973b4",
+            "7e535e8e-bf2f-517c-a4f6-55d4e464d0c9",
+            "7ef14d50-f52b-59a6-b0bd-2799d5d8ead3",
+            "9f4ce71e-e76a-563d-8e0d-9747e50926f8",
+            "a3929741-ac41-5d16-b504-e57432e95d80",
+            "b1ad4011-f502-527c-aa40-cf6e4e907af1",
+            "c0a927ba-bf5a-508f-9fc6-dac5c9cc5dc3",
+            "c8c569d8-f248-51f4-b115-22196d4128c4",
+            "de436790-dce3-5de1-8c0f-dd30f4514be8",
+            "eeabad65-20ca-5f8e-a673-ebe100ff96c4",
+            "f344ef25-abca-591c-873f-57d8aaa88b68"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "mysql-rule:2:0",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "inventory-colloquial:2:0",
+      "checks": [
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "primary-evidence-a687b-order-service",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "inventory-colloquial:2:1",
+      "checks": [
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "primary-evidence-a687b-order-service",
+          "ok": true,
+          "hits": [
+            "bcb9c846-faa7-5bae-a900-aa00628a0422",
+            "cfbc49a7-21d4-5c56-a806-cf32f8c7fc5c"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "multi-clarify:2:1",
+      "checks": [
+        {
+          "id": "two-distinct-candidates",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b",
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "multi-clarify:2:0",
+      "checks": [
+        {
+          "id": "two-distinct-candidates",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b",
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "multi-independent:2:0",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "primary-evidence-a687b-order-service",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "own-log-context-payment-service",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "own-log-context-inventory-service",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "multi-independent:2:1",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": true,
+          "hits": [
+            "950026c8-809b-5e80-99a8-24086d0766ed",
+            "f26a931d-97b7-58c2-baa8-c1d3dfc795ec"
+          ]
+        },
+        {
+          "id": "primary-evidence-a687b-order-service",
+          "ok": true,
+          "hits": [
+            "bcb9c846-faa7-5bae-a900-aa00628a0422",
+            "cfbc49a7-21d4-5c56-a806-cf32f8c7fc5c"
+          ]
+        },
+        {
+          "id": "own-log-context-payment-service",
+          "ok": true,
+          "hits": []
+        },
+        {
+          "id": "own-log-context-inventory-service",
+          "ok": true,
+          "hits": []
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "payment-time:2:1",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "payment-time:2:0",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "bounded-alerts:2:0",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-inventory-service",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "bounded-alerts:2:1",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-inventory-service",
+          "ok": true,
+          "hits": [
+            "ebe5aede-9f33-542d-a9d3-a8d11480c03b"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "normal-proof:2:1",
+      "checks": [
+        {
+          "id": "bounded-empty-alert-and-incident-query",
+          "ok": true,
+          "hits": []
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "normal-proof:2:0",
+      "checks": [
+        {
+          "id": "bounded-empty-alert-and-incident-query",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "mysql-current:2:0",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "mysql-current:2:1",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": true,
+          "hits": [
+            "2797c937-7127-5cea-9a03-93b393afdc20",
+            "32b45ddb-5797-5977-8775-a30ec8bd0aa9",
+            "387c99b1-8657-5954-824e-10632bf16ada",
+            "44953594-9ecc-5eea-ac1c-54878f9bc28c",
+            "4c039e5e-132a-581f-b51f-a37064e23da8",
+            "652b10eb-d361-501b-93f0-a7ea32982e1a",
+            "7c118a81-5801-5a27-a874-7bd70ac973b4",
+            "7e535e8e-bf2f-517c-a4f6-55d4e464d0c9",
+            "7ef14d50-f52b-59a6-b0bd-2799d5d8ead3",
+            "9f4ce71e-e76a-563d-8e0d-9747e50926f8",
+            "a3929741-ac41-5d16-b504-e57432e95d80",
+            "b1ad4011-f502-527c-aa40-cf6e4e907af1",
+            "c0a927ba-bf5a-508f-9fc6-dac5c9cc5dc3",
+            "c8c569d8-f248-51f4-b115-22196d4128c4",
+            "de436790-dce3-5de1-8c0f-dd30f4514be8",
+            "eeabad65-20ca-5f8e-a673-ebe100ff96c4",
+            "f344ef25-abca-591c-873f-57d8aaa88b68"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "normal-alerts:2:1",
+      "checks": [
+        {
+          "id": "bounded-empty-alert-and-incident-query",
+          "ok": true,
+          "hits": []
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "normal-alerts:2:0",
+      "checks": [
+        {
+          "id": "bounded-empty-alert-and-incident-query",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "inventory-root:2:0",
+      "checks": [
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "primary-evidence-a687b-order-service",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "own-log-context-inventory-service",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "inventory-root:2:1",
+      "checks": [
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "primary-evidence-a687b-order-service",
+          "ok": true,
+          "hits": [
+            "bcb9c846-faa7-5bae-a900-aa00628a0422",
+            "cfbc49a7-21d4-5c56-a806-cf32f8c7fc5c"
+          ]
+        },
+        {
+          "id": "own-log-context-inventory-service",
+          "ok": true,
+          "hits": []
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "payment-impact:2:1",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": true,
+          "hits": [
+            "950026c8-809b-5e80-99a8-24086d0766ed",
+            "f26a931d-97b7-58c2-baa8-c1d3dfc795ec"
+          ]
+        },
+        {
+          "id": "own-log-context-payment-service",
+          "ok": true,
+          "hits": []
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "payment-impact:2:0",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "own-log-context-payment-service",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "multi-time:2:0",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "multi-time:2:1",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": true,
+          "hits": [
+            "2797c937-7127-5cea-9a03-93b393afdc20",
+            "32b45ddb-5797-5977-8775-a30ec8bd0aa9",
+            "387c99b1-8657-5954-824e-10632bf16ada",
+            "44953594-9ecc-5eea-ac1c-54878f9bc28c",
+            "4c039e5e-132a-581f-b51f-a37064e23da8",
+            "652b10eb-d361-501b-93f0-a7ea32982e1a",
+            "7c118a81-5801-5a27-a874-7bd70ac973b4",
+            "7e535e8e-bf2f-517c-a4f6-55d4e464d0c9",
+            "7ef14d50-f52b-59a6-b0bd-2799d5d8ead3",
+            "9f4ce71e-e76a-563d-8e0d-9747e50926f8",
+            "a3929741-ac41-5d16-b504-e57432e95d80",
+            "b1ad4011-f502-527c-aa40-cf6e4e907af1",
+            "c0a927ba-bf5a-508f-9fc6-dac5c9cc5dc3",
+            "c8c569d8-f248-51f4-b115-22196d4128c4",
+            "de436790-dce3-5de1-8c0f-dd30f4514be8",
+            "eeabad65-20ca-5f8e-a673-ebe100ff96c4",
+            "f344ef25-abca-591c-873f-57d8aaa88b68"
+          ]
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": true,
+          "hits": [
+            "950026c8-809b-5e80-99a8-24086d0766ed",
+            "f26a931d-97b7-58c2-baa8-c1d3dfc795ec"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "mysql-colloquial:2:1",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": true,
+          "hits": [
+            "2797c937-7127-5cea-9a03-93b393afdc20",
+            "32b45ddb-5797-5977-8775-a30ec8bd0aa9",
+            "387c99b1-8657-5954-824e-10632bf16ada",
+            "44953594-9ecc-5eea-ac1c-54878f9bc28c",
+            "4c039e5e-132a-581f-b51f-a37064e23da8",
+            "652b10eb-d361-501b-93f0-a7ea32982e1a",
+            "7c118a81-5801-5a27-a874-7bd70ac973b4",
+            "7e535e8e-bf2f-517c-a4f6-55d4e464d0c9",
+            "7ef14d50-f52b-59a6-b0bd-2799d5d8ead3",
+            "9f4ce71e-e76a-563d-8e0d-9747e50926f8",
+            "a3929741-ac41-5d16-b504-e57432e95d80",
+            "b1ad4011-f502-527c-aa40-cf6e4e907af1",
+            "c0a927ba-bf5a-508f-9fc6-dac5c9cc5dc3",
+            "c8c569d8-f248-51f4-b115-22196d4128c4",
+            "de436790-dce3-5de1-8c0f-dd30f4514be8",
+            "eeabad65-20ca-5f8e-a673-ebe100ff96c4",
+            "f344ef25-abca-591c-873f-57d8aaa88b68"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "mysql-colloquial:2:0",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "mysql-synonym:2:0",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "mysql-synonym:2:1",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": true,
+          "hits": [
+            "2797c937-7127-5cea-9a03-93b393afdc20",
+            "32b45ddb-5797-5977-8775-a30ec8bd0aa9",
+            "387c99b1-8657-5954-824e-10632bf16ada",
+            "44953594-9ecc-5eea-ac1c-54878f9bc28c",
+            "4c039e5e-132a-581f-b51f-a37064e23da8",
+            "652b10eb-d361-501b-93f0-a7ea32982e1a",
+            "7c118a81-5801-5a27-a874-7bd70ac973b4",
+            "7e535e8e-bf2f-517c-a4f6-55d4e464d0c9",
+            "7ef14d50-f52b-59a6-b0bd-2799d5d8ead3",
+            "9f4ce71e-e76a-563d-8e0d-9747e50926f8",
+            "a3929741-ac41-5d16-b504-e57432e95d80",
+            "b1ad4011-f502-527c-aa40-cf6e4e907af1",
+            "c0a927ba-bf5a-508f-9fc6-dac5c9cc5dc3",
+            "c8c569d8-f248-51f4-b115-22196d4128c4",
+            "de436790-dce3-5de1-8c0f-dd30f4514be8",
+            "eeabad65-20ca-5f8e-a673-ebe100ff96c4",
+            "f344ef25-abca-591c-873f-57d8aaa88b68"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "status-services:2:1",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "incident-identity-65889",
+          "ok": true,
+          "hits": [
+            "01a1e52c-67fc-7284-9131-747d13765889"
+          ]
+        },
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "incident-identity-4d56c",
+          "ok": true,
+          "hits": [
+            "01a1e4e7-f3eb-7021-ad91-a389ff94d56c"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "status-services:2:0",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "incident-identity-65889",
+          "ok": true,
+          "hits": [
+            "01a1e52c-67fc-7284-9131-747d13765889"
+          ]
+        },
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "incident-identity-4d56c",
+          "ok": true,
+          "hits": [
+            "01a1e4e7-f3eb-7021-ad91-a389ff94d56c"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "native-log-gap:2:0",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "native-log-gap:2:1",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": true,
+          "hits": [
+            "2797c937-7127-5cea-9a03-93b393afdc20",
+            "32b45ddb-5797-5977-8775-a30ec8bd0aa9",
+            "387c99b1-8657-5954-824e-10632bf16ada",
+            "44953594-9ecc-5eea-ac1c-54878f9bc28c",
+            "4c039e5e-132a-581f-b51f-a37064e23da8",
+            "652b10eb-d361-501b-93f0-a7ea32982e1a",
+            "7c118a81-5801-5a27-a874-7bd70ac973b4",
+            "7e535e8e-bf2f-517c-a4f6-55d4e464d0c9",
+            "7ef14d50-f52b-59a6-b0bd-2799d5d8ead3",
+            "9f4ce71e-e76a-563d-8e0d-9747e50926f8",
+            "a3929741-ac41-5d16-b504-e57432e95d80",
+            "b1ad4011-f502-527c-aa40-cf6e4e907af1",
+            "c0a927ba-bf5a-508f-9fc6-dac5c9cc5dc3",
+            "c8c569d8-f248-51f4-b115-22196d4128c4",
+            "de436790-dce3-5de1-8c0f-dd30f4514be8",
+            "eeabad65-20ca-5f8e-a673-ebe100ff96c4",
+            "f344ef25-abca-591c-873f-57d8aaa88b68"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "inventory-root:3:1",
+      "checks": [
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "primary-evidence-a687b-order-service",
+          "ok": true,
+          "hits": [
+            "bcb9c846-faa7-5bae-a900-aa00628a0422",
+            "cfbc49a7-21d4-5c56-a806-cf32f8c7fc5c"
+          ]
+        },
+        {
+          "id": "own-log-context-inventory-service",
+          "ok": true,
+          "hits": []
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "inventory-root:3:0",
+      "checks": [
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "primary-evidence-a687b-order-service",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "own-log-context-inventory-service",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "payment-impact:3:0",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "own-log-context-payment-service",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "payment-impact:3:1",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": true,
+          "hits": [
+            "950026c8-809b-5e80-99a8-24086d0766ed",
+            "f26a931d-97b7-58c2-baa8-c1d3dfc795ec"
+          ]
+        },
+        {
+          "id": "own-log-context-payment-service",
+          "ok": true,
+          "hits": []
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "mysql-current:3:1",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": true,
+          "hits": [
+            "2797c937-7127-5cea-9a03-93b393afdc20",
+            "32b45ddb-5797-5977-8775-a30ec8bd0aa9",
+            "387c99b1-8657-5954-824e-10632bf16ada",
+            "44953594-9ecc-5eea-ac1c-54878f9bc28c",
+            "4c039e5e-132a-581f-b51f-a37064e23da8",
+            "652b10eb-d361-501b-93f0-a7ea32982e1a",
+            "7c118a81-5801-5a27-a874-7bd70ac973b4",
+            "7e535e8e-bf2f-517c-a4f6-55d4e464d0c9",
+            "7ef14d50-f52b-59a6-b0bd-2799d5d8ead3",
+            "9f4ce71e-e76a-563d-8e0d-9747e50926f8",
+            "a3929741-ac41-5d16-b504-e57432e95d80",
+            "b1ad4011-f502-527c-aa40-cf6e4e907af1",
+            "c0a927ba-bf5a-508f-9fc6-dac5c9cc5dc3",
+            "c8c569d8-f248-51f4-b115-22196d4128c4",
+            "de436790-dce3-5de1-8c0f-dd30f4514be8",
+            "eeabad65-20ca-5f8e-a673-ebe100ff96c4",
+            "f344ef25-abca-591c-873f-57d8aaa88b68"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "mysql-current:3:0",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "normal-alerts:3:0",
+      "checks": [
+        {
+          "id": "bounded-empty-alert-and-incident-query",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "normal-alerts:3:1",
+      "checks": [
+        {
+          "id": "bounded-empty-alert-and-incident-query",
+          "ok": true,
+          "hits": []
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "payment-time:3:1",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "payment-time:3:0",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "multi-time:3:0",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "multi-time:3:1",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": true,
+          "hits": [
+            "2797c937-7127-5cea-9a03-93b393afdc20",
+            "32b45ddb-5797-5977-8775-a30ec8bd0aa9",
+            "387c99b1-8657-5954-824e-10632bf16ada",
+            "44953594-9ecc-5eea-ac1c-54878f9bc28c",
+            "4c039e5e-132a-581f-b51f-a37064e23da8",
+            "652b10eb-d361-501b-93f0-a7ea32982e1a",
+            "7c118a81-5801-5a27-a874-7bd70ac973b4",
+            "7e535e8e-bf2f-517c-a4f6-55d4e464d0c9",
+            "7ef14d50-f52b-59a6-b0bd-2799d5d8ead3",
+            "9f4ce71e-e76a-563d-8e0d-9747e50926f8",
+            "a3929741-ac41-5d16-b504-e57432e95d80",
+            "b1ad4011-f502-527c-aa40-cf6e4e907af1",
+            "c0a927ba-bf5a-508f-9fc6-dac5c9cc5dc3",
+            "c8c569d8-f248-51f4-b115-22196d4128c4",
+            "de436790-dce3-5de1-8c0f-dd30f4514be8",
+            "eeabad65-20ca-5f8e-a673-ebe100ff96c4",
+            "f344ef25-abca-591c-873f-57d8aaa88b68"
+          ]
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": true,
+          "hits": [
+            "950026c8-809b-5e80-99a8-24086d0766ed",
+            "f26a931d-97b7-58c2-baa8-c1d3dfc795ec"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "status-services:3:1",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "incident-identity-65889",
+          "ok": true,
+          "hits": [
+            "01a1e52c-67fc-7284-9131-747d13765889"
+          ]
+        },
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "incident-identity-4d56c",
+          "ok": true,
+          "hits": [
+            "01a1e4e7-f3eb-7021-ad91-a389ff94d56c"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "status-services:3:0",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "incident-identity-65889",
+          "ok": true,
+          "hits": [
+            "01a1e52c-67fc-7284-9131-747d13765889"
+          ]
+        },
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "incident-identity-4d56c",
+          "ok": true,
+          "hits": [
+            "01a1e4e7-f3eb-7021-ad91-a389ff94d56c"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "payment-root:3:0",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "own-log-context-payment-service",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "payment-root:3:1",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": true,
+          "hits": [
+            "950026c8-809b-5e80-99a8-24086d0766ed",
+            "f26a931d-97b7-58c2-baa8-c1d3dfc795ec"
+          ]
+        },
+        {
+          "id": "own-log-context-payment-service",
+          "ok": true,
+          "hits": []
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "multi-clarify:3:1",
+      "checks": [
+        {
+          "id": "two-distinct-candidates",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b",
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "multi-clarify:3:0",
+      "checks": [
+        {
+          "id": "two-distinct-candidates",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b",
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "mysql-synonym:3:0",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "mysql-synonym:3:1",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": true,
+          "hits": [
+            "2797c937-7127-5cea-9a03-93b393afdc20",
+            "32b45ddb-5797-5977-8775-a30ec8bd0aa9",
+            "387c99b1-8657-5954-824e-10632bf16ada",
+            "44953594-9ecc-5eea-ac1c-54878f9bc28c",
+            "4c039e5e-132a-581f-b51f-a37064e23da8",
+            "652b10eb-d361-501b-93f0-a7ea32982e1a",
+            "7c118a81-5801-5a27-a874-7bd70ac973b4",
+            "7e535e8e-bf2f-517c-a4f6-55d4e464d0c9",
+            "7ef14d50-f52b-59a6-b0bd-2799d5d8ead3",
+            "9f4ce71e-e76a-563d-8e0d-9747e50926f8",
+            "a3929741-ac41-5d16-b504-e57432e95d80",
+            "b1ad4011-f502-527c-aa40-cf6e4e907af1",
+            "c0a927ba-bf5a-508f-9fc6-dac5c9cc5dc3",
+            "c8c569d8-f248-51f4-b115-22196d4128c4",
+            "de436790-dce3-5de1-8c0f-dd30f4514be8",
+            "eeabad65-20ca-5f8e-a673-ebe100ff96c4",
+            "f344ef25-abca-591c-873f-57d8aaa88b68"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "inventory-colloquial:3:1",
+      "checks": [
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "primary-evidence-a687b-order-service",
+          "ok": true,
+          "hits": [
+            "bcb9c846-faa7-5bae-a900-aa00628a0422",
+            "cfbc49a7-21d4-5c56-a806-cf32f8c7fc5c"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "inventory-colloquial:3:0",
+      "checks": [
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "primary-evidence-a687b-order-service",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "mysql-root:3:0",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "mysql-followup:3:0",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "mysql-root:3:1",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": true,
+          "hits": [
+            "2797c937-7127-5cea-9a03-93b393afdc20",
+            "32b45ddb-5797-5977-8775-a30ec8bd0aa9",
+            "387c99b1-8657-5954-824e-10632bf16ada",
+            "44953594-9ecc-5eea-ac1c-54878f9bc28c",
+            "4c039e5e-132a-581f-b51f-a37064e23da8",
+            "652b10eb-d361-501b-93f0-a7ea32982e1a",
+            "7c118a81-5801-5a27-a874-7bd70ac973b4",
+            "7e535e8e-bf2f-517c-a4f6-55d4e464d0c9",
+            "7ef14d50-f52b-59a6-b0bd-2799d5d8ead3",
+            "9f4ce71e-e76a-563d-8e0d-9747e50926f8",
+            "a3929741-ac41-5d16-b504-e57432e95d80",
+            "b1ad4011-f502-527c-aa40-cf6e4e907af1",
+            "c0a927ba-bf5a-508f-9fc6-dac5c9cc5dc3",
+            "c8c569d8-f248-51f4-b115-22196d4128c4",
+            "de436790-dce3-5de1-8c0f-dd30f4514be8",
+            "eeabad65-20ca-5f8e-a673-ebe100ff96c4",
+            "f344ef25-abca-591c-873f-57d8aaa88b68"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "mysql-followup:3:1",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": true,
+          "hits": [
+            "2797c937-7127-5cea-9a03-93b393afdc20",
+            "32b45ddb-5797-5977-8775-a30ec8bd0aa9",
+            "387c99b1-8657-5954-824e-10632bf16ada",
+            "44953594-9ecc-5eea-ac1c-54878f9bc28c",
+            "4c039e5e-132a-581f-b51f-a37064e23da8",
+            "652b10eb-d361-501b-93f0-a7ea32982e1a",
+            "7c118a81-5801-5a27-a874-7bd70ac973b4",
+            "7e535e8e-bf2f-517c-a4f6-55d4e464d0c9",
+            "7ef14d50-f52b-59a6-b0bd-2799d5d8ead3",
+            "9f4ce71e-e76a-563d-8e0d-9747e50926f8",
+            "a3929741-ac41-5d16-b504-e57432e95d80",
+            "b1ad4011-f502-527c-aa40-cf6e4e907af1",
+            "c0a927ba-bf5a-508f-9fc6-dac5c9cc5dc3",
+            "c8c569d8-f248-51f4-b115-22196d4128c4",
+            "de436790-dce3-5de1-8c0f-dd30f4514be8",
+            "eeabad65-20ca-5f8e-a673-ebe100ff96c4",
+            "f344ef25-abca-591c-873f-57d8aaa88b68"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "mysql-colloquial:3:1",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": true,
+          "hits": [
+            "2797c937-7127-5cea-9a03-93b393afdc20",
+            "32b45ddb-5797-5977-8775-a30ec8bd0aa9",
+            "387c99b1-8657-5954-824e-10632bf16ada",
+            "44953594-9ecc-5eea-ac1c-54878f9bc28c",
+            "4c039e5e-132a-581f-b51f-a37064e23da8",
+            "652b10eb-d361-501b-93f0-a7ea32982e1a",
+            "7c118a81-5801-5a27-a874-7bd70ac973b4",
+            "7e535e8e-bf2f-517c-a4f6-55d4e464d0c9",
+            "7ef14d50-f52b-59a6-b0bd-2799d5d8ead3",
+            "9f4ce71e-e76a-563d-8e0d-9747e50926f8",
+            "a3929741-ac41-5d16-b504-e57432e95d80",
+            "b1ad4011-f502-527c-aa40-cf6e4e907af1",
+            "c0a927ba-bf5a-508f-9fc6-dac5c9cc5dc3",
+            "c8c569d8-f248-51f4-b115-22196d4128c4",
+            "de436790-dce3-5de1-8c0f-dd30f4514be8",
+            "eeabad65-20ca-5f8e-a673-ebe100ff96c4",
+            "f344ef25-abca-591c-873f-57d8aaa88b68"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "mysql-colloquial:3:0",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "multi-independent:3:0",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "primary-evidence-a687b-order-service",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "own-log-context-payment-service",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "own-log-context-inventory-service",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "multi-independent:3:1",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": true,
+          "hits": [
+            "950026c8-809b-5e80-99a8-24086d0766ed",
+            "f26a931d-97b7-58c2-baa8-c1d3dfc795ec"
+          ]
+        },
+        {
+          "id": "primary-evidence-a687b-order-service",
+          "ok": true,
+          "hits": [
+            "bcb9c846-faa7-5bae-a900-aa00628a0422",
+            "cfbc49a7-21d4-5c56-a806-cf32f8c7fc5c"
+          ]
+        },
+        {
+          "id": "own-log-context-payment-service",
+          "ok": true,
+          "hits": []
+        },
+        {
+          "id": "own-log-context-inventory-service",
+          "ok": true,
+          "hits": []
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "native-log-gap:3:1",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": true,
+          "hits": [
+            "2797c937-7127-5cea-9a03-93b393afdc20",
+            "32b45ddb-5797-5977-8775-a30ec8bd0aa9",
+            "387c99b1-8657-5954-824e-10632bf16ada",
+            "44953594-9ecc-5eea-ac1c-54878f9bc28c",
+            "4c039e5e-132a-581f-b51f-a37064e23da8",
+            "652b10eb-d361-501b-93f0-a7ea32982e1a",
+            "7c118a81-5801-5a27-a874-7bd70ac973b4",
+            "7e535e8e-bf2f-517c-a4f6-55d4e464d0c9",
+            "7ef14d50-f52b-59a6-b0bd-2799d5d8ead3",
+            "9f4ce71e-e76a-563d-8e0d-9747e50926f8",
+            "a3929741-ac41-5d16-b504-e57432e95d80",
+            "b1ad4011-f502-527c-aa40-cf6e4e907af1",
+            "c0a927ba-bf5a-508f-9fc6-dac5c9cc5dc3",
+            "c8c569d8-f248-51f4-b115-22196d4128c4",
+            "de436790-dce3-5de1-8c0f-dd30f4514be8",
+            "eeabad65-20ca-5f8e-a673-ebe100ff96c4",
+            "f344ef25-abca-591c-873f-57d8aaa88b68"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "native-log-gap:3:0",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "normal-proof:3:0",
+      "checks": [
+        {
+          "id": "bounded-empty-alert-and-incident-query",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "normal-proof:3:1",
+      "checks": [
+        {
+          "id": "bounded-empty-alert-and-incident-query",
+          "ok": true,
+          "hits": []
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "bounded-alerts:3:1",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-inventory-service",
+          "ok": true,
+          "hits": [
+            "ebe5aede-9f33-542d-a9d3-a8d11480c03b"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "bounded-alerts:3:0",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-inventory-service",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "mysql-rule:3:0",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    },
+    {
+      "row_id": "mysql-rule:3:1",
+      "checks": [
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": true,
+          "hits": [
+            "2797c937-7127-5cea-9a03-93b393afdc20",
+            "32b45ddb-5797-5977-8775-a30ec8bd0aa9",
+            "387c99b1-8657-5954-824e-10632bf16ada",
+            "44953594-9ecc-5eea-ac1c-54878f9bc28c",
+            "4c039e5e-132a-581f-b51f-a37064e23da8",
+            "652b10eb-d361-501b-93f0-a7ea32982e1a",
+            "7c118a81-5801-5a27-a874-7bd70ac973b4",
+            "7e535e8e-bf2f-517c-a4f6-55d4e464d0c9",
+            "7ef14d50-f52b-59a6-b0bd-2799d5d8ead3",
+            "9f4ce71e-e76a-563d-8e0d-9747e50926f8",
+            "a3929741-ac41-5d16-b504-e57432e95d80",
+            "b1ad4011-f502-527c-aa40-cf6e4e907af1",
+            "c0a927ba-bf5a-508f-9fc6-dac5c9cc5dc3",
+            "c8c569d8-f248-51f4-b115-22196d4128c4",
+            "de436790-dce3-5de1-8c0f-dd30f4514be8",
+            "eeabad65-20ca-5f8e-a673-ebe100ff96c4",
+            "f344ef25-abca-591c-873f-57d8aaa88b68"
+          ]
+        }
+      ],
+      "sufficient": true,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "multi-day:3:1",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "incident-identity-65889",
+          "ok": true,
+          "hits": [
+            "01a1e52c-67fc-7284-9131-747d13765889"
+          ]
+        },
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "incident-identity-4d56c",
+          "ok": true,
+          "hits": [
+            "01a1e4e7-f3eb-7021-ad91-a389ff94d56c"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": true,
+          "hits": [
+            "950026c8-809b-5e80-99a8-24086d0766ed",
+            "f26a931d-97b7-58c2-baa8-c1d3dfc795ec"
+          ]
+        },
+        {
+          "id": "primary-evidence-a687b-order-service",
+          "ok": true,
+          "hits": [
+            "bcb9c846-faa7-5bae-a900-aa00628a0422",
+            "cfbc49a7-21d4-5c56-a806-cf32f8c7fc5c"
+          ]
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": true
+    },
+    {
+      "row_id": "multi-day:3:0",
+      "checks": [
+        {
+          "id": "incident-identity-fdbcc",
+          "ok": true,
+          "hits": [
+            "01a1e890-a1e2-7cc6-84da-817005dfdbcc"
+          ]
+        },
+        {
+          "id": "incident-identity-a687b",
+          "ok": true,
+          "hits": [
+            "01a1e890-6c77-72cb-8c34-2ca3bcfa687b"
+          ]
+        },
+        {
+          "id": "incident-identity-65889",
+          "ok": true,
+          "hits": [
+            "01a1e52c-67fc-7284-9131-747d13765889"
+          ]
+        },
+        {
+          "id": "incident-identity-96d3f",
+          "ok": true,
+          "hits": [
+            "01a1e4f8-2fce-758f-acd3-76ee06a96d3f"
+          ]
+        },
+        {
+          "id": "incident-identity-4d56c",
+          "ok": true,
+          "hits": [
+            "01a1e4e7-f3eb-7021-ad91-a389ff94d56c"
+          ]
+        },
+        {
+          "id": "primary-evidence-96d3f-all",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "primary-evidence-fdbcc-order-service",
+          "ok": false,
+          "hits": []
+        },
+        {
+          "id": "primary-evidence-a687b-order-service",
+          "ok": false,
+          "hits": []
+        }
+      ],
+      "sufficient": false,
+      "recorded_sufficient": false
+    }
+  ]
+}

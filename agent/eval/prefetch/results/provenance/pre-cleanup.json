@@ -1,0 +1,11 @@
+{
+  "at": "2026-11-17T09:02:33.590171+00:00",
+  "traffic": [],
+  "active_faults": [],
+  "health": {
+    "order": "UP",
+    "inventory": "UP",
+    "payment": "UP",
+    "core": "UP"
+  }
+}

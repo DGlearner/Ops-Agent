@@ -19,6 +19,8 @@ core-service ──agent.tasks.high──▶ agent ──只读 HTTP──▶ co
 
 ## 运行
 
+对话与后台任务的衔接、自动只读诊断与人工重新分析的授权区别、结果时效及验证方式，见 [对话与后台诊断衔接](../docs/chat-background-diagnosis.md)。
+
 需要 Python 3.11+。
 
 ```bash
@@ -98,3 +100,7 @@ ops_agent/chat/
 - **没有大模型时**（`--mode baseline`）：路由只用规则，运维问题按查到的数据写出规则的结论和原始告警，知识类问题说明需要大模型。
 - **测试：** `tests/test_chat_*.py` 用假的 core-service 和按脚本回答的模型，覆盖路由、编排的每个分支、工具次数用完、模型失败降级、引用核对、追问、摘要、取消、SSE 接口和 409；操作卡片（重复确认、版本不对、提出后被改、core-service 拒绝、200 但读回不一致、超时后读回、过期、拒绝、重启）、问卷与暂停点、经验的审核与隔离、摘要的并发写入，以及轨迹评测器本身。
 
+
+## 证据预取评测
+
+固定问题、真实 API/日志、HTTP/SSE 首字与 P90/P95、受控反事实和逐答案复核见 [数据与复现](eval/prefetch/README.md) 及 [评测报告](../docs/prefetch-evaluation.md)。旧 eval-chat 的 3.1 → 1.4 s 仅指 DeepSeek/mysql-down、每方案 6 个回答的进程内中位数；不能当作当前模型 P95、覆盖率或延迟保证。

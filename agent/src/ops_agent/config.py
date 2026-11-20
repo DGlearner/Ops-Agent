@@ -50,7 +50,8 @@ class Settings(BaseSettings):
     chat_fast_extra_body: dict[str, Any] = {}
     chat_router_timeout_s: float = 8
     # The model's thinking when it answers, unless the question says (the console's "深度思考"); off sends
-    # chat_fast_extra_body. Off by default: 1.4 s to the first word instead of 9.7 s, as right (§6.7).
+    # chat_fast_extra_body. Historical DeepSeek/mysql-down: 1.4 vs 9.7 s in-process medians, n=6/arm;
+    # not a current-model latency guarantee. See docs/prefetch-evaluation.md for HTTP/SSE measurements.
     chat_thinking: bool = False
     # The evidence fetched before the model is asked; off leaves it for the model to fetch with its tools (the
     # experiment's baseline).

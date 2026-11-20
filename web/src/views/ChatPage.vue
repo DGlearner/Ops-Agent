@@ -306,6 +306,7 @@ onBeforeUnmount(stop)
             @confirm="(c) => decide(c, true)"
             @decline="(c) => decide(c, false)"
             @answer="answer"
+            @explain="(text) => ask(text)"
           />
         </div>
       </div>

@@ -1,0 +1,145 @@
+{
+  "note": "delivery source and reused runtime jar hashes; no build performed; v1.1/v1.2 scoring revisions disclosed in dataset manifest",
+  "files": [
+    {
+      "path": "src/ops_agent/chat/actions.py",
+      "sha256": "87ca0b0cd5c4eb49d20f4e26d08c22286ddaea661beb2e1841eb59e1e67c294c"
+    },
+    {
+      "path": "src/ops_agent/chat/agent.py",
+      "sha256": "e125ffb5be191ac1262db44439e23af5ad83aaac4b0139f829a7bcc5ad1f001c"
+    },
+    {
+      "path": "src/ops_agent/chat/casework.py",
+      "sha256": "7c8eb43504dd9ac166cb9b4451720a726ca0d0d8961069086c26aa6f05fd5c3b"
+    },
+    {
+      "path": "src/ops_agent/chat/claims.py",
+      "sha256": "a0be8ff98d663bc4bb9a356feca6e749bc333fcfe3fd41dd1ca8e38ec42dc54c"
+    },
+    {
+      "path": "src/ops_agent/chat/clarify.py",
+      "sha256": "c975c5399dac6a5a3faf4fc78200aaca44c34aaef26883d91df6ae9dfe5976e0"
+    },
+    {
+      "path": "src/ops_agent/chat/diagnostics.py",
+      "sha256": "7070a4c4c20ef0ce418cd30c68541d5f7e95bc7001985e91d40fe43d8b43e394"
+    },
+    {
+      "path": "src/ops_agent/chat/eval_core.py",
+      "sha256": "41ffe6aecaa83a1ec54a14e7b7cd757190f3b0185a100ed0e938717d58bde029"
+    },
+    {
+      "path": "src/ops_agent/chat/evidence.py",
+      "sha256": "762705066e9f5905c94920a1c93d3436778c4b70b45f44148443a5747727d8b9"
+    },
+    {
+      "path": "src/ops_agent/chat/gaps.py",
+      "sha256": "367499aaf5e4e0081c6ebdca9479b1a8d2c493e103ecea57bf16371aafbb0ea0"
+    },
+    {
+      "path": "src/ops_agent/chat/graph.py",
+      "sha256": "56e12c1b1136c775fcfae8949ce8fcafcfbb6164f584458f72c70b957913b964"
+    },
+    {
+      "path": "src/ops_agent/chat/knowledge.py",
+      "sha256": "02842d0cf140bf28b5ef454606d2b8d5a26070547c014dad4758f3df04198e7b"
+    },
+    {
+      "path": "src/ops_agent/chat/latency_eval.py",
+      "sha256": "73619b4ccbb2b0a33ce9053fc7d19ac7fd0bbb7f09c661a86ea4dff13fc4aec6"
+    },
+    {
+      "path": "src/ops_agent/chat/llm.py",
+      "sha256": "2cdc32aa60b19e29c094419d8cad108f5f8075e0e47d3d338b43c83980d019e2"
+    },
+    {
+      "path": "src/ops_agent/chat/memory.py",
+      "sha256": "f0abfb4e008e47d844803aae7c7c34638b803210162e533568d09766e58487cb"
+    },
+    {
+      "path": "src/ops_agent/chat/outcome_eval.py",
+      "sha256": "51ef01729d4cc8cb0195d0230129a219a487c080654a56a3a3a2ed0581037cf3"
+    },
+    {
+      "path": "src/ops_agent/chat/prefetch_data.py",
+      "sha256": "19eac4045c3e48f1bda4fe97de77d19a8553625b568dfa650059cd2de1708038"
+    },
+    {
+      "path": "src/ops_agent/chat/prefetch_eval.py",
+      "sha256": "c21dd7013b149feade8a9ce7ee3fc946fa4fad4bb5073b3a98f9baddceebaa55"
+    },
+    {
+      "path": "src/ops_agent/chat/prompts.py",
+      "sha256": "8b3c3f881a649f635db69686f485afa79d51162bf229b2b8bd6dd0e34c35bde7"
+    },
+    {
+      "path": "src/ops_agent/chat/router.py",
+      "sha256": "183ca3eee283fba61ce4217bc0bc5cf979e7eaf834e264f18a0e37d2e78835d0"
+    },
+    {
+      "path": "src/ops_agent/chat/router_eval.py",
+      "sha256": "a17bb41854188ec51d488126d3eefcf9b812cb94ee1539c05d15edb62b7db9fa"
+    },
+    {
+      "path": "src/ops_agent/chat/runbooks.py",
+      "sha256": "8581cb566b11fd64e91037e5ba3f6d90f9ad7a4f83ca8c08ec7e5a04ff83d858"
+    },
+    {
+      "path": "src/ops_agent/chat/server.py",
+      "sha256": "09729141721c1ec871300ee350288df47c3e0203050fe8052fbd387881d0caa8"
+    },
+    {
+      "path": "src/ops_agent/chat/tools.py",
+      "sha256": "20f41b841ff7886e173d17f5b08bb2c9548b0a8008f7d29482c197b3d537eb01"
+    },
+    {
+      "path": "src/ops_agent/chat/trace_eval.py",
+      "sha256": "2812f9a541f9af5978f719a274aa22197cf3347ebbf93ecd8bc598644d9173f4"
+    },
+    {
+      "path": "src/ops_agent/chat/usage.py",
+      "sha256": "5373b2b886b05b9370704736abbccbe46d1500b45779ba40dd738a03903f06b4"
+    },
+    {
+      "path": "src/ops_agent/chat/__init__.py",
+      "sha256": "9f6406f79843cbd8de25baccb9609b6d58b478fd18f0a6a6416998142f30f4c2"
+    },
+    {
+      "path": "src/ops_agent/config.py",
+      "sha256": "c28c41a74c225a77f68ecd33c85cf90cf914db1cf3724620d78756f6dcd25caf"
+    },
+    {
+      "path": "src/ops_agent/core_api.py",
+      "sha256": "e14a2b4103fb33b2ceeb1ea42c33b2c0a48d936e0733d7bbdf81008b610f158b"
+    },
+    {
+      "path": "../services/core-service/build/libs/core-service.jar",
+      "sha256": "06feeb0cf5ecdd4aa21cb800f23c689e616b573147ce72a6e97508c87781bcbd"
+    },
+    {
+      "path": "../services/ingest-service/build/libs/ingest-service.jar",
+      "sha256": "b13313cee90ea15a8e3921af4851bb998d9a72c978e45530cbc965158477c398"
+    },
+    {
+      "path": "../services/stream-processor/build/libs/stream-processor.jar",
+      "sha256": "d1e5282ef4aa12060da3099ecc5df58dd89cef4a645bd9984704d7f3a3bc0ae9"
+    },
+    {
+      "path": "../shop/order-service/build/libs/order-service.jar",
+      "sha256": "f1bde43d475fb4bac118c09bfb69aeea21199ef3a0c117ac24a0d065aef4e1c5"
+    },
+    {
+      "path": "../shop/inventory-service/build/libs/inventory-service.jar",
+      "sha256": "87a44bdcec2cb75787254f260920d2e2df25235a4de23b42723fe748b5611559"
+    },
+    {
+      "path": "../shop/payment-service/build/libs/payment-service.jar",
+      "sha256": "18394103e6b35005c22323426a9ece0d1a71b78916cd20d6d3db20c9ec089988"
+    },
+    {
+      "path": "../shop/lab/build/libs/lab.jar",
+      "sha256": "1cea29850e620f04065b9200c0649aec9e55c6bbd52c246c324dbfa3377a4a0f"
+    }
+  ]
+}

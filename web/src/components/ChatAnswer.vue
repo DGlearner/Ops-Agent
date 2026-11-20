@@ -5,6 +5,8 @@ import { useRouter } from 'vue-router'
 import type { ActionCard as Card, ChatMessage, QuestionAnswer, StepItem } from '@/api/chat'
 import ActionCard from '@/components/ActionCard.vue'
 import QuestionnaireCard from '@/components/QuestionnaireCard.vue'
+import DiagnosisTask from '@/components/DiagnosisTask.vue'
+import { confirmedDiagnosis } from '@/diagnostics'
 import { citationLink, citationTitle, currentCard, METHOD_LABEL, metricsLine, renderAnswer, seconds } from '@/chat'
 
 const props = withDefaults(
@@ -19,8 +21,16 @@ const props = withDefaults(
   }>(),
   { actions: () => ({}), openPause: null, busy: null },
 )
-const emit = defineEmits<{ confirm: [card: Card]; decline: [card: Card]; answer: [answers: QuestionAnswer[]] }>()
+const emit = defineEmits<{ confirm: [card: Card]; decline: [card: Card]; answer: [answers: QuestionAnswer[]]; explain: [text: string] }>()
 const cards = computed(() => (trace.value.actions ?? []).map((c) => currentCard(c, props.actions)))
+const tasks = computed(() => {
+  const byIncident = new Map((trace.value.analyses ?? []).map((task) => [task.incident_id, task]))
+  for (const card of cards.value) {
+    const task = confirmedDiagnosis(card)
+    if (task) byIncident.set(task.incident_id, task)
+  }
+  return [...byIncident.values()]
+})
 
 const router = useRouter()
 const trace = computed(() => props.message.trace ?? { route: null, items: [], citations: [] })
@@ -121,6 +131,8 @@ function follow(event: MouseEvent) {
       :busy="busy === trace.questionnaire.pause_id"
       @answer="(a) => emit('answer', a)"
     />
+    <DiagnosisTask v-for="task in tasks" :key="task.analysis_id" :task="task"
+      :busy="streaming || !!busy" @explain="(text) => emit('explain', text)" />
     <ActionCard
       v-for="c in cards"
       :key="c.action_id"

@@ -81,6 +81,7 @@ class ChatCore:
                                  now - timedelta(hours=3), DB_EVENT, "timeout", dependency="payment-service")],
         }
         self.analyses = {MYSQL_INCIDENT: [{"analysis_id": "a1", "incident_id": MYSQL_INCIDENT, "status": "completed",
+                                           "requested_at": iso(now - timedelta(minutes=1)),
                                            "model": "deepseek-v4-pro", "summary": "MySQL 不可用", "uncertain": False,
                                            "hypotheses": [{"component": "shop-mysql", "cause": "down",
                                                            "confidence": "high", "evidence": []}]}]}

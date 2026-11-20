@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 from ..baseline import rule_attribution
 from ..core_api import CoreApi, CoreApiError, parse_time
 from .evidence import RefTable
+from . import diagnostics
 
 log = logging.getLogger(__name__)
 
@@ -104,12 +105,19 @@ class ChatTools:
         result = self.brief(incident)
         result["rule_attribution"] = [{"component": h.component, "basis": h.cause}
                                       for h in rule_attribution(incident, alerts)]
-        completed = next((a for a in raw["analyses"] if a.get("status") == "completed"), None)
-        if completed and completed.get("model") != "baseline":
+        completed = diagnostics.latest(incident, raw)
+        if completed:
+            result["background_task"] = {
+                "analysis_id": completed["analysis_id"], "status": completed["status"],
+                "requested_at": completed.get("requested_at"),
+                "stale": not diagnostics.applicable(incident, raw, completed)}
+        if (completed and completed.get("status") == "completed" and completed.get("model") != "baseline"
+                and diagnostics.applicable(incident, raw, completed)):
             result["background_analysis"] = {
+                "analysis_id": completed["analysis_id"], "requested_at": completed["requested_at"],
                 "model": completed.get("model"), "summary": completed.get("summary"),
                 "uncertain": completed.get("uncertain", False),
-                "causes": [{"component": h["component"], "confidence": h["confidence"]}
+                "causes": [{"component": h["component"], "cause": h.get("cause"), "confidence": h["confidence"]}
                            for h in completed.get("hypotheses") or []]}
         if raw["logs"]:
             result["service_logs"] = {service: {"events": got["events"],
@@ -123,6 +131,18 @@ class ChatTools:
                             for n, a in enumerate(alerts[:max_alerts])]
         if len(alerts) > max_alerts:
             result["omitted_alerts"] = len(alerts) - max_alerts
+        # Only refs actually fetched in this answer; a background citation is not proof that chat read the line.
+        if "background_analysis" in result:
+            fetched_refs = {result["ref"], *[a["ref"] for a in result["alerts"]],
+                            *[s["ref"] for a in result["alerts"] for s in a.get("samples", [])],
+                            *[line["ref"] for got in result.get("service_logs", {}).values()
+                              for line in got["warnings_and_errors"]]}
+            known = {(v["kind"], v["id"].lower()): ref for ref, v in self.refs.as_json().items()
+                     if ref in fetched_refs}
+            for cause, hypothesis in zip(result["background_analysis"]["causes"], completed.get("hypotheses") or []):
+                cause["evidence"] = [known[(e.get("kind"), str(e.get("id", "")).lower())]
+                                     for e in hypothesis.get("evidence") or []
+                                     if (e.get("kind"), str(e.get("id", "")).lower()) in known]
         return result
 
     async def _logging_services(self, incident: dict) -> list[str]:

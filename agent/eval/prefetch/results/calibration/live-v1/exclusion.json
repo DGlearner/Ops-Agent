@@ -1,0 +1,6 @@
+{
+  "excluded_from_main": true,
+  "reason": "normal-case clock overlapped subsequent inventory alert because API upper bound has +1 minute tolerance; interrupted before completion; do not pool or discard raw rows",
+  "completed_rows_saved": 11,
+  "inflight_trace_missing": "process interrupted during next request; no completed row for that calibration request"
+}

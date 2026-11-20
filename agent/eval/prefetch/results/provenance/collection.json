@@ -1,0 +1,188 @@
+{
+  "before_at": "2026-11-17T08:12:06.600926+00:00",
+  "before_incidents": [
+    {
+      "incident_id": "01a1e52c-67fc-7284-9131-747d13765889",
+      "title": "Warning spike in inventory-service: \"Database unavailable: No operations allowed after connection closed.\" 18 in 1m, baseline 0.5",
+      "status": "open",
+      "severity": "low",
+      "services": [
+        "inventory-service"
+      ],
+      "subjects": [
+        "inventory-service"
+      ],
+      "shared_dependencies": [],
+      "alert_count": 1,
+      "opened_at": "2026-11-16T16:24:14.916914Z",
+      "last_alert_at": "2026-11-16T16:24:14.916914Z",
+      "version": 0
+    },
+    {
+      "incident_id": "01a1e4f8-2fce-758f-acd3-76ee06a96d3f",
+      "title": "order-service answered 3 requests with DATABASE_UNAVAILABLE within 1m",
+      "status": "open",
+      "severity": "high",
+      "services": [
+        "order-service",
+        "payment-service",
+        "inventory-service"
+      ],
+      "subjects": [
+        "order-service",
+        "payment-service",
+        "inventory-service"
+      ],
+      "shared_dependencies": [
+        "shop-mysql"
+      ],
+      "alert_count": 9,
+      "opened_at": "2026-11-16T15:27:12.725731Z",
+      "last_alert_at": "2026-11-16T15:27:49.528460Z",
+      "version": 8
+    },
+    {
+      "incident_id": "01a1e4e7-f3eb-7021-ad91-a389ff94d56c",
+      "title": "Recovery step abandoned orders of order-service failed 3 times within 5m",
+      "status": "open",
+      "severity": "high",
+      "services": [
+        "order-service",
+        "payment-service"
+      ],
+      "subjects": [
+        "order-service",
+        "payment-service"
+      ],
+      "shared_dependencies": [
+        "shop-mysql"
+      ],
+      "alert_count": 19,
+      "opened_at": "2026-11-16T15:09:26.325064Z",
+      "last_alert_at": "2026-11-16T15:11:00.285142Z",
+      "version": 18
+    }
+  ],
+  "episode": {
+    "id": "06c4db84-100d-409e-b35d-18ee19b3d4de",
+    "kind": "fault",
+    "name": "independent-faults",
+    "target": "payment-service, inventory-service",
+    "description": "30% of charge requests and, independently, 50% of reservation requests fail with 503",
+    "expected": "two separate problems: Ops-Agent should keep them in two incidents, although both services use the same MySQL",
+    "expected_incidents": 2,
+    "started_at": "2026-11-17T08:12:10.711993600Z",
+    "actions_ok": true
+  },
+  "ended": {
+    "id": "06c4db84-100d-409e-b35d-18ee19b3d4de",
+    "kind": "fault",
+    "name": "independent-faults",
+    "target": "payment-service, inventory-service",
+    "description": "30% of charge requests and, independently, 50% of reservation requests fail with 503",
+    "expected": "two separate problems: Ops-Agent should keep them in two incidents, although both services use the same MySQL",
+    "expected_incidents": 2,
+    "started_at": "2026-11-17T08:12:10.711993600Z",
+    "ended_at": "2026-11-17T08:12:55.886677500Z",
+    "actions_ok": true
+  },
+  "traffic_after": [],
+  "after_at": "2026-11-17T08:12:56.206137+00:00",
+  "after_incidents": [
+    {
+      "incident_id": "01a1e890-a1e2-7cc6-84da-817005dfdbcc",
+      "title": "10 failed calls from order-service to payment-service within 1m",
+      "status": "open",
+      "severity": "medium",
+      "services": [
+        "order-service"
+      ],
+      "subjects": [
+        "payment-service"
+      ],
+      "shared_dependencies": [],
+      "alert_count": 1,
+      "opened_at": "2026-11-17T08:12:35.111112Z",
+      "last_alert_at": "2026-11-17T08:12:35.111112Z",
+      "version": 0
+    },
+    {
+      "incident_id": "01a1e890-6c77-72cb-8c34-2ca3bcfa687b",
+      "title": "10 failed calls from order-service to inventory-service within 1m",
+      "status": "open",
+      "severity": "medium",
+      "services": [
+        "order-service"
+      ],
+      "subjects": [
+        "inventory-service"
+      ],
+      "shared_dependencies": [],
+      "alert_count": 1,
+      "opened_at": "2026-11-17T08:12:18.694267Z",
+      "last_alert_at": "2026-11-17T08:12:18.694267Z",
+      "version": 0
+    },
+    {
+      "incident_id": "01a1e52c-67fc-7284-9131-747d13765889",
+      "title": "Warning spike in inventory-service: \"Database unavailable: No operations allowed after connection closed.\" 18 in 1m, baseline 0.5",
+      "status": "open",
+      "severity": "low",
+      "services": [
+        "inventory-service"
+      ],
+      "subjects": [
+        "inventory-service"
+      ],
+      "shared_dependencies": [],
+      "alert_count": 1,
+      "opened_at": "2026-11-16T16:24:14.916914Z",
+      "last_alert_at": "2026-11-16T16:24:14.916914Z",
+      "version": 0
+    },
+    {
+      "incident_id": "01a1e4f8-2fce-758f-acd3-76ee06a96d3f",
+      "title": "order-service answered 3 requests with DATABASE_UNAVAILABLE within 1m",
+      "status": "open",
+      "severity": "high",
+      "services": [
+        "order-service",
+        "payment-service",
+        "inventory-service"
+      ],
+      "subjects": [
+        "order-service",
+        "payment-service",
+        "inventory-service"
+      ],
+      "shared_dependencies": [
+        "shop-mysql"
+      ],
+      "alert_count": 9,
+      "opened_at": "2026-11-16T15:27:12.725731Z",
+      "last_alert_at": "2026-11-16T15:27:49.528460Z",
+      "version": 8
+    },
+    {
+      "incident_id": "01a1e4e7-f3eb-7021-ad91-a389ff94d56c",
+      "title": "Recovery step abandoned orders of order-service failed 3 times within 5m",
+      "status": "open",
+      "severity": "high",
+      "services": [
+        "order-service",
+        "payment-service"
+      ],
+      "subjects": [
+        "order-service",
+        "payment-service"
+      ],
+      "shared_dependencies": [
+        "shop-mysql"
+      ],
+      "alert_count": 19,
+      "opened_at": "2026-11-16T15:09:26.325064Z",
+      "last_alert_at": "2026-11-16T15:11:00.285142Z",
+      "version": 18
+    }
+  ]
+}

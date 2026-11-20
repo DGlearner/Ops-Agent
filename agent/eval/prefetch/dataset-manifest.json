@@ -1,0 +1,10 @@
+{
+  "version": "1.2",
+  "cases_sha256": "e31f3cd8d65c7f679f10882c89a28d52b3512da042cb94bb97a2ae43ac0ef23b",
+  "measurement_cases_sha256_v11": "3c38e3c02fc224f074ef738acbf0ebbe37629372a88d530e76cabf948c385a25",
+  "corpus_sha256": "b5f7593f951559022ca7d34f38c0d8fcdbc34c256d96c7518a97328abac6d9ba",
+  "live_cases": 20,
+  "controlled_cases": 8,
+  "oracle_revision": "during development run: enforce source incident ownership and individual sample-message relevance; questions, clocks and semantic rubrics unchanged; original raw scores retained; main evidence scores recomputed for all arms",
+  "holdout": false
+}

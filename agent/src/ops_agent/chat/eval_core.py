@@ -60,6 +60,7 @@ class EvalCore:
         self.logs: list[dict] = []
         # Every write that reached core-service: path, body and the HTTP status it got.
         self.writes: list[tuple[str, dict | None, int]] = []
+        self.diagnostic_requests: list[str] = []
         self.write_fault: str | int | None = None
         self._n = 0
         t = self.now
@@ -110,6 +111,7 @@ class EvalCore:
         self._alert(i, "shop-database-unavailable", "payment-service", opened + timedelta(seconds=20),
                     "Server shutdown in progress")
         self.analyses[i] = [{"analysis_id": "an-mysql", "incident_id": i, "status": "completed",
+                             "requested_at": _iso(last + timedelta(seconds=1)),
                              "model": "deepseek-v4-pro", "summary": "shop-mysql 停机，订单和支付的数据库调用失败",
                              "uncertain": False, "hypotheses": [{"component": "shop-mysql", "cause": "down",
                                                                  "confidence": "high", "evidence": []}]}]
@@ -133,6 +135,16 @@ class EvalCore:
     # core-service's API.
 
     def handle(self, request: httpx.Request) -> httpx.Response:
+        if request.method == "POST" and request.url.path.endswith("/analyses/ensure"):
+            incident_id = request.url.path.split("/")[4]
+            self.diagnostic_requests.append(incident_id)
+            if incident_id not in self.incidents:
+                return httpx.Response(404, json={"code": "INCIDENT_NOT_FOUND"})
+            rows = self.analyses.setdefault(incident_id, [])
+            if not rows:
+                rows.append({"analysis_id": "an-" + incident_id[-6:], "incident_id": incident_id,
+                             "status": "pending", "requested_at": _iso(self.now), "requested_by": "system"})
+            return httpx.Response(202, json=copy.deepcopy(rows[0]))
         if request.method == "POST":
             return self._write(request)
         path, params = request.url.path, request.url.params

@@ -7,7 +7,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -68,6 +70,11 @@ class LabController {
     @DeleteMapping("/traffic")
     void stopTraffic() {
         traffic.stop();
+    }
+
+    @ExceptionHandler(Traffic.CatalogUnavailable.class)
+    ProblemDetail catalogUnavailable(Traffic.CatalogUnavailable failure) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE, failure.getMessage());
     }
 
     @PostMapping("/faults/{name}")

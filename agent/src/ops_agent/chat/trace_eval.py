@@ -5,7 +5,8 @@ asks, write faults injected, and the user confirming or declining the cards. Eac
 the incidents located and the tools called, citations, cards, questionnaires) and each receipt is checked against
 what the case expects, and every case against invariants that hold whatever was asked:
 
-- contract: no write reaches core-service outside a confirm; at most one write per action, however often it is
+- contract: no operational write reaches core-service outside a confirm (guarded system diagnosis scheduling is
+  recorded separately as diagnostic_requests); at most one write per action, however often it is
   confirmed; a receipt agrees with what core-service did (succeeded only with a 2xx write, nothing written for a
   blocked, declined or expired card); every card's evidence belongs to its incident.
 - trajectory: the route; whether it asked first; the incidents located and cited (the object chosen); the tools

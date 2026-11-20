@@ -1,0 +1,33 @@
+{
+  "started_at": "2026-11-17T09:00:42.822892+00:00",
+  "model": "gpt-6-luna",
+  "fast_model": "gpt-6-luna",
+  "thinking": false,
+  "fast_extra_body": {},
+  "temperature": 0.1,
+  "tool_budget": 4,
+  "router_timeout_s": 8.0,
+  "casework": false,
+  "writer": false,
+  "corpus_sha256": "b5f7593f951559022ca7d34f38c0d8fcdbc34c256d96c7518a97328abac6d9ba",
+  "dataset_sha256": "e31f3cd8d65c7f679f10882c89a28d52b3512da042cb94bb97a2ae43ac0ef23b",
+  "repeats": 1,
+  "seed": 1711,
+  "timeout_s": 120,
+  "selected_case_ids": [
+    "controlled-pending-1",
+    "controlled-pending-2",
+    "controlled-stale-1",
+    "controlled-stale-2",
+    "controlled-failed-1",
+    "controlled-failed-2",
+    "controlled-missing-1",
+    "controlled-missing-2"
+  ],
+  "transport": "real localhost TCP HTTP/SSE; live_core uses actual Java/PostgreSQL; controlled uses replay",
+  "clock": "fixed per-case evaluation-only clock; source requests retain absolute time bounds",
+  "order": "seeded group shuffle; on/off order alternates by group and repetition",
+  "cache": "fresh sessions/agent per group/arm; provider prompt cache uncontrolled and metered; no answer cache",
+  "finished_at": "2026-11-17T09:03:55.427803+00:00",
+  "attempts": 16
+}

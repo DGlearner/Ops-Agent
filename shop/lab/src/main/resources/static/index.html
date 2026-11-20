@@ -63,6 +63,7 @@
 <main>
   <section>
     <h2>正常流量</h2>
+    <p class="muted">演练 mysql-down：先开始流量，确认已发订单持续增加，再注入故障；等待 MySQL 恢复后再调整流量。</p>
     <label>每秒订单<input id="rate" type="number" value="5" min="0.5" max="300" step="0.5"></label>
     <label>重复请求比例<input id="dup" type="number" value="0.05" min="0" max="1" step="0.05"></label>
     <label>被拒卡比例<input id="decline" type="number" value="0.05" min="0" max="1" step="0.05"></label>

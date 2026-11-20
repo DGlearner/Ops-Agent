@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.dglearner.opsagent.contracts.Alert;
 import io.github.dglearner.opsagent.contracts.JsonSerde;
-import io.github.dglearner.opsagent.contracts.NormalizedEvent;
+import io.github.dglearner.opsagent.contracts.RawLogRecord;
 import io.github.dglearner.opsagent.contracts.Severity;
 import io.github.dglearner.opsagent.contracts.SourceType;
 import io.github.dglearner.opsagent.contracts.Topics;
@@ -30,14 +30,14 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-/** The baseline detector inside the real topology, fed normalized lines directly (docs/project-design.md §8.8). */
+/** The baseline detector inside the real topology, fed parsed raw ECS lines (docs/project-design.md §8.8). */
 class BaselineDetectorTest {
 
     private static final Instant T0 = Instant.parse("2026-03-01T10:00:00Z");
     private static final String PAYMENT = "payment-service";
 
     private TopologyTestDriver driver;
-    private TestInputTopic<String, NormalizedEvent> logs;
+    private TestInputTopic<String, RawLogRecord> logs;
     private TestOutputTopic<String, Alert> alerts;
     private int seq;
 
@@ -51,8 +51,8 @@ class BaselineDetectorTest {
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "baseline-test");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "unused:9092");
         driver = new TopologyTestDriver(builder.build(), props);
-        logs = driver.createInputTopic(Topics.LOGS_NORMALIZED, Serdes.String().serializer(),
-                JsonSerde.of(NormalizedEvent.class).serializer());
+        logs = driver.createInputTopic(Topics.LOGS_RAW, Serdes.String().serializer(),
+                JsonSerde.of(RawLogRecord.class).serializer());
         alerts = driver.createOutputTopic(Topics.ALERTS, Serdes.String().deserializer(),
                 JsonSerde.of(Alert.class).deserializer());
     }
@@ -202,9 +202,13 @@ class BaselineDetectorTest {
     }
 
     private void line(String service, Instant at, Severity severity, String message) {
-        NormalizedEvent e = new NormalizedEvent(UUID.nameUUIDFromBytes(("e" + seq++).getBytes()), "src",
-                SourceType.APP_SERVICE, null, "vps", service, null, "app_log", severity, at, at, message, Map.of(),
-                List.of());
-        logs.pipeInput(service, e, at);
+        String level = severity == Severity.LOW ? "WARN" : severity == Severity.MEDIUM ? "ERROR" : "INFO";
+        String json = "{\"@timestamp\":\"" + at + "\",\"log\":{\"level\":\"" + level
+                + "\"},\"service\":{\"name\":\"" + service + "\"},\"message\":\""
+                + message.replace("\\", "\\\\").replace("\"", "\\\"")
+                + "\",\"event\":{\"action\":\"app_log\"}}";
+        RawLogRecord record = new RawLogRecord(UUID.nameUUIDFromBytes(("e" + seq++).getBytes()), null,
+                "test", SourceType.APP_SERVICE, "vps", service, null, json, at);
+        logs.pipeInput("vps", record, at);
     }
 }

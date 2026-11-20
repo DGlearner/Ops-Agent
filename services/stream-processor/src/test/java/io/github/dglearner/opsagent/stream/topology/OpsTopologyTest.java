@@ -53,6 +53,7 @@ class OpsTopologyTest {
     private TestOutputTopic<String, NormalizedEvent> normalized;
     private TestOutputTopic<String, UnparsedLog> unparsed;
     private TestOutputTopic<String, Alert> alerts;
+    private String topologyDescription;
 
     @AfterEach
     void close() {
@@ -76,6 +77,17 @@ class OpsTopologyTest {
         assertThat(failed.key).isEqualTo("nginx");
         assertThat(failed.value.reason()).isEqualTo("no nginx pattern matched");
         assertThat(normalized.isEmpty()).isTrue();
+    }
+
+    @Test
+    void detectsFromParsedRawBranchWhileKeepingNormalizedOutput() {
+        start(DetectionTime.EVENT);
+
+        assertThat(topologyDescription)
+                .contains("read-raw")
+                .contains("write-normalized")
+                .contains("set-detection-time")
+                .doesNotContain("read-normalized");
     }
 
     @Test
@@ -308,7 +320,9 @@ class OpsTopologyTest {
         Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "ops-topology-test");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "unused:9092");
-        driver = new TopologyTestDriver(builder.build(), props);
+        var topology = builder.build();
+        topologyDescription = topology.describe().toString();
+        driver = new TopologyTestDriver(topology, props);
         raw = driver.createInputTopic(Topics.LOGS_RAW, OpsTopology.STRING.serializer(), OpsTopology.RAW.serializer());
         rules = driver.createInputTopic(Topics.RULES_CHANGELOG, OpsTopology.STRING.serializer(),
                 OpsTopology.RULE.serializer());

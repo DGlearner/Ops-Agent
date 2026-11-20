@@ -43,6 +43,9 @@ final class ShipperState {
     }
 
     void save(Map<String, Position> positions) throws IOException {
+        // The collector may start before the first service creates its log directory. A custom --state path
+        // can have a different parent, so create the state directory here rather than only the input directory.
+        Files.createDirectories(file.toAbsolutePath().getParent());
         ObjectNode root = json.createObjectNode();
         positions.forEach((name, p) -> root.putObject(name).put("identity", p.identity())
                 .put("generation", p.generation()).put("offset", p.offset()));

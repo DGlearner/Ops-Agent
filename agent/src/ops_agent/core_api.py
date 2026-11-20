@@ -1,6 +1,5 @@
-"""core-service's API. CoreApi is read-only: the only way the agents see the system they analyse, and all the
-model's tools ever get. CoreWriter is the chat's few writes, used only by chat.actions to run an action the user
-confirmed; nothing the model calls holds one."""
+"""core-service's API. CoreApi stays read-only. CoreWriter is held by the orchestration: confirmed operations,
+case records, and guarded scheduling of read-only background investigations. Models never hold a writer."""
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -139,6 +138,10 @@ class CoreWriter:
     def request_analysis(self, incident_id: str) -> WriteOutcome:
         """202 with the pending analysis; one already pending is returned instead of a second."""
         return self._post(f"/api/v1/incidents/{incident_id}/analyses", None)
+
+    def ensure_analysis(self, incident_id: str) -> WriteOutcome:
+        """System investigation: reuse the current attempt, including failures; 204 when not eligible."""
+        return self._post(f"/api/v1/incidents/{incident_id}/analyses/ensure", None)
 
     # Cases: the agent's working state, kept in core-service (docs/agent-design.md §2, §13.1).
 
