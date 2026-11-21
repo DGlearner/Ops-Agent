@@ -87,4 +87,18 @@ JSON 和嵌套字段按字段名递归处理，自由文本按模式处理。ser
 
 结果：57 个脱敏和解析测试通过。Docker 集成测试属于阶段二，当前没有在阶段一重复执行。
 
-仍待执行：Kafka Streams 重启和 state restore 演练、consumer lag 和端到端延迟指标、规则治理、认证和独立人工双评。
+阶段一已完成并已提交。
+
+## 阶段二当前进度
+
+已实现检测处理器的低基数指标：
+
+- `ops.stream.rule.events{result="matched|unmatched"}`。
+- `ops.stream.dedup{result="accepted|duplicate"}`。
+- `ops.stream.alerts{result="emitted|suppressed"}`。
+
+这些指标通过 `MeterRegistry` 注入，生产拓扑使用，测试拓扑默认使用无指标构造函数，避免改变既有测试和状态行为。指标没有使用 rule ID、fingerprint、service 或 host 标签。
+
+阶段二仍待在真实 Kafka 环境执行：consumer lag、state store restore 时间、repartition 积压、进程重启后的重复告警验证，以及 raw 到首条告警的端到端延迟观测。当前 Docker provider 不可用时不能把这些环境验证写成已完成。
+
+阶段三的规则审批、访问控制、多模型评测和独立人工复核仍属于后续范围。

@@ -20,6 +20,7 @@ import io.github.dglearner.opsagent.stream.detect.RuleMatchProcessor;
 import io.github.dglearner.opsagent.stream.detect.WindowAggregate;
 import io.github.dglearner.opsagent.stream.parse.ParseOutcome;
 import io.github.dglearner.opsagent.stream.parse.ParserRegistry;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
@@ -79,12 +80,19 @@ public class OpsTopology {
     private final StreamProperties properties;
     private final BaselineProperties baseline;
     private final Clock clock;
+    private final MeterRegistry meters;
 
     public OpsTopology(ParserRegistry parsers, StreamProperties properties, BaselineProperties baseline, Clock clock) {
+        this(parsers, properties, baseline, clock, null);
+    }
+
+    public OpsTopology(ParserRegistry parsers, StreamProperties properties, BaselineProperties baseline, Clock clock,
+            MeterRegistry meters) {
         this.parsers = parsers;
         this.properties = properties;
         this.baseline = baseline;
         this.clock = clock;
+        this.meters = meters;
     }
 
     public void addTo(StreamsBuilder builder) {
@@ -132,7 +140,7 @@ public class OpsTopology {
                 .process(() -> new DetectionTimestampProcessor(properties.detectionTime()),
                         Named.as("set-detection-time"));
         KStream<String, RuleMatch> matches = detected
-                .process(() -> new RuleMatchProcessor(RULES_STORE), Named.as("match-rules"));
+                .process(() -> new RuleMatchProcessor(RULES_STORE, meters), Named.as("match-rules"));
         if (baseline.enabled()) {
             // The parsed branch is already keyed by service: a service's lines reach one task, in order.
             builder.addStateStore(Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore(BASELINE_STORE), STRING,
@@ -157,7 +165,7 @@ public class OpsTopology {
             matches.filter((fingerprint, match) -> window.equals(match.window()), Named.as("tier-" + tier))
                     .repartition(Repartitioned.<String, RuleMatch>as("detect-" + tier)
                             .withKeySerde(STRING).withValueSerde(MATCH))
-                    .processValues(() -> new DuplicateMatchFilter(dedupStore, dedupRetention),
+                    .processValues(() -> new DuplicateMatchFilter(dedupStore, dedupRetention, meters),
                             Named.as("dedup-" + tier), dedupStore)
                     .groupByKey(Grouped.with(STRING, MATCH))
                     .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(window, properties.grace()))
@@ -167,7 +175,7 @@ public class OpsTopology {
                             Materialized.<String, WindowAggregate, WindowStore<Bytes, byte[]>>as("windows-" + tier)
                                     .withKeySerde(STRING).withValueSerde(AGGREGATE))
                     .toStream(Named.as("window-updates-" + tier))
-                    .process(() -> new AlertSuppressor(suppressionStore, clock, properties.quietPeriod()),
+                    .process(() -> new AlertSuppressor(suppressionStore, clock, properties.quietPeriod(), meters),
                             Named.as("suppress-" + tier),
                             suppressionStore)
                     .to(Topics.ALERTS, Produced.with(STRING, ALERT).withName("write-alerts-" + tier));

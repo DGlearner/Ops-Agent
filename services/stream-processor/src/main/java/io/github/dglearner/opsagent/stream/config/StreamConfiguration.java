@@ -28,7 +28,8 @@ class StreamConfiguration {
     @Bean
     OpsTopology opsTopology(StreamsBuilder builder, StreamProperties properties, BaselineProperties baseline,
             Clock clock, MeterRegistry meters) {
-        OpsTopology topology = new OpsTopology(ParserRegistry.withDefaultParsers(meters), properties, baseline, clock);
+        OpsTopology topology = new OpsTopology(ParserRegistry.withDefaultParsers(meters), properties, baseline, clock,
+                meters);
         topology.addTo(builder);
         return topology;
     }

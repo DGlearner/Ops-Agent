@@ -1,6 +1,7 @@
 package io.github.dglearner.opsagent.stream.detect;
 
 import java.time.Duration;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
 import org.apache.kafka.streams.processor.api.FixedKeyRecord;
@@ -20,12 +21,18 @@ public class DuplicateMatchFilter implements FixedKeyProcessor<String, RuleMatch
 
     private final String storeName;
     private final long retentionMillis;
+    private final MeterRegistry meters;
     private FixedKeyProcessorContext<String, RuleMatch> context;
     private WindowStore<String, Long> seen;
 
     public DuplicateMatchFilter(String storeName, Duration retention) {
+        this(storeName, retention, null);
+    }
+
+    public DuplicateMatchFilter(String storeName, Duration retention, MeterRegistry meters) {
         this.storeName = storeName;
         this.retentionMillis = retention.toMillis();
+        this.meters = meters;
     }
 
     @Override
@@ -45,10 +52,16 @@ public class DuplicateMatchFilter implements FixedKeyProcessor<String, RuleMatch
         long time = record.timestamp();
         try (WindowStoreIterator<Long> copies = seen.fetch(key, time - retentionMillis, time + retentionMillis)) {
             if (copies.hasNext()) {
+                if (meters != null) {
+                    meters.counter("ops.stream.dedup", "result", "duplicate").increment();
+                }
                 return;
             }
         }
         seen.put(key, time, time);
+        if (meters != null) {
+            meters.counter("ops.stream.dedup", "result", "accepted").increment();
+        }
         context.forward(record);
     }
 }

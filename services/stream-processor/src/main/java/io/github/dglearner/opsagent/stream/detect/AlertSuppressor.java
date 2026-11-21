@@ -1,6 +1,7 @@
 package io.github.dglearner.opsagent.stream.detect;
 
 import io.github.dglearner.opsagent.contracts.Alert;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -43,13 +44,19 @@ public class AlertSuppressor implements Processor<Windowed<String>, WindowAggreg
     private final String storeName;
     private final Clock clock;
     private final long quietMillis;
+    private final MeterRegistry meters;
     private ProcessorContext<String, Alert> context;
     private KeyValueStore<String, State> states;
 
     public AlertSuppressor(String storeName, Clock clock, Duration quietPeriod) {
+        this(storeName, clock, quietPeriod, null);
+    }
+
+    public AlertSuppressor(String storeName, Clock clock, Duration quietPeriod, MeterRegistry meters) {
         this.storeName = storeName;
         this.clock = clock;
         this.quietMillis = quietPeriod.toMillis();
+        this.meters = meters;
     }
 
     @Override
@@ -76,6 +83,9 @@ public class AlertSuppressor implements Processor<Windowed<String>, WindowAggreg
 
         boolean repeat = until != null && detectedAt < until && alertedAt >= burstStartedAt;
         if (!agg.reachedThreshold() || repeat) {
+            if (meters != null && repeat) {
+                meters.counter("ops.stream.alerts", "result", "suppressed").increment();
+            }
             states.put(fingerprint, new State(alertedAt, until, lastMatchAt, burstStartedAt));
             return;
         }
@@ -83,6 +93,9 @@ public class AlertSuppressor implements Processor<Windowed<String>, WindowAggreg
                 record.key().window().endTime(), agg, clock.instant());
         states.put(fingerprint, new State(detectedAt, detectedAt + agg.latest().suppressFor().toMillis(), lastMatchAt,
                 burstStartedAt));
+        if (meters != null) {
+            meters.counter("ops.stream.alerts", "result", "emitted").increment();
+        }
         context.forward(new Record<>(alert.groupKey(), alert, record.timestamp()));
     }
 
